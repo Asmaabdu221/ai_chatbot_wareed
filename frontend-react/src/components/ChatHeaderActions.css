@@ -1,0 +1,93 @@
+.chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+}
+
+.chat-header-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 14px;
+  min-height: 36px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.35;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  box-sizing: border-box;
+}
+
+.chat-header-action-btn svg {
+  flex-shrink: 0;
+  display: block;
+}
+
+.chat-header-action-btn:hover:not(:disabled) {
+  background: var(--panel-section-bg);
+  color: var(--text-primary);
+}
+
+.chat-header-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.chat-header-dropdown {
+  min-width: 200px;
+  padding: 6px 0;
+  background: var(--panel-section-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.chat-header-dropdown-opt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 120ms ease;
+  text-align: right;
+}
+
+[dir="rtl"] .chat-header-dropdown-opt {
+  flex-direction: row-reverse;
+}
+
+.chat-header-dropdown-opt:hover {
+  background: var(--panel-bg);
+}
+
+.chat-header-dropdown-opt svg {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.chat-header-dropdown-opt:hover svg {
+  color: var(--text-primary);
+}
+
+.chat-header-dropdown-opt-danger {
+  color: #dc2626;
+}
+
+.chat-header-dropdown-opt-danger:hover {
+  background: rgba(220, 38, 38, 0.1);
+}
+
+.chat-header-dropdown-opt-danger svg {
+  color: #dc2626;
+}

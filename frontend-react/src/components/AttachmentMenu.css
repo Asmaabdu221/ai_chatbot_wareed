@@ -1,0 +1,79 @@
+.attachment-menu {
+  min-width: 200px;
+  padding: 8px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15), 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 1500;
+  animation: attachment-menu-in 0.2s ease-out;
+}
+
+[data-theme="dark"] .attachment-menu {
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+@keyframes attachment-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.attachment-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+  text-align: start;
+}
+
+.attachment-menu-item:hover:not(:disabled) {
+  background: var(--panel-section-bg);
+}
+
+.attachment-menu-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.attachment-menu-item:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.attachment-menu-icon {
+  font-size: 18px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.attachment-menu-label {
+  flex: 1;
+}
+
+@media (max-width: 640px) {
+  .attachment-menu {
+    min-width: 160px;
+    padding: 4px;
+    margin-bottom: 8px;
+  }
+
+  .attachment-menu-item {
+    padding: 12px 14px;
+    font-size: 15px;
+  }
+}

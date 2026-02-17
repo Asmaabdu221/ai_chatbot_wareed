@@ -1,0 +1,50 @@
+{
+  "version": "1.0",
+  "sheets": {
+    "Sheet1": {
+      "total_records": 574,
+      "columns": [
+        {
+          "name": "اسم التحليل بالعربية",
+          "type": "string"
+        },
+        {
+          "name": "فائدة التحليل",
+          "type": "string"
+        },
+        {
+          "name": "التحاليل المكملة",
+          "type": "string"
+        },
+        {
+          "name": "نوع العينة",
+          "type": "string"
+        },
+        {
+          "name": "تصنيف التحليل",
+          "type": "string"
+        },
+        {
+          "name": "الأعراض",
+          "type": "string"
+        },
+        {
+          "name": "Unnamed: 0",
+          "type": "string"
+        },
+        {
+          "name": "التحضير قبل التحليل",
+          "type": "string"
+        },
+        {
+          "name": "تحاليل قريبة",
+          "type": "string"
+        },
+        {
+          "name": "تحاليل بديلة",
+          "type": "string"
+        }
+      ]
+    }
+  }
+}

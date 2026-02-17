@@ -1,0 +1,111 @@
+/**
+ * AdminLayout - Dedicated admin dashboard layout.
+ * No chat sidebar. Clean header.
+ */
+
+.admin-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg);
+}
+
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--panel-bg);
+  flex-shrink: 0;
+}
+
+[dir="rtl"] .admin-header {
+  flex-direction: row-reverse;
+}
+
+.admin-header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+[dir="rtl"] .admin-header-left {
+  flex-direction: row-reverse;
+}
+
+.admin-logo-link {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.admin-logo {
+  height: 40px;
+  width: auto;
+  object-fit: contain;
+}
+
+.admin-badge {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.admin-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+[dir="rtl"] .admin-header-right {
+  flex-direction: row-reverse;
+}
+
+.admin-user-email {
+  font-size: 13px;
+  color: var(--text-muted);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-logout-btn {
+  padding: 8px 16px;
+  font-size: 14px;
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.admin-logout-btn:hover {
+  background: #fee2e2;
+}
+
+.admin-main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+@media (max-width: 640px) {
+  .admin-header {
+    padding: 10px 16px;
+  }
+
+  .admin-logo {
+    height: 32px;
+  }
+
+  .admin-user-email {
+    display: none;
+  }
+
+  .admin-main {
+    padding: 16px;
+  }
+}

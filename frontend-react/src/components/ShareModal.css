@@ -1,0 +1,111 @@
+.share-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 16px;
+}
+
+.share-modal {
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  min-width: 320px;
+  max-width: 420px;
+}
+
+.share-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.share-modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.share-modal-close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 24px;
+  cursor: pointer;
+  line-height: 1;
+  transition: background 0.2s, color 0.2s;
+}
+
+.share-modal-close:hover {
+  background: var(--panel-section-bg);
+  color: var(--text-primary);
+}
+
+.share-modal-body {
+  padding: 20px;
+}
+
+.share-modal-url {
+  margin-bottom: 16px;
+}
+
+.share-modal-url input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.share-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.share-modal-btn {
+  padding: 10px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--button-bg);
+  color: var(--text-primary);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.share-modal-btn:hover {
+  background: var(--panel-section-bg);
+}
+
+.share-modal-btn-whatsapp {
+  background: #25d366;
+  color: white;
+  border-color: #25d366;
+}
+
+.share-modal-btn-whatsapp:hover {
+  background: #20bd5a;
+}
+
+.share-modal-btn-telegram {
+  background: #0088cc;
+  color: white;
+  border-color: #0088cc;
+}
+
+.share-modal-btn-telegram:hover {
+  background: #0077b5;
+}

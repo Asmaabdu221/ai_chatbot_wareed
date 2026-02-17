@@ -1,0 +1,8 @@
+Medical Analysis Price Matching Summary
+======================================================================
+
+Total analyses: 574
+Successfully matched: 475
+Not matched: 99
+Match rate: 82.8%
+Similarity threshold used: 80%

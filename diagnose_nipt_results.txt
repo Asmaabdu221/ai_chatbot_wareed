@@ -1,0 +1,134 @@
+======================================================================
+NIPT Retrieval Diagnostic
+======================================================================
+Similarity threshold: 0.75
+
+NIPT-related tests in KB: 2
+  [402] الفحص قبل الولادة غير الغازي | Noninvasive prenatal testing (NIPT)
+  [403] الفحص قبل الولادة غير الغازي بلس | Noninvasive prenatal testing (NIPT) plus
+
+----------------------------------------------------------------------
+Query: "Do you have NIPT test?"
+----------------------------------------------------------------------
+has_sufficient at 0.75: True
+
+Top 10 results (scores):
+  1. [0.8235] اختبار مونو سبوت | Monospot Test 
+  2. [0.8235] اختبار ذوبان خلايا الدم المنجلية | Sickle Cell Solubility Test 
+  3. [0.8000] مستضد سطح التهاب الكبد ب (HBs) | HBsAg confirmation test 
+  4. [0.8000] اختبار تأكيد التهاب الكبد C | HCV confirmation test 
+  5. [0.8000] إختبار تأكيد الإصابة بنقص المناعة | HIV confirmation test 
+  6. [0.7778] اختبار تحمل الجلكوز الفموي (50 جرام ) | Glucose Tolerance Test-OGTT (50g) Screen 
+  7. [0.7143] اختبار البراز المناعي للكشف عن الدم الخفي | FAECAL IMMUNOCHEMECAL TEST 
+  8. [0.7143] اختبار متلازمة X الهشة | Fragile X Syndrome Test 
+  9. [0.7143] اختبار الحمل | Pregnancy Test 
+  10. [0.7143] اختبار كوانتيفرون - الذهب بلس للكشف عن السل | Quantiferon - TB Gold Plus Test 
+NIPT in top 5: False
+
+----------------------------------------------------------------------
+Query: "هل لديكم تحليل nipt"
+----------------------------------------------------------------------
+has_sufficient at 0.75: True
+
+Top 10 results (scores):
+  1. [1.0000] الفحص قبل الولادة غير الغازي بلس | Noninvasive prenatal testing (NIPT) plus  <-- NIPT
+  2. [1.0000] الفحص قبل الولادة غير الغازي | Noninvasive prenatal testing (NIPT)  <-- NIPT
+  3. [0.8571] فحص وزراعة إفرازات الحلمة | Nipple Discharge Examination C/S 
+  4. [0.8571] فحص وتزرع إفرازات الحلمة (الجهة اليسرى) | Nipple Discharge Examination C/S (Left) 
+  5. [0.7500] الأحماض الأمينية في البلازما (كمي) | Amino Acids in Plasma (quantitative) - 
+  6. [0.7500] الأحماض الأمينية في البول (كمي) | Amino Acids in Urine (quantitative) - 
+  7. [0.7500] مضاد التخثر الثالث (AT III) | Antithrombin III (AT III) 
+  8. [0.7500] زرع البكتيريا واختبار الحساسية | Bacterial Culture and Sensitivity 
+  9. [0.7500] نيتروجين اليوريا في الدم | Blood Urea Nitrogen (BUN) 
+  10. [0.7500] البروتين التفاعلي C الكمي | C-Reactive Protein (CRP) quantitative 
+NIPT in top 5: True
+
+----------------------------------------------------------------------
+Query: "هل لديكم تحليل NIPT"
+----------------------------------------------------------------------
+has_sufficient at 0.75: True
+
+Top 10 results (scores):
+  1. [1.0000] الفحص قبل الولادة غير الغازي بلس | Noninvasive prenatal testing (NIPT) plus  <-- NIPT
+  2. [1.0000] الفحص قبل الولادة غير الغازي | Noninvasive prenatal testing (NIPT)  <-- NIPT
+  3. [0.8571] فحص وزراعة إفرازات الحلمة | Nipple Discharge Examination C/S 
+  4. [0.8571] فحص وتزرع إفرازات الحلمة (الجهة اليسرى) | Nipple Discharge Examination C/S (Left) 
+  5. [0.7500] الأحماض الأمينية في البلازما (كمي) | Amino Acids in Plasma (quantitative) - 
+  6. [0.7500] الأحماض الأمينية في البول (كمي) | Amino Acids in Urine (quantitative) - 
+  7. [0.7500] مضاد التخثر الثالث (AT III) | Antithrombin III (AT III) 
+  8. [0.7500] زرع البكتيريا واختبار الحساسية | Bacterial Culture and Sensitivity 
+  9. [0.7500] نيتروجين اليوريا في الدم | Blood Urea Nitrogen (BUN) 
+  10. [0.7500] البروتين التفاعلي C الكمي | C-Reactive Protein (CRP) quantitative 
+NIPT in top 5: True
+
+----------------------------------------------------------------------
+Query: "NIPT"
+----------------------------------------------------------------------
+has_sufficient at 0.75: True
+
+Top 10 results (scores):
+  1. [1.0000] الفحص قبل الولادة غير الغازي بلس | Noninvasive prenatal testing (NIPT) plus  <-- NIPT
+  2. [1.0000] الفحص قبل الولادة غير الغازي | Noninvasive prenatal testing (NIPT)  <-- NIPT
+  3. [0.8571] فحص وزراعة إفرازات الحلمة | Nipple Discharge Examination C/S 
+  4. [0.8571] فحص وتزرع إفرازات الحلمة (الجهة اليسرى) | Nipple Discharge Examination C/S (Left) 
+  5. [0.7500] الأحماض الأمينية في البلازما (كمي) | Amino Acids in Plasma (quantitative) - 
+  6. [0.7500] الأحماض الأمينية في البول (كمي) | Amino Acids in Urine (quantitative) - 
+  7. [0.7500] مضاد التخثر الثالث (AT III) | Antithrombin III (AT III) 
+  8. [0.7500] زرع البكتيريا واختبار الحساسية | Bacterial Culture and Sensitivity 
+  9. [0.7500] نيتروجين اليوريا في الدم | Blood Urea Nitrogen (BUN) 
+  10. [0.7500] البروتين التفاعلي C الكمي | C-Reactive Protein (CRP) quantitative 
+NIPT in top 5: True
+
+----------------------------------------------------------------------
+Query: "nipt"
+----------------------------------------------------------------------
+has_sufficient at 0.75: True
+
+Top 10 results (scores):
+  1. [1.0000] الفحص قبل الولادة غير الغازي بلس | Noninvasive prenatal testing (NIPT) plus  <-- NIPT
+  2. [1.0000] الفحص قبل الولادة غير الغازي | Noninvasive prenatal testing (NIPT)  <-- NIPT
+  3. [0.8571] فحص وزراعة إفرازات الحلمة | Nipple Discharge Examination C/S 
+  4. [0.8571] فحص وتزرع إفرازات الحلمة (الجهة اليسرى) | Nipple Discharge Examination C/S (Left) 
+  5. [0.7500] الأحماض الأمينية في البلازما (كمي) | Amino Acids in Plasma (quantitative) - 
+  6. [0.7500] الأحماض الأمينية في البول (كمي) | Amino Acids in Urine (quantitative) - 
+  7. [0.7500] مضاد التخثر الثالث (AT III) | Antithrombin III (AT III) 
+  8. [0.7500] زرع البكتيريا واختبار الحساسية | Bacterial Culture and Sensitivity 
+  9. [0.7500] نيتروجين اليوريا في الدم | Blood Urea Nitrogen (BUN) 
+  10. [0.7500] البروتين التفاعلي C الكمي | C-Reactive Protein (CRP) quantitative 
+NIPT in top 5: True
+
+----------------------------------------------------------------------
+Query: "الفحص قبل الولادة غير الغازي"
+----------------------------------------------------------------------
+has_sufficient at 0.75: True
+
+Top 10 results (scores):
+  1. [1.0000] الفحص قبل الولادة غير الغازي بلس | Noninvasive prenatal testing (NIPT) plus  <-- NIPT
+  2. [1.0000] الفحص قبل الولادة غير الغازي | Noninvasive prenatal testing (NIPT)  <-- NIPT
+  3. [0.6667] زرع البراز | Stool Culture 
+  4. [0.6429] تصنيف فيروس الورم الحليمي البشري غير الغازي بواسطة تفاعل الب | Non-invasive HPV typing by qPCR 
+  5. [0.6415] اختبار كومبس المباشر (اختبار التماسك المباشر) | Direct Coombs' Test (DAT) 
+  6. [0.6364] تحليل البول | Urine Analysis 
+  7. [0.6316] الكلوسترول غير الجيد | Non-HDL Cholesterol 
+  8. [0.6316] فحص البلغم | Sputum Examination 
+  9. [0.6207] النحاس في البول | Copper in urine 
+  10. [0.6207] فحص سائل المفصل | Synovial Fluid Examination 
+NIPT in top 5: True
+
+----------------------------------------------------------------------
+Query: "Noninvasive prenatal testing"
+----------------------------------------------------------------------
+has_sufficient at 0.75: True
+
+Top 10 results (scores):
+  1. [1.0000] الفحص قبل الولادة غير الغازي بلس | Noninvasive prenatal testing (NIPT) plus  <-- NIPT
+  2. [1.0000] الفحص قبل الولادة غير الغازي | Noninvasive prenatal testing (NIPT)  <-- NIPT
+  3. [0.7143] اختبار الحمل | Pregnancy Test 
+  4. [0.7059] تصنيف فيروس الورم الحليمي البشري غير الغازي بواسطة تفاعل الب | Non-invasive HPV typing by qPCR 
+  5. [0.7000] اختبار ويدال | Widal Test 
+  6. [0.6786] اختبار كولو تيكت للكشف غير الجراحي عن سرطان القولون والمستقي | ColoTect Non-invasive Colorectal Cancer  
+  7. [0.6667] هرمون الجاسترين | Gastrin 
+  8. [0.6667] اختبار البلازما السريعة (RPR) | RPR 
+  9. [0.6364] كالبرتكتيين | Calprotectin 
+  10. [0.6250] اختبار اللبتين الكمي | Leptin - 
+NIPT in top 5: True

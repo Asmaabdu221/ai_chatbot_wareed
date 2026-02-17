@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مراقبة الاستهلاك والإحصائيات - وريد</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            margin: 0;
+            padding: 24px;
+            background: #f0f4f8;
+            color: #333;
+        }
+        .container { max-width: 1000px; margin: 0 auto; }
+        h1 { color: #1a5276; margin-bottom: 8px; }
+        .subtitle { color: #666; margin-bottom: 24px; }
+        .card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .card h2 { margin-top: 0; color: #1a5276; font-size: 1.1rem; }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 16px;
+        }
+        .stat {
+            background: #e8f4f8;
+            padding: 16px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat .value { font-size: 1.8rem; font-weight: bold; color: #1a5276; }
+        .stat .label { font-size: 0.85rem; color: #666; margin-top: 4px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px 12px; text-align: right; border-bottom: 1px solid #eee; }
+        th { background: #e8f4f8; color: #1a5276; }
+        .bar-chart { display: flex; align-items: flex-end; gap: 4px; height: 120px; margin-top: 12px; }
+        .bar {
+            flex: 1;
+            background: #1a5276;
+            border-radius: 4px 4px 0 0;
+            min-height: 4px;
+        }
+        .bar:hover { opacity: 0.85; }
+        .bar-analysis { background: #2980b9; border-radius: 4px 4px 0 0; min-height: 8px; margin-top: 4px; }
+        .analysis-row:hover { background: #f8f9fa; }
+        .error { color: #c0392b; padding: 16px; }
+        .refresh {
+            background: #1a5276;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-bottom: 16px;
+        }
+        .refresh:hover { background: #154360; }
+        .loading { color: #666; }
+        .cache-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        @media (max-width: 600px) { .cache-grid { grid-template-columns: 1fr; } }
+        .highlight { background: #d5f4e6; padding: 2px 6px; border-radius: 4px; }
+        .muted { color: #7f8c8d; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 مراقبة الاستهلاك والإحصائيات</h1>
+        <p class="subtitle">مختبرات وريد — الطلبات، التحاليل الأكثر طلباً، الكاش، والتكلفة</p>
+        <button class="refresh" onclick="load()">🔄 تحديث</button>
+        <div id="content">
+            <p class="loading">جاري تحميل البيانات...</p>
+        </div>
+    </div>
+    <script>
+        const API_BASE = '';
+
+        async function load() {
+            const el = document.getElementById('content');
+            el.innerHTML = '<p class="loading">جاري تحميل البيانات...</p>';
+            try {
+                const res = await fetch((API_BASE || '') + '/api/chat/usage/dashboard');
+                if (!res.ok) throw new Error('فشل جلب البيانات');
+                const data = await res.json();
+                if (!data.success || !data.dashboard) throw new Error('صيغة البيانات غير صحيحة');
+                render(data.dashboard);
+            } catch (e) {
+                el.innerHTML = '<div class="card"><p class="error">❌ لا يمكن تحميل البيانات. تأكد أن السيرفر يعمل وأنك تفتح الصفحة من نفس عنوان السيرفر (مثلاً: http://localhost:8000/dashboard)</p><p class="error">' + e.message + '</p></div>';
+            }
+        }
+
+        function render(d) {
+            const byModel = d.by_model || {};
+            const rows = Object.entries(byModel).map(([model, v]) => {
+                const count = v && typeof v.count === 'number' ? v.count : 0;
+                const tokens = v && typeof v.tokens === 'number' ? v.tokens : 0;
+                const costUsd = v && typeof v.cost_usd === 'number' ? v.cost_usd : 0;
+                return `<tr><td>${model}</td><td>${count}</td><td>${tokens.toLocaleString('ar-EG')}</td><td>$${costUsd.toFixed(4)}</td></tr>`;
+            }).join('');
+
+            const hourly = (d.requests_last_24h || []).slice().reverse();
+            const maxReq = Math.max(1, ...hourly.map(x => x.requests));
+            const bars = hourly.map((x, i) =>
+                `<div class="bar" title="${24 - i} ساعة مضت: ${x.requests} طلب" style="height: ${(x.requests / maxReq) * 100}%"></div>`
+            ).join('');
+
+            // Analysis usage
+            const au = d.analysis_usage || {};
+            const byAnalysis = au.by_analysis || [];
+            const totalUses = au.total_uses || 0;
+            const totalAnalysesUsed = au.total_analyses_used || 0;
+            const top20 = byAnalysis.slice(0, 20);
+            const maxCount = Math.max(1, ...top20.map(x => x.count));
+            const analysisRows = byAnalysis.slice(0, 50).map(a =>
+                `<tr class="analysis-row"><td>${escapeHtml(a.name_ar)}</td><td class="muted">${escapeHtml(a.name_en)}</td><td><strong>${a.count}</strong></td></tr>`
+            ).join('');
+            const analysisBars = top20.map(a =>
+                `<div class="bar-analysis" title="${escapeHtml(a.name_ar)}: ${a.count} مرة" style="height: ${(a.count / maxCount) * 100}%"></div>`
+            ).join('');
+            const topOne = top20[0];
+            const highlightLine = topOne
+                ? `<p class="highlight">🏆 أكثر تحليل طلباً: <strong>${escapeHtml(topOne.name_ar)}</strong> (${topOne.count} مرة)</p>`
+                : '<p class="muted">لا توجد بيانات استخدام تحاليل بعد.</p>';
+
+            // Cache
+            const cache = d.cache || {};
+            const ctxCache = d.context_cache || {};
+            const cacheSection = `
+                <div class="card">
+                    <h2>📦 الكاش (تسريع الاستجابة)</h2>
+                    <div class="cache-grid">
+                        <div>
+                            <h3 style="margin-top:0;font-size:1rem">كاش الردود (Q&A)</h3>
+                            <p>ضربات: <strong>${cache.hits ?? 0}</strong> — إجمالي طلبات: <strong>${(cache.total_requests ?? 0)}</strong><br>
+                            معدل الضرب: <strong>${(cache.hit_rate_percent ?? 0).toFixed(1)}%</strong> — حجم الكاش: ${cache.cache_size ?? 0}</p>
+                            <p class="muted">التوفير التقديري: $${(cache.estimated_savings_usd ?? 0).toFixed(4)}</p>
+                        </div>
+                        <div>
+                            <h3 style="margin-top:0;font-size:1rem">كاش سياق المعرفة (RAG)</h3>
+                            <p>ضربات: <strong>${ctxCache.hits ?? 0}</strong> — إجمالي طلبات: <strong>${(ctxCache.total_requests ?? 0)}</strong><br>
+                            معدل الضرب: <strong>${(ctxCache.hit_rate_percent ?? 0).toFixed(1)}%</strong> — حجم: ${ctxCache.cache_size ?? 0}</p>
+                        </div>
+                    </div>
+                </div>`;
+
+            document.getElementById('content').innerHTML = `
+                <div class="card">
+                    <h2>الإجماليات</h2>
+                    <div class="stats">
+                        <div class="stat"><div class="value">${(d.total_requests || 0).toLocaleString('ar-EG')}</div><div class="label">إجمالي الطلبات</div></div>
+                        <div class="stat"><div class="value">${(d.total_tokens || 0).toLocaleString('ar-EG')}</div><div class="label">إجمالي التوكنز</div></div>
+                        <div class="stat"><div class="value">$${(d.total_cost_usd || 0).toFixed(4)}</div><div class="label">التكلفة (USD)</div></div>
+                        <div class="stat"><div class="value">${(d.requests_in_last_24h || 0).toLocaleString('ar-EG')}</div><div class="label">طلبات آخر 24 ساعة</div></div>
+                    </div>
+                </div>
+                <div class="card">
+                    <h2>🔬 استخدام التحاليل (كم مرة تم عرض كل تحليل للمستخدم)</h2>
+                    ${highlightLine}
+                    <div class="stats" style="margin-top:12px">
+                        <div class="stat"><div class="value">${totalAnalysesUsed}</div><div class="label">تحاليل مختلفة مستخدمة</div></div>
+                        <div class="stat"><div class="value">${totalUses}</div><div class="label">إجمالي مرات الظهور</div></div>
+                    </div>
+                    <h3 style="font-size:0.95rem;margin-top:16px">أعلى 20 تحليلاً</h3>
+                    <div class="bar-chart">${analysisBars}</div>
+                    <p class="muted" style="margin-top:8px">من اليسار إلى اليمين: من الأكثر إلى الأقل طلباً</p>
+                    <h3 style="font-size:0.95rem;margin-top:16px">جدول التحاليل (أول 50)</h3>
+                    <table>
+                        <thead><tr><th>التحليل (عربي)</th><th>التحليل (إنجليزي)</th><th>عدد المرات</th></tr></thead>
+                        <tbody>${analysisRows || '<tr><td colspan="3">لا توجد بيانات</td></tr>'}</tbody>
+                    </table>
+                </div>
+                ${cacheSection}
+                <div class="card">
+                    <h2>حسب المصدر (النموذج)</h2>
+                    <table>
+                        <thead><tr><th>النموذج</th><th>الطلبات</th><th>التوكنز</th><th>التكلفة (USD)</th></tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+                <div class="card">
+                    <h2>الطلبات في آخر 24 ساعة (كل ساعة)</h2>
+                    <div class="bar-chart">${bars}</div>
+                    <p style="margin-top:8px;font-size:0.85rem;color:#666">من اليسار: من أقدم ساعة إلى أحدث ساعة</p>
+                </div>
+            `;
+        }
+
+        function escapeHtml(s) {
+            if (s == null) return '';
+            const div = document.createElement('div');
+            div.textContent = s;
+            return div.innerHTML;
+        }
+
+        load();
+        setInterval(load, 60000);
+    </script>
+</body>
+</html>

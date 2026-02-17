@@ -1,0 +1,59 @@
+# FastAPI Web Framework
+fastapi==0.128.0
+uvicorn==0.40.0
+
+# Data Validation
+pydantic==2.12.5
+pydantic-settings==2.12.0
+
+# AI Integration
+openai==1.59.6
+
+# HTTP Client
+requests==2.32.5
+
+# Environment Variables
+python-dotenv==1.2.1
+
+# Database - PostgreSQL (Production)
+sqlalchemy==2.0.36
+alembic==1.14.0
+psycopg2-binary==2.9.10
+asyncpg==0.30.0
+
+# Multipart Form Data
+python-multipart==0.0.18
+
+# Authentication (JWT + password hashing) - platform-agnostic
+PyJWT==2.10.1
+passlib[bcrypt]==1.7.4
+email-validator>=2.0.0
+
+# Knowledge Base - Fuzzy Search (used by knowledge_loader_v2.py)
+rapidfuzz>=3.0.0
+
+# Excel/Data Processing (admin upload, data scripts)
+openpyxl>=3.1.0
+pandas>=2.0.0
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.24.0
+httpx==0.28.1
+
+# Production Server
+gunicorn==21.2.0
+waitress==3.0.2
+
+# OCR - Medical prescription processing
+pytesseract>=0.3.10
+opencv-python>=4.8.0
+Pillow>=10.0.0
+
+# Document text extraction (PDF, DOCX)
+pypdf>=4.0.0
+python-docx>=1.0.0
+
+# Code Quality
+black>=24.1.0
+flake8>=7.0.0

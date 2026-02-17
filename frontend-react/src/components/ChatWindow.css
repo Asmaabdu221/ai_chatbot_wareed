@@ -1,0 +1,194 @@
+.chat-window {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel-bg);
+  position: relative;
+  min-height: 100vh;
+}
+
+.empty-conversation {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  text-align: center;
+  color: #6b7280;
+}
+
+.empty-conversation h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 12px;
+}
+
+.empty-conversation p {
+  font-size: 16px;
+}
+
+.chat-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: 1fr;
+  align-items: center;
+  justify-items: stretch;
+  gap: 12px 20px;
+  padding: 10px 20px;
+  min-height: 52px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--panel-bg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  position: relative;
+  z-index: 10;
+  isolation: isolate;
+}
+
+.chat-header-profile-btn {
+  grid-column: 1;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+}
+
+.chat-header-spacer {
+  grid-column: 2;
+  flex: 1;
+  min-width: 0;
+  align-self: stretch;
+  justify-self: stretch;
+}
+
+.chat-header-brand {
+  grid-column: 3;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  align-self: stretch;
+  min-height: 36px;
+  padding: 8px 0 10px;
+  box-sizing: border-box;
+  position: relative;
+  z-index: 2;
+}
+
+.chat-header-brand-text {
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+  line-height: 1.35;
+  padding: 0;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+[dir="rtl"] .chat-header-profile-btn {
+  grid-column: 3;
+}
+
+[dir="rtl"] .chat-header-spacer {
+  grid-column: 2;
+}
+
+[dir="rtl"] .chat-header-brand {
+  grid-column: 1;
+  justify-content: flex-start;
+}
+
+.error-banner {
+  padding: 12px 24px;
+  background: #fef2f2;
+  color: #991b1b;
+  border-top: 1px solid #fecaca;
+  border-bottom: 1px solid #fecaca;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: slideDown 0.3s ease;
+}
+
+.mobile-menu-btn {
+  display: none;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* على سطح المكتب: إخفاء زر الملف الشخصي - يظهر فقط في الشريط الجانبي على الموبايل */
+@media (min-width: 641px) {
+  .chat-header-profile-btn {
+    display: none !important;
+  }
+
+  .chat-header {
+    grid-template-columns: 1fr auto;
+  }
+
+  .chat-header-spacer {
+    grid-column: 1;
+  }
+
+  .chat-header-brand {
+    grid-column: 2;
+  }
+
+  [dir="rtl"] .chat-header {
+    grid-template-columns: auto 1fr;
+  }
+
+  [dir="rtl"] .chat-header-spacer {
+    grid-column: 2;
+  }
+
+  [dir="rtl"] .chat-header-brand {
+    grid-column: 1;
+  }
+}
+
+/* تابلت: توحيد المسافات */
+@media (max-width: 768px) {
+  .chat-header {
+    padding: 10px 18px;
+    gap: 12px 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .chat-header {
+    padding: 10px 16px;
+    min-height: 48px;
+    gap: 10px 12px;
+  }
+
+  .chat-header-brand {
+    padding: 6px 0 8px;
+  }
+
+  .chat-header-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 11px;
+  }
+
+  .chat-header-brand-text {
+    font-size: 1.1rem;
+    line-height: 1.35;
+  }
+}

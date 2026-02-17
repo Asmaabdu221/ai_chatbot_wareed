@@ -1,0 +1,42 @@
+Knowledge Base Generation Summary
+======================================================================
+
+Generation Date: 2026-02-05 14:01:44
+Source File: analyses_with_prices.xlsx
+
+Statistics:
+-----------
+Total Tests: 574
+Tests with Price: 574 (100.0%)
+Tests without Price: 0 (0.0%)
+
+Output Files:
+-------------
+1. knowledge_base_full.json - Full version with metadata (635.92 KB)
+2. knowledge_base.json - Simplified version (618.69 KB)
+3. knowledge_base_compact.json - Compact version (577.77 KB)
+
+Fields Included:
+----------------
+- analysis_name_ar
+- analysis_name_en
+- analysis_name_en
+- description
+- complementary_tests
+- related_tests
+- alternative_tests
+- sample_type
+- category
+- symptoms
+- preparation
+- price
+- service_name
+- match_confidence
+
+Next Steps:
+-----------
+1. Use knowledge_base.json in your RAG system
+2. Update app/data/knowledge_loader.py to load this file
+3. Test the chatbot with the new knowledge base
+
+======================================================================

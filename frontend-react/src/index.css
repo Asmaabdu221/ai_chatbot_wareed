@@ -1,0 +1,94 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700&family=Cairo:wght@400;500;600;700&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+ :root {
+  --bg: #f9fafb;
+  --panel-bg: #ffffff;
+  --panel-section-bg: #ffffff;
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --text-muted: #6b7280;
+  --border-color: #e5e7eb;
+  --input-bg: #ffffff;
+  --button-bg: #ffffff;
+  --message-bg: #ffffff;
+  --assistant-bg: #ffffff;
+  --user-bg: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  --code-bg: #0f172a;
+  --code-text: #f8fafc;
+  --inline-slide-in: 10px;
+  --focus-ring: 0 0 0 3px rgba(59, 130, 246, 0.35);
+}
+
+ [data-theme="dark"] {
+  --bg: #0f172a;
+  --panel-bg: #111827;
+  --panel-section-bg: #0b1220;
+  --text-primary: #f9fafb;
+  --text-secondary: #cbd5f5;
+  --text-muted: #94a3b8;
+  --border-color: #1f2937;
+  --input-bg: #0b1220;
+  --button-bg: #0b1220;
+  --message-bg: #0b1220;
+  --assistant-bg: #0b1220;
+  --code-bg: #111827;
+  --code-text: #e2e8f0;
+  --focus-ring: 0 0 0 3px rgba(148, 163, 184, 0.4);
+}
+
+[dir="ltr"] {
+  --inline-slide-in: -10px;
+}
+
+html {
+  font-size: 19px;
+}
+
+body {
+  font-family: 'Noto Sans Arabic', 'Cairo', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
+    'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans',
+    'Helvetica Neue', sans-serif;
+  font-size: 1rem;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  direction: inherit;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text-primary);
+}
+
+.arabic-text {
+  line-height: 1.7;
+  letter-spacing: -0.01em;
+  unicode-bidi: plaintext;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
