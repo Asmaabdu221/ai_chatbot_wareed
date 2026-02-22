@@ -2,10 +2,29 @@
   flex: 1;
   overflow-y: auto;
   padding: 24px;
-  background: var(--bg);
+  background: transparent;
   position: relative;
   --msg-gap: 24px;
   --msg-gap-grouped: 8px;
+}
+
+/* Seasonal Theme: Ramadan Watermark */
+.ramadan-watermark {
+  position: fixed;
+  top: 55%;
+  left: 20px;
+  /* Aligned to the left */
+  transform: translateY(-50%);
+  width: min(500px, 90vw);
+  /* Enlarged slightly */
+  height: min(500px, 90vh);
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: left center;
+  opacity: 0.20;
+  /* More visible (less transparent) */
+  pointer-events: none;
+  z-index: 0;
 }
 
 .welcome-screen {
@@ -14,9 +33,17 @@
   text-align: center;
 }
 
+.welcome-card {
+  background: var(--panel-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
 .welcome-hint {
   margin-top: 8px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: 16px;
 }
 
@@ -26,23 +53,115 @@
 }
 
 .welcome-icon-img {
-  width: 96px;
-  height: 96px;
-  margin-bottom: 16px;
+  width: 104px;
+  height: 104px;
+  margin-bottom: 14px;
   display: block;
   margin-left: auto;
   margin-right: auto;
-}
-
-.welcome-icon-img {
   object-fit: contain;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.08));
 }
 
 .welcome-screen h3 {
-  font-size: 24px;
+  display: inline-block;
+  padding: 0;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  font-size: 20px;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 32px;
+  line-height: 1.35;
+  opacity: 0.95;
+  margin-bottom: 8px;
+  border: none;
+  box-shadow: none;
+}
+
+.welcome-subtitle {
+  margin-top: 0;
+  margin-bottom: 18px;
+  color: var(--text-secondary);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.welcome-trust-line {
+  margin-top: 0;
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+  opacity: 0.68;
+}
+
+.welcome-primary-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.welcome-primary-button {
+  padding: 14px 16px;
+  background: var(--card-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  font-size: 16px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+  text-align: start;
+  width: 100%;
+  font-family: inherit;
+}
+
+.welcome-primary-button:hover {
+  background: var(--card-hover-bg);
+}
+
+.welcome-primary-button.is-active {
+  box-shadow: var(--glass-shadow);
+}
+
+.welcome-secondary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 6px;
+  direction: rtl;
+}
+
+.welcome-chip {
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.welcome-chip:hover:not(:disabled) {
+  background: var(--card-hover-bg);
+  color: var(--text-primary);
+}
+
+.welcome-collapse-button {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.welcome-collapse-button:hover {
+  color: var(--text-primary);
 }
 
 .suggested-prompts {
@@ -53,13 +172,15 @@
 
 .prompt-card {
   padding: 16px;
-  background: var(--panel-bg);
-  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
   border-radius: 12px;
   font-size: 16px;
-  color: var(--text-secondary);
+  color: var(--text-primary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   text-align: start;
   font-family: inherit;
   margin: 0;
@@ -67,14 +188,18 @@
   display: block;
 }
 
+.prompt-card:hover:not(:disabled) {
+  background: var(--card-hover-bg);
+  transform: translateY(-2px);
+  box-shadow: var(--glass-shadow);
+}
+
 .prompt-card:disabled {
   cursor: not-allowed;
   opacity: 0.7;
 }
 
-.prompt-card:hover {
-  background: var(--panel-section-bg);
-}
+
 
 .prompt-card:active {
   transform: scale(0.98);
@@ -84,11 +209,17 @@
   outline: none;
   box-shadow: var(--focus-ring);
 }
+
 .prompt-card:hover {
-  background: var(--panel-section-bg);
-  border-color: var(--border-color);
+  background: var(--accent);
+  border-color: rgba(0, 0, 0, 0.1);
   transform: translateY(-2px);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .welcome-card {
+  background: var(--panel-bg);
+  border-color: rgba(148, 163, 184, 0.28);
 }
 
 .date-separator {
@@ -176,8 +307,13 @@
 }
 
 @keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 @media (max-width: 640px) {
@@ -192,6 +328,10 @@
 
   .welcome-screen h3 {
     font-size: 20px;
+  }
+
+  .welcome-primary-actions {
+    grid-template-columns: 1fr;
   }
 
   .suggested-prompts {

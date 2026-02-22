@@ -50,6 +50,9 @@ function ChatView() {
     }
   });
 
+  const [pinnedMessageIds, setPinnedMessageIds] = useState([]);
+  const [replyingToMessage, setReplyingToMessage] = useState(null);
+
   const currentConversation = conversations.find((c) => c.id === currentConversationId);
 
   const handlePinConversation = (conversationId) => {
@@ -62,69 +65,17 @@ function ChatView() {
     });
   };
 
-  useLayoutEffect(() => {
-    const root = document.documentElement;
-    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const resolved = theme === 'system' ? (prefersDark ? 'dark' : 'light') : theme;
-    root.setAttribute('data-theme', resolved);
-  }, [theme]);
-
-  useEffect(() => {
-    if (theme !== 'system' || !window.matchMedia) return;
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = (e) => {
-      document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light');
-    };
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, [theme]);
-
-  const loadConversations = useCallback(async () => {
-    try {
-      const data = await getUserConversations();
-      setConversations(data.conversations || []);
-    } catch (err) {
-      console.error('Failed to load conversations:', err);
-      setConversations([]);
+  const handleDeleteMessage = (messageId) => {
+    if (window.confirm('هل تريد حذف هذه الرسالة؟')) {
+      setCurrentMessages((prev) => prev.filter((m) => m.id !== messageId));
     }
-  }, []);
+  };
 
-  useEffect(() => {
-    const TIMEOUT_MS = 8000;
-    const init = async () => {
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Init timeout')), TIMEOUT_MS)
-      );
-      try {
-        await Promise.race([
-          (async () => {
-            const healthy = await checkAPIHealth();
-            setIsAPIHealthy(healthy);
-            const me = await getMe();
-            setUser(me);
-            await loadConversations();
-          })(),
-          timeoutPromise,
-        ]);
-      } catch (err) {
-        console.error('Init error:', err);
-        setIsAPIHealthy(false);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    init();
-  }, [loadConversations]);
-
-  const convIdFromUrl = searchParams.get('c');
-  useEffect(() => {
-    if (!convIdFromUrl || isLoading || conversations.length === 0) return;
-    const exists = conversations.some((c) => c.id === convIdFromUrl);
-    if (exists && currentConversationId !== convIdFromUrl) {
-      selectConversation(convIdFromUrl);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [convIdFromUrl, isLoading, conversations.length]);
+  const handlePinMessage = (messageId) => {
+    setPinnedMessageIds((prev) =>
+      prev.includes(messageId) ? prev.filter(id => id !== messageId) : [...prev, messageId]
+    );
+  };
 
   const selectConversation = async (conversationId) => {
     try {
@@ -138,6 +89,7 @@ function ChatView() {
         content: m.content,
         created_at: m.created_at,
         token_count: m.token_count,
+        replyTo: m.reply_to // Support if backend provides it
       })));
       setSidebarOpen(false);
       setUiNotice(null);
@@ -153,22 +105,31 @@ function ChatView() {
   const createNewConversation = () => {
     setCurrentConversationId(null);
     setCurrentMessages([]);
+    setReplyingToMessage(null);
   };
 
   const handleDeleteConversation = async (conversationId) => {
+    if (!conversationId) return;
     try {
       await apiDeleteConversation(conversationId);
+
+      const remaining = conversations.filter((c) => c.id !== conversationId);
+      setConversations(remaining);
+
       setPinnedConversationIds((prev) => {
         const next = prev.filter((id) => id !== conversationId);
         localStorage.setItem('wareed_pinned_conversations', JSON.stringify(next));
         return next;
       });
-      setConversations((prev) => prev.filter((c) => c.id !== conversationId));
+
       if (currentConversationId === conversationId) {
-        const rest = conversations.filter((c) => c.id !== conversationId);
-        if (rest.length > 0) await selectConversation(rest[0].id);
-        else createNewConversation();
+        if (remaining.length > 0) {
+          await selectConversation(remaining[0].id);
+        } else {
+          createNewConversation();
+        }
       }
+
       setUiNotice(null);
     } catch (err) {
       console.error('Delete conversation error:', err);
@@ -176,20 +137,12 @@ function ChatView() {
     }
   };
 
-  const handleRenameConversation = async (conversationId, newTitle) => {
-    try {
-      await apiUpdateConversation(conversationId, { title: newTitle });
-      setConversations((prev) =>
-        prev.map((c) => (c.id === conversationId ? { ...c, title: newTitle } : c))
-      );
-      setUiNotice(null);
-    } catch (err) {
-      console.error('Rename conversation error:', err);
-      setUiNotice('تعذر إعادة تسمية المحادثة. حاول مرة أخرى.');
+  const handleSendMessage = async (content, attachment = null, attachmentType = null) => {
+    const normalizedContent = typeof content === 'string' ? content.trim() : '';
+    if (!normalizedContent && !attachment) {
+      throw new Error('محتوى الرسالة مطلوب.');
     }
-  };
 
-  const handleSendMessage = async (content) => {
     let convId = currentConversationId;
     if (!convId) {
       const newConv = await createConversation();
@@ -197,12 +150,29 @@ function ChatView() {
       setCurrentConversationId(convId);
       setConversations((prev) => [{ ...newConv, message_count: 0 }, ...prev]);
     }
-    const data = await sendConversationMessage(convId, content);
+
+    // Store reply metadata locally for UI linking only
+    const replyRef = replyingToMessage ? {
+      content: replyingToMessage.content,
+      role: replyingToMessage.role
+    } : null;
+
+    if (process.env.NODE_ENV === 'development') {
+      console.info('[Chat] Sending message', {
+        conversationId: convId,
+        hasAttachment: !!attachment,
+        attachmentType: attachmentType || null,
+        contentLength: normalizedContent.length,
+      });
+    }
+
+    const data = await sendConversationMessage(convId, normalizedContent, attachment, attachmentType);
     const userMsg = {
       id: data.user_message.id,
       role: 'user',
       content: data.user_message.content,
       created_at: data.user_message.created_at,
+      replyTo: replyRef // UI-only link
     };
     const assistantMsg = {
       id: data.assistant_message.id,
@@ -212,6 +182,14 @@ function ChatView() {
       token_count: data.assistant_message.token_count,
     };
     setCurrentMessages((prev) => [...prev, userMsg, assistantMsg]);
+    setReplyingToMessage(null);
+  };
+
+  const handleQuickAction = async (content) => {
+    await handleSendMessage(content);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('wareed:focus-composer'));
+    }
   };
 
   const handlePrescriptionResponse = async (userContent, assistantContent) => {
@@ -253,99 +231,15 @@ function ChatView() {
     window.location.reload();
   };
 
-  if (isLoading) {
-    return (
-      <div className="app loading">
-        <div className="loading-message">جاري التحميل...</div>
-      </div>
-    );
-  }
-
-  const handleThemeChange = (next) => {
-    setTheme(next);
-    localStorage.setItem('wareed_theme', next);
-  };
-
-  const handleProfileUpdated = (updatedUser) => {
-    setUser(updatedUser);
-  };
-
-  const sidebar = (
-    <LeftSidebar
-      conversations={conversations}
-      pinnedConversationIds={pinnedConversationIds}
-      currentConversationId={currentConversationId}
-      onSelectConversation={selectConversation}
-      onNewConversation={createNewConversation}
-      onDeleteConversation={handleDeleteConversation}
-      onRenameConversation={handleRenameConversation}
-      onPinConversation={handlePinConversation}
-      onLogout={handleLogout}
-      onCloseSidebar={() => setSidebarOpen(false)}
-      onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
-      sidebarCollapsed={sidebarCollapsed}
-      user={user}
-      userEmail={user?.email}
-      theme={theme}
-      onThemeChange={handleThemeChange}
-      onClearChats={handleClearChats}
-      onProfileUpdated={handleProfileUpdated}
-      isLoading={isLoading}
-      showDashboardLink={isAdminUser(user)}
-    />
-  );
-
-  return (
-    <div className="app">
-      {!isAPIHealthy && (
-        <div className="api-warning arabic-text" dir="auto">
-          ⚠️ {formatArabicText(`تحذير: لا يمكن الاتصال بالخادم. تأكد من تشغيل الخادم على ${getApiUrlForDisplay()}`)}
-        </div>
-      )}
-      {uiNotice && (
-        <div className="ui-notice arabic-text" role="status" dir="auto">
-          <span>{formatArabicText(uiNotice)}</span>
-          <button
-            type="button"
-            className="ui-notice-close"
-            onClick={() => setUiNotice(null)}
-            aria-label="إغلاق التنبيه"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-      <ChatLayout
-        sidebar={sidebar}
-        sidebarOpen={sidebarOpen}
-        sidebarCollapsed={sidebarCollapsed}
-        onCloseSidebar={() => setSidebarOpen(false)}
-      >
-        <ChatWindow
-          conversationId={currentConversationId}
-          conversationTitle={currentConversation?.title || 'محادثة جديدة'}
-          messages={currentMessages}
-          userId={user?.id}
-          userEmail={user?.email}
-          userName={user?.display_name || user?.username || (user?.email?.split('@')[0]) || null}
-          onSendMessage={handleSendMessage}
-          onPrescriptionResponse={handlePrescriptionResponse}
-          isFetchingMessages={isFetchingMessages}
-          onToggleSidebar={() => setSidebarOpen((v) => !v)}
-          onArchiveConversation={handleDeleteConversation}
-          onDeleteConversation={handleDeleteConversation}
-          onPinConversation={handlePinConversation}
-          pinnedConversationIds={pinnedConversationIds}
-        />
-      </ChatLayout>
-    </div>
-  );
-}
-
-function AdminDashboardView() {
-  const navigate = useNavigate();
-  const [theme, setTheme] = useState(localStorage.getItem('wareed_theme') || 'system');
-  const [user, setUser] = useState(null);
+  const loadConversations = useCallback(async () => {
+    try {
+      const data = await getUserConversations();
+      setConversations(data.conversations || []);
+    } catch (err) {
+      console.error('Failed to load conversations:', err);
+      setConversations([]);
+    }
+  }, []);
 
   useLayoutEffect(() => {
     const root = document.documentElement;
@@ -355,120 +249,101 @@ function AdminDashboardView() {
   }, [theme]);
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const me = await getMe();
-        setUser(me);
-      } catch (_) {}
+    const TIMEOUT_MS = 8000;
+    const init = async () => {
+      const healthy = await checkAPIHealth();
+      setIsAPIHealthy(healthy);
+      const me = await getMe();
+      setUser(me);
+      await loadConversations();
+      setIsLoading(false);
     };
-    load();
-  }, []);
+    init();
+  }, [loadConversations]);
 
-  const handleLogout = () => {
-    clearAuth();
-    navigate('/login', { replace: true });
-    window.location.reload();
-  };
+  const sidebar = (
+    <LeftSidebar
+      conversations={conversations}
+      pinnedConversationIds={pinnedConversationIds}
+      currentConversationId={currentConversationId}
+      onSelectConversation={selectConversation}
+      onNewConversation={createNewConversation}
+      onDeleteConversation={handleDeleteConversation}
+      onLogout={handleLogout}
+      onCloseSidebar={() => setSidebarOpen(false)}
+      onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+      sidebarCollapsed={sidebarCollapsed}
+      user={user}
+      theme={theme}
+      onThemeChange={(next) => { setTheme(next); localStorage.setItem('wareed_theme', next); }}
+      onClearChats={handleClearChats}
+      onQuickAction={handleQuickAction}
+    />
+  );
+
+  if (isLoading) return <div className="app loading">جاري التحميل...</div>;
 
   return (
-    <AdminLayout onLogout={handleLogout} userEmail={user?.email}>
+    <div className="app">
+      {!isAPIHealthy && <div className="api-warning">⚠️ خطأ في الاتصال بالخادم</div>}
+      <ChatLayout
+        sidebar={sidebar}
+        sidebarOpen={sidebarOpen}
+        sidebarCollapsed={sidebarCollapsed}
+        onCloseSidebar={() => setSidebarOpen(false)}
+        onToggleSidebarCollapse={() => setSidebarCollapsed((v) => !v)}
+      >
+        <ChatWindow
+          messages={currentMessages}
+          onSendMessage={handleSendMessage}
+          onReplyToMessage={setReplyingToMessage}
+          onDeleteMessage={handleDeleteMessage}
+          onPinMessage={handlePinMessage}
+          pinnedMessageIds={pinnedMessageIds}
+          replyingTo={replyingToMessage}
+          onCancelReply={() => setReplyingToMessage(null)}
+          userName={user?.display_name || user?.username}
+          isFetchingMessages={isFetchingMessages}
+          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+        />
+      </ChatLayout>
+    </div>
+  );
+}
+
+function AdminDashboardView() {
+  const navigate = useNavigate();
+  const [user, setUser] = useState(null);
+  useEffect(() => { getMe().then(setUser); }, []);
+  return (
+    <AdminLayout onLogout={() => { clearAuth(); navigate('/login'); }} userEmail={user?.email}>
       <Dashboard />
     </AdminLayout>
   );
 }
 
 function RequireAuth({ children }) {
-  const hasToken = !!getAccessToken();
-  if (!hasToken) return <Navigate to="/login" replace />;
-  return children;
-}
-
-function RequireAdmin({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const me = await getMe();
-        if (!cancelled) setUser(me);
-      } catch (_) {
-        if (!cancelled) setUser(null);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    load();
-    return () => { cancelled = true; };
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="app loading">
-        <div className="loading-message">جاري التحميل...</div>
-      </div>
-    );
-  }
-
-  if (!getAccessToken() || !isAdminUser(user)) {
-    return <Navigate to="/" replace />;
-  }
-
+  if (!getAccessToken()) return <Navigate to="/login" replace />;
   return children;
 }
 
 function App() {
   const navigate = useNavigate();
   useEffect(() => {
-    setOnUnauthorized(() => {
-      clearAuth();
-      navigate('/login', { replace: true });
-    });
-    return () => setOnUnauthorized(null);
+    setOnUnauthorized(() => { clearAuth(); navigate('/login'); });
   }, [navigate]);
 
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
-      <Route
-        path="/"
-        element={
-          <RequireAuth>
-            <ChatView />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/admin/dashboard"
-        element={
-          <RequireAuth>
-            <RequireAdmin>
-              <AdminDashboardView />
-            </RequireAdmin>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/help"
-        element={
-          <RequireAuth>
-            <Help />
-          </RequireAuth>
-        }
-      />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="/" element={<RequireAuth><ChatView /></RequireAuth>} />
+      <Route path="/admin/dashboard" element={<RequireAuth><AdminDashboardView /></RequireAuth>} />
+      <Route path="/help" element={<RequireAuth><Help /></RequireAuth>} />
     </Routes>
   );
 }
 
-function AppWithRouter() {
-  return (
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
-  );
+export default function AppWithRouter() {
+  return <BrowserRouter><App /></BrowserRouter>;
 }
-
-export default AppWithRouter;

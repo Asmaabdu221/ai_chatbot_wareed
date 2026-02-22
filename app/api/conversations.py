@@ -3,9 +3,10 @@ Conversation & Messages API. JWT Bearer only; user from token. No user_id from c
 """
 
 import logging
+from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Body, Request
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
@@ -161,30 +162,72 @@ def delete_conversation(
 # ---------- Messages ----------
 
 
+from fastapi import UploadFile, File, Form
+
 @router.post(
     "/conversations/{conversation_id}/messages",
     response_model=SendMessageResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Send message and get AI reply",
 )
-def send_message(
+async def send_message(
+    request: Request,
     conversation_id: UUID,
-    body: MessageCreate,
+    content: str = Form(None),
+    message: Optional[str] = Form(None),
+    attachment: Optional[UploadFile] = File(None),
+    attachment_type: Optional[str] = Form(None),
+    conversation_id_form: Optional[str] = Form(None, alias="conversation_id"),
+    # Support legacy JSON if no Form data is sent
+    body: Optional[MessageCreate] = Body(None),
     current_user: User = Depends(get_current_user),
     db: Session | None = Depends(get_db),
 ):
-    """Send a user message to the conversation; AI reply is generated and stored. 403 if not owner."""
+    """
+    Send a user message. Supports:
+    1. JSON (content field)
+    2. Form-data (content/message + optional attachment)
+    """
     if db is None:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="قاعدة البيانات غير مفعّلة.")
+    final_content = (content or message or (body.content if body else "")).strip()
+    if not final_content:
+        try:
+            payload = await request.json()
+            if isinstance(payload, dict):
+                final_content = str(payload.get("content") or payload.get("message") or "").strip()
+        except Exception:
+            # Multipart/form-data requests are valid and may not parse as JSON
+            pass
+
+    is_audio_attachment = bool(attachment and (attachment_type or "").lower() == "audio")
+    if not final_content:
+        if attachment and not is_audio_attachment:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="يرجى كتابة سؤالك حول المرفق قبل الإرسال.")
+        if not attachment:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="محتوى الرسالة مطلوب.")
     try:
-        result = msg_svc.send_message_with_ai(db, conversation_id, current_user.id, body.content)
+        if attachment:
+            file_bytes = await attachment.read()
+            result = msg_svc.send_message_with_attachment(
+                db, conversation_id, current_user.id, final_content or "",
+                attachment_content=file_bytes,
+                attachment_filename=attachment.filename,
+                attachment_type=attachment_type
+            )
+        else:
+            result = msg_svc.send_message_with_ai(db, conversation_id, current_user.id, final_content)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        logger.exception("send_message_with_ai failed: %s", e)
+        logger.exception("send_message failed: %s", e)
         from app.core.config import settings
-        detail = str(e) if getattr(settings, "DEBUG", False) else "حدث خطأ أثناء معالجة الرسالة. يرجى المحاولة مرة أخرى."
+        detail = str(e) if getattr(settings, "DEBUG", False) else "حدث خطأ أثناء معالجة الرسالة."
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail)
+
     if result is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="لا صلاحية لهذه المحادثة.")
+    
     user_msg, assistant_msg = result
     return SendMessageResponse(
         user_message=_msg_read(user_msg),

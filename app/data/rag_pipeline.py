@@ -28,7 +28,7 @@ DEFAULT_SIMILARITY_THRESHOLD = 0.58
 LEXICAL_MIN_SCORE = 50
 
 # Message when no relevant info found (professional, no "system" mention)
-NO_INFO_MESSAGE = "عذراً، لا تتوفر لدي معلومات عن ذلك حالياً."
+NO_INFO_MESSAGE = "عذراً، حالياً ما عندنا معلومات كافية عن هذا الطلب."
 
 
 def _load_json_robust(path: str) -> Optional[Dict]:
@@ -142,6 +142,79 @@ def _extract_search_terms(query: str) -> str:
     return q_lower if q_lower else (query or "").strip().lower()
 
 
+def _contains_arabic(text: str) -> bool:
+    return any("\u0600" <= ch <= "\u06FF" for ch in (text or ""))
+
+
+def _safe_normalize_for_matching(text: str) -> str:
+    """
+    Fast, safe normalization for retrieval.
+    Uses a local normalization path to avoid runtime stalls in legacy normalizers.
+    """
+    raw = (text or "").strip()
+    if not raw:
+        return ""
+    t = raw.lower()
+    if _contains_arabic(t):
+        t = re.sub(r"[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED]", "", t)
+        t = re.sub(r"[\u0622\u0623\u0625\u0671]", "\u0627", t)
+        t = re.sub(r"[\u0649\u064A]", "\u064A", t)
+        t = re.sub(r"\u0640", "", t)
+    else:
+        try:
+            return normalize_for_matching(t)
+        except Exception:
+            pass
+    t = re.sub(r"[^\w\s\u0600-\u06FF]", " ", t)
+    t = re.sub(r"\s+", " ", t)
+    return t.strip()
+
+
+def _extract_lab_code_tokens(query: str) -> List[str]:
+    tokens: List[str] = []
+    if not query:
+        return tokens
+    seen: Set[str] = set()
+    for raw in re.findall(r"\b[A-Za-z]{2,10}\d{0,3}[A-Za-z]{0,3}\d{0,2}\b", query):
+        token = raw.strip()
+        if not token:
+            continue
+        upper = token.upper()
+        if upper in {"TEST", "ANALYSIS", "PDF", "DOC", "DOCX", "TXT"}:
+            continue
+        if upper in seen:
+            continue
+        seen.add(upper)
+        tokens.append(token)
+    return tokens
+
+
+def _structured_code_match(query: str, tests: List[Dict[str, Any]], max_results: int = 5) -> List[Dict[str, Any]]:
+    tokens = _extract_lab_code_tokens(query)
+    if not tokens:
+        return []
+    matches: List[Dict[str, Any]] = []
+    for test in tests:
+        name_en = (test.get("analysis_name_en") or "").lower()
+        name_ar = _safe_normalize_for_matching((test.get("analysis_name_ar") or "").strip())
+        related = (test.get("related_tests") or "").lower()
+        alternative = (test.get("alternative_tests") or "").lower()
+        composite = f"{name_en} {name_ar} {related} {alternative}"
+        top_score = 0.0
+        for token in tokens:
+            tk = token.lower()
+            if re.search(rf"\b{re.escape(tk)}\b", name_en):
+                top_score = max(top_score, 0.99)
+            elif re.search(rf"\b{re.escape(tk)}\b", composite):
+                top_score = max(top_score, 0.93)
+            elif tk in composite:
+                top_score = max(top_score, 0.86)
+        if top_score > 0:
+            matches.append({"test": test, "score": top_score, "source": "structured"})
+    matches.sort(key=lambda x: x["score"], reverse=True)
+    return matches[:max_results]
+
+
 def _lexical_retrieve(
     query: str,
     tests: List[Dict[str, Any]],
@@ -152,47 +225,107 @@ def _lexical_retrieve(
     Lexical/fuzzy search on test names. Handles short queries, acronyms, partial names.
     Returns list of {test, score} where score is 0-100 (rapidfuzz).
     """
-    from rapidfuzz import fuzz
-
     search_terms = _extract_search_terms(query)
-    if not search_terms:
-        search_terms = (query or "").strip().lower()
     if not search_terms:
         return []
 
-    query_norm = normalize_for_matching(search_terms)
-    raw_norm = normalize_for_matching((query or "").strip().lower())
+    query_norm = _safe_normalize_for_matching(search_terms)
+    raw_norm = _safe_normalize_for_matching((query or "").strip().lower())
+    code_tokens = _extract_lab_code_tokens(query)
+    use_arabic_fast = _contains_arabic(query_norm) or _contains_arabic(raw_norm)
+    fuzz = None
+    if not use_arabic_fast:
+        try:
+            from rapidfuzz import fuzz as _rf_fuzz
+            fuzz = _rf_fuzz
+        except Exception:
+            from difflib import SequenceMatcher
+
+            class _FuzzFallback:
+                @staticmethod
+                def partial_ratio(a: str, b: str) -> int:
+                    a = (a or "").lower()
+                    b = (b or "").lower()
+                    if not a or not b:
+                        return 0
+                    if a in b or b in a:
+                        return 95
+                    return int(SequenceMatcher(None, a, b).ratio() * 100)
+
+                @staticmethod
+                def token_set_ratio(a: str, b: str) -> int:
+                    sa = set((a or "").lower().split())
+                    sb = set((b or "").lower().split())
+                    if not sa or not sb:
+                        return 0
+                    return int((len(sa & sb) / max(1, len(sa | sb))) * 100)
+
+            fuzz = _FuzzFallback()
+    logger.info(
+        "normalization executed | raw_query='%s' | normalized_query='%s' | query_len=%s | normalized_len=%s | has_arabic=%s | detected_tokens=%s",
+        (query or "")[:120],
+        query_norm[:120],
+        len(query or ""),
+        len(query_norm),
+        use_arabic_fast,
+        code_tokens,
+    )
     results = []
 
+    def _token_overlap_score(a: str, b: str) -> int:
+        if not a or not b:
+            return 0
+        if a in b or b in a:
+            return 90
+        at = set(a.split())
+        bt = set(b.split())
+        if not at or not bt:
+            return 0
+        return int((len(at & bt) / max(1, len(at))) * 100)
+
     for test in tests:
-        name_ar = (test.get("analysis_name_ar") or "").strip()
+        name_ar = _safe_normalize_for_matching((test.get("analysis_name_ar") or "").strip())
         name_en = (test.get("analysis_name_en") or "").strip()
-        desc = (test.get("description") or "").strip()
-        symptoms = (test.get("symptoms") or "").strip()
-        category = (test.get("category") or "").strip()
-        comp = (test.get("complementary_tests") or "").strip()
-        related = (test.get("alternative_tests") or "").strip() + " " + (test.get("related_tests") or "").strip()
+        desc = _safe_normalize_for_matching((test.get("description") or "").strip())
+        symptoms = _safe_normalize_for_matching((test.get("symptoms") or "").strip())
+        category = _safe_normalize_for_matching((test.get("category") or "").strip())
+        comp = _safe_normalize_for_matching((test.get("complementary_tests") or "").strip())
+        related = _safe_normalize_for_matching((test.get("alternative_tests") or "").strip() + " " + (test.get("related_tests") or "").strip())
         # Include symptoms, category, complementary, related for better matching (فيتامين د، نوم، مزاج، معدة)
         searchable = f"{name_ar} {name_en} {desc} {symptoms} {category} {comp} {related}".lower()
 
         max_score = 0
+        for token in code_tokens:
+            tk = token.lower()
+            if re.search(rf"\b{re.escape(tk)}\b", (name_en or "").lower()):
+                max_score = max(max_score, 99)
+            elif re.search(rf"\b{re.escape(tk)}\b", searchable):
+                max_score = max(max_score, 93)
         # Partial ratio: query contained in field (e.g. "nipt" in "Noninvasive prenatal testing (NIPT)")
         for qn in (query_norm, raw_norm):
             if not qn or len(qn) < 2:
                 continue
+            if use_arabic_fast:
+                if name_ar:
+                    max_score = max(max_score, _token_overlap_score(qn, name_ar))
+                if name_en:
+                    max_score = max(max_score, _token_overlap_score(qn, name_en.lower()))
+                if searchable:
+                    max_score = max(max_score, _token_overlap_score(qn, searchable))
+            else:
+                if name_ar:
+                    s = fuzz.partial_ratio(qn, name_ar)
+                    max_score = max(max_score, s)
+                if name_en:
+                    s = fuzz.partial_ratio(qn, name_en.lower())
+                    max_score = max(max_score, s)
+                if searchable:
+                    s = fuzz.partial_ratio(qn, searchable)
+                    max_score = max(max_score, s)
+        # Token set ratio: better for multi-word queries (Latin path only)
+        if not use_arabic_fast and len(query_norm.split()) >= 2:
             if name_ar:
-                s = fuzz.partial_ratio(qn, normalize_for_matching(name_ar))
-                max_score = max(max_score, s)
-            if name_en:
-                s = fuzz.partial_ratio(qn, name_en.lower())
-                max_score = max(max_score, s)
-            if searchable:
-                s = fuzz.partial_ratio(qn, normalize_for_matching(searchable))
-                max_score = max(max_score, s)
-        # Token set ratio: better for multi-word queries (e.g. "vitamin d" vs "Vitamine K")
-        if len(query_norm.split()) >= 2:
-            if name_ar:
-                s = fuzz.token_set_ratio(query_norm, normalize_for_matching(name_ar))
+                s = fuzz.token_set_ratio(query_norm, name_ar)
                 max_score = max(max_score, s)
             if name_en:
                 s = fuzz.token_set_ratio(query_norm, name_en.lower())
@@ -202,7 +335,7 @@ def _lexical_retrieve(
         for qn in (query_norm, raw_norm):
             if not qn or len(qn) < 2:
                 continue
-            if name_ar and qn in normalize_for_matching(name_ar):
+            if name_ar and qn in name_ar:
                 max_score = max(max_score, 90)
             if name_en and qn in name_en.lower():
                 max_score = max(max_score, 90)
@@ -224,47 +357,58 @@ def retrieve(
     Returns merged results; has_sufficient = True if semantic OR lexical finds a match.
     """
     tests, _ = load_rag_knowledge()
+    lex_min = LEXICAL_MIN_SCORE / 100.0
 
-    # Semantic search
-    semantic_results: List[Dict] = []
-    emb_data = load_embeddings()
-    if emb_data:
-        test_embeddings = emb_data.get("test_embeddings") or []
-        if len(test_embeddings) == len(tests):
-            try:
-                from app.services.embeddings_service import get_embedding
-                q_emb = get_embedding(query)
-                if q_emb:
-                    scored = []
-                    for i, emb in enumerate(test_embeddings):
-                        if emb:
-                            sim = _cosine_similarity(q_emb, emb)
-                            scored.append((i, sim))
-                    scored.sort(key=lambda x: x[1], reverse=True)
-                    for i, score in scored[:max_results]:
-                        semantic_results.append({
-                            "test": tests[i],
-                            "score": score,
-                            "source": "semantic",
-                        })
-            except Exception as e:
-                logger.debug("Semantic search failed: %s", e)
-
-    # Lexical search (always runs; robust for short queries)
+    detected_tokens = _extract_lab_code_tokens(query)
+    structured_results = _structured_code_match(query, tests, max_results=max_results)
     lexical_results = _lexical_retrieve(
         query,
         tests,
         max_results=max_results,
         min_score=LEXICAL_MIN_SCORE,
     )
+    lexical_results = structured_results + lexical_results
+    lexical_has_sufficient = any(r["score"] >= lex_min for r in lexical_results)
+    logger.info(
+        "retrieval routing | detected_tokens=%s | structured_hits=%s | lexical_hits=%s | semantic_skipped=%s",
+        detected_tokens,
+        len(structured_results),
+        len(lexical_results),
+        lexical_has_sufficient,
+    )
+
+    # Semantic search only when lexical is insufficient.
+    # This avoids blocking on external embedding calls when we already have a solid lexical hit.
+    semantic_results: List[Dict] = []
+    if not lexical_has_sufficient:
+        emb_data = load_embeddings()
+        if emb_data:
+            test_embeddings = emb_data.get("test_embeddings") or []
+            if len(test_embeddings) == len(tests):
+                try:
+                    from app.services.embeddings_service import get_embedding
+                    q_emb = get_embedding(query)
+                    if q_emb:
+                        scored = []
+                        for i, emb in enumerate(test_embeddings):
+                            if emb:
+                                sim = _cosine_similarity(q_emb, emb)
+                                scored.append((i, sim))
+                        scored.sort(key=lambda x: x[1], reverse=True)
+                        for i, score in scored[:max_results]:
+                            semantic_results.append({
+                                "test": tests[i],
+                                "score": score,
+                                "source": "semantic",
+                            })
+                except Exception as e:
+                    logger.debug("Semantic search failed: %s", e)
 
     # Merge: by test key, keep best score per test
     def _key(t: Dict) -> str:
         return str(t.get("analysis_name_ar", "")) + "|" + str(t.get("analysis_name_en", ""))
 
     best_by_key: Dict[str, Dict] = {}
-    lex_min = LEXICAL_MIN_SCORE / 100.0
-
     for r in semantic_results + lexical_results:
         t = r["test"]
         k = _key(t)

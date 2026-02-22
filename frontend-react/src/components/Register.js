@@ -3,10 +3,11 @@ import { useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
 import { setTokens, isAuthenticated } from '../services/auth';
 import { getErrorMessage } from '../utils/errorUtils';
-import './Register.css';
+import './Login.css'; /* auth styles shared with Login */
 
 function Register() {
   const navigate = useNavigate();
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -20,8 +21,8 @@ function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!email.trim() || !password) {
-      setError('يرجى إدخال البريد الإلكتروني وكلمة المرور.');
+    if (!name.trim() || !email.trim() || !password) {
+      setError('يرجى ملء جميع الحقول المطلوبة.');
       return;
     }
     if (password.length < 8) {
@@ -35,6 +36,7 @@ function Register() {
     setLoading(true);
     try {
       const { data } = await api.post("/api/auth/register", {
+        username: name.trim(), // Assuming username is used for full name in backend
         email,
         password,
       });
@@ -49,7 +51,7 @@ function Register() {
   };
 
   return (
-    <div className="auth-page" dir="rtl">
+    <div className="auth-page" dir="rtl" style={{ backgroundImage: "url('/images/login-ramadan.png')" }}>
       <div className="auth-card">
         <div className="auth-header">
           <img src="/images/wareed-logo.png" alt="وريد" className="auth-logo" />
@@ -59,17 +61,32 @@ function Register() {
 
         <form onSubmit={handleSubmit} className="auth-form">
           {error && <div className="auth-error">{error}</div>}
+
+          <label>
+            الاسم الكامل
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="أدخل اسمك الكامل"
+              disabled={loading}
+              required
+            />
+          </label>
+
           <label>
             البريد الإلكتروني
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="example@email.com"
+              placeholder="user@email.com"
               autoComplete="email"
               disabled={loading}
+              required
             />
           </label>
+
           <label>
             كلمة المرور (8 أحرف على الأقل)
             <input
@@ -79,8 +96,10 @@ function Register() {
               placeholder="••••••••"
               autoComplete="new-password"
               disabled={loading}
+              required
             />
           </label>
+
           <label>
             تأكيد كلمة المرور
             <input
@@ -90,10 +109,12 @@ function Register() {
               placeholder="••••••••"
               autoComplete="new-password"
               disabled={loading}
+              required
             />
           </label>
+
           <button type="submit" className="auth-submit" disabled={loading}>
-            {loading ? 'جاري إنشاء الحساب...' : 'إنشاء حساب'}
+            {loading ? 'جاري إنشاء الحساب...' : 'إنشاء حساب جديد'}
           </button>
         </form>
 

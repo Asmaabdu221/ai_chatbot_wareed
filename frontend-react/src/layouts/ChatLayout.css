@@ -1,100 +1,112 @@
-/**
- * ChatLayout - Sidebar on LEFT, main content on RIGHT.
- * Sidebar slides from left on mobile. Flexbox-based, responsive.
- */
+/* ============================================================
+   ChatLayout – Premium RTL Structure
+   ============================================================ */
 
 .chat-layout {
   display: flex;
+  flex-direction: row-reverse;
+  /* Sidebar Right, Chat Left */
   flex: 1;
-  min-height: 0;
-  position: relative;
+  height: 100%;
+  width: 100%;
   overflow: hidden;
+  overflow-x: hidden;
+  position: relative;
+  background: transparent;
 }
 
-/* Sidebar: left in LTR (previous chats column) */
-.chat-layout-sidebar {
-  order: 0;
-  width: 280px;
-  flex-shrink: 0;
-  background: var(--panel-bg);
-  border-inline-end: 1px solid var(--border-color);
+.chat-layout-main {
+  flex: 1;
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-width: 0;
+  position: relative;
+  transition: padding var(--transition-base);
+}
+
+.chat-layout-sidebar {
+  flex: 0 0 var(--sidebar-width);
+  width: var(--sidebar-width);
+  height: 100%;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-inline-start: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
   overflow: hidden;
-  transition: width 0.25s ease;
+  transition: width 0.2s ease, flex-basis 0.2s ease, margin 0.2s ease, transform var(--transition-base), background-color 200ms ease, box-shadow 200ms ease;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
 }
 
 .chat-layout-sidebar.collapsed {
-  width: 56px;
-  min-width: 56px;
+  width: 0;
+  flex-basis: 0;
+  margin: 0;
+  border-inline-start-color: transparent;
+  box-shadow: none;
+  pointer-events: none;
 }
 
-/* Main content: right in LTR */
-.chat-layout-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  order: 1;
-}
-
-/* RTL: sidebar left, main right */
-[dir="rtl"] .chat-layout-sidebar {
-  order: 0;
-  border-inline-end: none;
-  border-inline-start: 1px solid var(--border-color);
-}
-
-[dir="rtl"] .chat-layout-main {
-  order: 1;
-}
-
+/* Mobile backdrop */
 .chat-layout-backdrop {
   display: none;
   position: fixed;
   inset: 0;
-  border: none;
-  background: rgba(0, 0, 0, 0.35);
-  z-index: 1050;
-  cursor: default;
+  background: rgba(10, 15, 30, 0.3);
+  backdrop-filter: blur(4px);
+  z-index: 90;
+  opacity: 0;
+  transition: opacity var(--transition-base);
 }
 
-@media (max-width: 640px) {
-  .chat-layout-sidebar.collapsed {
-    width: 85%;
-    max-width: 320px;
-    min-width: auto;
-  }
+.chat-layout-floating-toggle {
+  position: fixed;
+  top: 16px;
+  right: 12px;
+  z-index: 9999;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--panel-bg);
+  color: var(--text-primary);
+  box-shadow: var(--glass-shadow);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
 
+.chat-layout-floating-toggle:hover {
+  background: var(--panel-section-bg);
+}
+
+[dir="ltr"] .chat-layout-floating-toggle {
+  right: auto;
+  left: 12px;
+}
+
+@media (max-width: 900px) {
   .chat-layout-sidebar {
-    position: fixed;
-    top: 0;
-    bottom: 0;
-    inset-inline-start: 0;
-    z-index: 1100;
-    width: 85%;
-    max-width: 320px;
-    transform: translateX(-100%);
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
-  }
-
-  [dir="rtl"] .chat-layout-sidebar {
-    inset-inline-start: auto;
+    position: absolute;
     inset-inline-end: 0;
     transform: translateX(100%);
+    box-shadow: -10px 0 40px rgba(0, 0, 0, 0.1);
   }
 
   .chat-layout-sidebar.open {
     transform: translateX(0);
   }
 
-  [dir="rtl"] .chat-layout-sidebar.open {
-    transform: translateX(0);
-  }
-
   .chat-layout-backdrop.visible {
     display: block;
+    opacity: 1;
   }
 }

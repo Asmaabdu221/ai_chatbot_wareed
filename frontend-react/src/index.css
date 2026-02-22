@@ -1,94 +1,219 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700&family=Cairo:wght@400;500;600;700&display=swap');
+/* ============================================================
+   WAREED AI – Premium UX Design System
+   Modern SaaS · Clean · Glassmorphism · RTL-first
+   ============================================================ */
 
-* {
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&family=Cairo:wght@400;500;600;700&display=swap');
+
+/* ── Reset ── */
+*,
+*::before,
+*::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
- :root {
-  --bg: #f9fafb;
-  --panel-bg: #ffffff;
-  --panel-section-bg: #ffffff;
-  --text-primary: #111827;
-  --text-secondary: #4b5563;
-  --text-muted: #6b7280;
-  --border-color: #e5e7eb;
-  --input-bg: #ffffff;
-  --button-bg: #ffffff;
-  --message-bg: #ffffff;
-  --assistant-bg: #ffffff;
-  --user-bg: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  --code-bg: #0f172a;
-  --code-text: #f8fafc;
-  --inline-slide-in: 10px;
-  --focus-ring: 0 0 0 3px rgba(59, 130, 246, 0.35);
-}
+:root {
+  /* Brand Identity - Premium Lavender */
+  --brand-50: #f7f6ff;
+  --brand-100: #f0eeff;
+  --brand-200: #e8e6ff;
+  --brand-300: #e0ddff;
+  --brand-400: #d8d3f7;
+  --brand-500: #b9b2e2;
+  --brand-600: #a196d4;
+  --brand-700: #8c7fc4;
 
- [data-theme="dark"] {
-  --bg: #0f172a;
-  --panel-bg: #111827;
-  --panel-section-bg: #0b1220;
-  --text-primary: #f9fafb;
-  --text-secondary: #cbd5f5;
+  /* Neutrals */
+  --gray-0: #ffffff;
+  --gray-50: #fcfcfd;
+  --gray-100: #f3f4f6;
+  --gray-200: #e5e7eb;
+  --gray-300: #d1d5db;
+  --gray-400: #9ca3af;
+  --gray-500: #6b7280;
+  --gray-600: #4b5563;
+  --gray-700: #374151;
+  --gray-800: #1f2937;
+  --gray-900: #111827;
+
+  /* Semantic - Light Mode */
+  --bg: #fcfcfd;
+  --surface: #ffffff;
+  --border: rgba(0, 0, 0, 0.08);
+  --text-primary: #1e293b;
+  --text-secondary: #475569;
   --text-muted: #94a3b8;
-  --border-color: #1f2937;
-  --input-bg: #0b1220;
-  --button-bg: #0b1220;
-  --message-bg: #0b1220;
-  --assistant-bg: #0b1220;
-  --code-bg: #111827;
-  --code-text: #e2e8f0;
-  --focus-ring: 0 0 0 3px rgba(148, 163, 184, 0.4);
+  --accent: #e2dff7;
+
+  /* Glassmorphism - Light Mode */
+  --glass-bg: rgba(255, 255, 255, 0.82);
+  --glass-border: rgba(255, 255, 255, 0.5);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  --glass-blur: blur(20px);
+
+  /* Component Specific - Light Mode */
+  --bubble-user-bg: rgba(226, 223, 247, 0.85);
+  --bubble-user-text: #1e293b;
+  --bubble-assistant-bg: rgba(255, 255, 255, 0.8);
+  --bubble-assistant-text: #1e293b;
+  --card-bg: rgba(255, 255, 255, 0.7);
+  --card-hover-bg: rgba(255, 255, 255, 0.9);
+  --sidebar-bg: rgba(255, 255, 255, 0.45);
+  --header-bg: rgba(255, 255, 255, 0.5);
+  --input-bg: rgba(255, 255, 255, 0.6);
+  --btn-bg: rgba(255, 255, 255, 0.7);
+
+  /* Typography Scale */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-md: 1.125rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 2rem;
+
+  /* Spacing Scale */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+
+  /* Layout */
+  --sidebar-width: 290px;
+  --sidebar-collapsed-width: 72px;
+  --header-height: 72px;
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-raised: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+  --shadow-overlay: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+  /* Background Mesh Gradient Colors - Light Mode (Soft Lavender/White) */
+  --mesh-1: #f7f6ff;
+  --mesh-2: #f0f4ff;
+  --mesh-3: #e8e6ff;
+  --mesh-4: #ffffff;
+
+  --transition-base: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-[dir="ltr"] {
-  --inline-slide-in: -10px;
+/* ── Dark Theme Overrides ── */
+[data-theme="dark"] {
+  --bg: #030712;
+  --surface: #0f172a;
+  --border: rgba(255, 255, 255, 0.08);
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #64748b;
+  --accent: #433e6b;
+
+  /* Glassmorphism - Dark Mode */
+  --glass-bg: rgba(15, 21, 36, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --glass-blur: blur(20px);
+
+  /* Component Specific - Dark Mode */
+  --bubble-user-bg: rgba(67, 62, 107, 0.7);
+  --bubble-user-text: #f8fafc;
+  --bubble-assistant-bg: rgba(30, 41, 59, 0.75);
+  --bubble-assistant-text: #f8fafc;
+  --card-bg: rgba(255, 255, 255, 0.06);
+  --card-hover-bg: rgba(255, 255, 255, 0.1);
+  --sidebar-bg: rgba(15, 23, 42, 0.55);
+  --header-bg: rgba(15, 23, 42, 0.6);
+  --input-bg: rgba(30, 41, 59, 0.5);
+  --btn-bg: rgba(255, 255, 255, 0.08);
+
+  /* Dark Mesh Gradient Colors (Marine Navy) */
+  --mesh-1: #0a1128;
+  --mesh-2: #1c4966;
+  --mesh-3: #2e5a7d;
+  --mesh-4: #163152;
 }
 
-html {
-  font-size: 19px;
-}
-
+html,
 body {
-  font-family: 'Noto Sans Arabic', 'Cairo', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
-    'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans',
-    'Helvetica Neue', sans-serif;
-  font-size: 1rem;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  direction: inherit;
+  height: 100%;
+  width: 100%;
   overflow: hidden;
   background: var(--bg);
+  font-family: 'Inter', 'Noto Sans Arabic', sans-serif;
   color: var(--text-primary);
+  line-height: 1.6;
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+/* Layered Marine Background System */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  /* Premium Reactive Mesh Gradient */
+  background:
+    radial-gradient(at 0% 0%, var(--mesh-1) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, var(--mesh-2) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, var(--mesh-3) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, var(--mesh-4) 0px, transparent 50%);
+  z-index: -2;
+  transition: filter 0.5s ease;
+}
+
+/* Layer 2: Readability Overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(10, 17, 40, 0.2), rgba(10, 17, 40, 0.4));
+  z-index: -1;
+  pointer-events: none;
+}
+
+[dir="rtl"] {
+  text-align: right;
 }
 
 .arabic-text {
-  line-height: 1.7;
-  letter-spacing: -0.01em;
-  unicode-bidi: plaintext;
+  font-family: 'Noto Sans Arabic', 'Cairo', sans-serif;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+#root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Scrollbar styling */
+.app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a1a1a1;
+  background: rgba(0, 0, 0, 0.15);
 }

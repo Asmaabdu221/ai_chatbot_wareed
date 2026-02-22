@@ -243,8 +243,8 @@ async def chat_endpoint(
         
         # === QUESTION ROUTING (price → fixed response, no API) ===
         route_type, fixed_reply = route_question(request.message)
-        if route_type == "price" and fixed_reply:
-            logger.info("🔀 Routed to price - returning contact response (no API call)")
+        if fixed_reply:
+            logger.info("🔀 Routed to fixed response (route=%s) - no API call", route_type)
             cache = get_smart_cache()
             try:
                 cache.set(request.message, fixed_reply)
@@ -754,8 +754,8 @@ async def voice_chat_endpoint(
         
         # Question routing for voice (price → fixed response)
         route_type, fixed_reply = route_question(transcribed_text)
-        if route_type == "price" and fixed_reply:
-            logger.info("🔀 Voice routed to price - returning contact response")
+        if fixed_reply:
+            logger.info("🔀 Voice routed to fixed response (route=%s)", route_type)
             try:
                 get_smart_cache().set(transcribed_text, fixed_reply)
             except Exception:

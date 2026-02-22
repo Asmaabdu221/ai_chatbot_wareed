@@ -11,6 +11,51 @@ const SUGGESTED_PROMPTS = [
   'ما هي التحاليل الجينية المتوفرة؟',
 ];
 
+const WELCOME_PRIMARY_ACTIONS = [
+  { key: 'booking', label: '\u0627\u062d\u062c\u0632 \u062a\u062d\u0644\u064a\u0644 \u0623\u0648 \u0628\u0627\u0642\u0629' },
+  { key: 'specific_test', label: '\u0627\u0633\u0623\u0644 \u0639\u0646 \u062a\u062d\u0644\u064a\u0644 \u0645\u0639\u064a\u0651\u0646' },
+  { key: 'explain_results', label: '\u0634\u0631\u062d \u0646\u062a\u0627\u0626\u062c \u0627\u0644\u062a\u062d\u0644\u064a\u0644' },
+  { key: 'services', label: '\u0627\u0644\u062e\u062f\u0645\u0627\u062a \u0648\u0627\u0644\u0641\u0631\u0648\u0639 \u0648\u0627\u0644\u0633\u062d\u0628 \u0627\u0644\u0645\u0646\u0632\u0644\u064a' },
+];
+
+const WELCOME_SECONDARY_ACTIONS = {
+  booking: [
+    {
+      label: '\u0627\u0628\u062f\u0623 \u0627\u0644\u0637\u0644\u0628',
+      message: '\u0623\u0628\u063a\u0649 \u0623\u062d\u062c\u0632 \u062a\u062d\u0644\u064a\u0644 \u0623\u0648 \u0628\u0627\u0642\u0629.',
+    },
+    {
+      label: '\u0627\u0637\u0644\u0628 \u062e\u062f\u0645\u0629 \u0633\u062d\u0628 \u0645\u0646\u0632\u0644\u064a',
+      message: '\u0623\u0628\u063a\u0649 \u062e\u062f\u0645\u0629 \u0633\u062d\u0628 \u0645\u0646\u0632\u0644\u064a (\u0648\u0631\u064a\u062f \u0643\u064a\u0631).',
+    },
+    { label: '\u0643\u064a\u0641 \u0623\u062d\u062c\u0632 \u0645\u0648\u0639\u062f\u061f', message: '\u0643\u064a\u0641 \u0623\u062d\u062c\u0632 \u0645\u0648\u0639\u062f\u061f' },
+  ],
+  specific_test: [
+    {
+      label: '\u0627\u0628\u062f\u0623 \u0627\u0644\u0633\u0624\u0627\u0644',
+      message: '\u0623\u0628\u063a\u0649 \u0623\u0633\u0623\u0644 \u0639\u0646 \u062a\u062d\u0644\u064a\u0644 \u0645\u0639\u064a\u0651\u0646.',
+    },
+    {
+      label: '\u0627\u0644\u062a\u062d\u0636\u064a\u0631 \u0642\u0628\u0644 \u0627\u0644\u062a\u062d\u0644\u064a\u0644',
+      message: '\u0627\u064a\u0634 \u0644\u0627\u0632\u0645 \u0623\u0633\u0648\u064a \u0642\u0628\u0644 \u062a\u062d\u0644\u064a\u0644 \u0641\u064a\u062a\u0627\u0645\u064a\u0646 \u062f\u061f',
+    },
+  ],
+  explain_results: [
+    {
+      label: '\u0627\u0628\u062f\u0623 \u0627\u0644\u0634\u0631\u062d',
+      message: '\u0623\u0628\u063a\u0649 \u0634\u0631\u062d \u0646\u062a\u0627\u0626\u062c \u0627\u0644\u062a\u062d\u0644\u064a\u0644. \u0648\u0634 \u0627\u0644\u0645\u0637\u0644\u0648\u0628 \u0623\u0631\u0641\u0642\u061f',
+    },
+  ],
+  services: [
+    {
+      label: '\u0627\u0628\u062f\u0623 \u0627\u0644\u0637\u0644\u0628',
+      message: '\u0623\u0628\u063a\u0649 \u0645\u0639\u0644\u0648\u0645\u0627\u062a \u0639\u0646 \u0627\u0644\u0641\u0631\u0648\u0639 \u0648\u0627\u0644\u062e\u062f\u0645\u0627\u062a \u0648\u0627\u0644\u0633\u062d\u0628 \u0627\u0644\u0645\u0646\u0632\u0644\u064a.',
+    },
+    { label: '\u0645\u062a\u0649 \u0633\u0627\u0639\u0627\u062a \u0627\u0644\u062f\u0648\u0627\u0645\u061f', message: '\u0645\u062a\u0649 \u0633\u0627\u0639\u0627\u062a \u0627\u0644\u062f\u0648\u0627\u0645\u061f' },
+    { label: '\u0637\u0631\u0642 \u0627\u0644\u062f\u0641\u0639', message: '\u0648\u0634 \u0637\u0631\u0642 \u0627\u0644\u062f\u0641\u0639 \u0627\u0644\u0645\u062a\u0627\u062d\u0629\u061f' },
+  ],
+};
+
 const MessageList = ({
   messages,
   isSending,
@@ -19,6 +64,10 @@ const MessageList = ({
   hasConversation,
   onSuggestedPromptClick,
   userName = 'مستخدم',
+  onReply,
+  onDelete,
+  onPin,
+  pinnedMessageIds = [],
 }) => {
   const messagesEndRef = useRef(null);
   const [speakingId, setSpeakingId] = useState(null);
@@ -28,6 +77,7 @@ const MessageList = ({
   const prevFirstIdRef = useRef(null);
   const prevScrollHeightRef = useRef(0);
   const [showNewMessages, setShowNewMessages] = useState(false);
+  const [selectedWelcomeSection, setSelectedWelcomeSection] = useState(null);
 
   const scrollToBottom = (behavior = 'smooth') => {
     messagesEndRef.current?.scrollIntoView({ behavior });
@@ -69,6 +119,12 @@ const MessageList = ({
     };
   }, []);
 
+  useEffect(() => {
+    if (messages.length > 0 && selectedWelcomeSection !== null) {
+      setSelectedWelcomeSection(null);
+    }
+  }, [messages.length, selectedWelcomeSection]);
+
   useLayoutEffect(() => {
     const list = listRef.current;
     if (!list) return;
@@ -90,13 +146,73 @@ const MessageList = ({
 
   const formatDay = (ts) => formatArabicDate(ts);
 
+  const handleMessageAction = (action, message) => {
+    if (action === 'reply') onReply(message);
+    if (action === 'delete') onDelete(message.id);
+    if (action === 'pin') onPin(message.id);
+  };
+
   return (
     <div
       className={`message-list ${isFetching ? 'is-fetching' : ''}`}
       ref={listRef}
       onScroll={updateNearBottom}
     >
-      {messages.length === 0 && !isSending && !isFetching && !hasConversation && (
+      {/* Ramadan Watermark */}
+      <div
+        className="ramadan-watermark"
+        style={{ backgroundImage: "url('/images/ramadan.png')" }}
+        aria-hidden="true"
+      />
+      {messages.length === 0 && !isSending && !isFetching && (
+        <div className="welcome-screen arabic-text" dir="auto">
+          <div className="welcome-card">
+            <img src="/images/chat-welcome-icon.png" alt="" className="welcome-icon-img" aria-hidden="true" />
+            <h3 className="welcome-greeting">{formatArabicText('\u0645\u0631\u062d\u0628\u064b\u0627 \u0628\u0643 \u0641\u064a \u0645\u062e\u062a\u0628\u0631\u0627\u062a \u0648\u0631\u064a\u062f \u0627\u0644\u0637\u0628\u064a\u0629')}</h3>
+            <p className="welcome-trust-line">{formatArabicText('\u0645\u0639\u062a\u0645\u062f\u064a\u0646 \u0645\u0646 \u0633\u0628\u0627\u0647\u064a \u00b7 10M+ \u062a\u062d\u0644\u064a\u0644 \u00b7 \u0633\u062d\u0628 \u0645\u0646\u0632\u0644\u064a')}</p>
+            <p className="welcome-subtitle">{formatArabicText('\u0643\u064a\u0641 \u0646\u0642\u062f\u0631 \u0646\u062e\u062f\u0645\u0643 \u0627\u0644\u064a\u0648\u0645\u061f')}</p>
+
+            <div className="welcome-primary-actions">
+              {WELCOME_PRIMARY_ACTIONS.map((action) => (
+                <button
+                  key={`welcome-primary-${action.key}`}
+                  type="button"
+                  className={`welcome-primary-button ${selectedWelcomeSection === action.key ? 'is-active' : ''}`}
+                  dir="auto"
+                  onClick={() => setSelectedWelcomeSection(action.key)}
+                >
+                  {formatArabicText(action.label)}
+                </button>
+              ))}
+            </div>
+
+            {selectedWelcomeSection && (
+              <div className="welcome-secondary-actions">
+                {WELCOME_SECONDARY_ACTIONS[selectedWelcomeSection].map((action, index) => (
+                  <button
+                    key={`welcome-secondary-${selectedWelcomeSection}-${index}`}
+                    type="button"
+                    className="welcome-chip"
+                    dir="auto"
+                    onClick={() => onSuggestedPromptClick?.(action.message)}
+                    disabled={!onSuggestedPromptClick}
+                  >
+                    {formatArabicText(action.label)}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="welcome-collapse-button"
+                  onClick={() => setSelectedWelcomeSection(null)}
+                >
+                  {formatArabicText('\u0631\u062c\u0648\u0639')}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {false && messages.length === 0 && !isSending && !isFetching && !hasConversation && (
         <div className="welcome-screen arabic-text" dir="auto">
           <img src="/images/chat-welcome-icon.png" alt="" className="welcome-icon-img" aria-hidden="true" />
           <h3 className="welcome-greeting">
@@ -120,7 +236,7 @@ const MessageList = ({
         </div>
       )}
 
-      {messages.length === 0 && !isSending && !isFetching && hasConversation && (
+      {false && messages.length === 0 && !isSending && !isFetching && hasConversation && (
         <div className="welcome-screen arabic-text" dir="auto">
           <img src="/images/chat-welcome-icon.png" alt="" className="welcome-icon-img" aria-hidden="true" />
           <h3>{formatArabicText('لا توجد رسائل بعد')}</h3>
@@ -156,35 +272,37 @@ const MessageList = ({
       {(() => {
         let groupIndex = 0;
         return messages.map((message, index) => {
-        const prev = messages[index - 1];
-        const next = messages[index + 1];
-        const currentTs = message.created_at || message.timestamp;
-        const prevTs = prev ? (prev.created_at || prev.timestamp) : null;
-        const showSeparator = !prev || dayKey(currentTs) !== dayKey(prevTs);
-        const prevRole = prev?.role;
-        const nextRole = next?.role;
-        const isGrouped = prevRole === message.role;
-        const isGroupEnd = nextRole !== message.role;
-        if (!prev || prev.role !== message.role) groupIndex += 1;
-        const isAltGroup = groupIndex % 2 === 0;
-        return (
-          <React.Fragment key={`${message.id || index}-${index}`}>
-            {showSeparator && currentTs && (
-              <div className="date-separator arabic-text" dir="auto">
-                {formatDay(currentTs)}
-              </div>
-            )}
-            <Message
-              message={message}
-              showAvatar={isGroupEnd}
-              showTimestamp={isGroupEnd}
-              isGrouped={isGrouped}
-              isAltGroup={isAltGroup}
-              speakingId={speakingId}
-              onSpeak={setSpeakingId}
-            />
-          </React.Fragment>
-        );
+          const prev = messages[index - 1];
+          const next = messages[index + 1];
+          const currentTs = message.created_at || message.timestamp;
+          const prevTs = prev ? (prev.created_at || prev.timestamp) : null;
+          const showSeparator = !prev || dayKey(currentTs) !== dayKey(prevTs);
+          const prevRole = prev?.role;
+          const nextRole = next?.role;
+          const isGrouped = prevRole === message.role;
+          const isGroupEnd = nextRole !== message.role;
+          if (!prev || prev.role !== message.role) groupIndex += 1;
+          const isAltGroup = groupIndex % 2 === 0;
+          return (
+            <React.Fragment key={`${message.id || index}-${index}`}>
+              {showSeparator && currentTs && (
+                <div className="date-separator arabic-text" dir="auto">
+                  {formatDay(currentTs)}
+                </div>
+              )}
+              <Message
+                message={message}
+                showAvatar={isGroupEnd}
+                showTimestamp={isGroupEnd}
+                isGrouped={isGrouped}
+                isAltGroup={isAltGroup}
+                speakingId={speakingId}
+                onSpeak={setSpeakingId}
+                isPinned={pinnedMessageIds.includes(message.id)}
+                onAction={(action) => handleMessageAction(action, message)}
+              />
+            </React.Fragment>
+          );
         });
       })()}
 

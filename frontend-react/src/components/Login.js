@@ -37,7 +37,7 @@ function Login() {
   };
 
   return (
-    <div className="auth-page" dir="rtl">
+    <div className="auth-page" dir="rtl" style={{ backgroundImage: "url('/images/login-ramadan.png')" }}>
       <div className="auth-card">
         <div className="auth-header">
           <img src="/images/wareed-logo.png" alt="وريد" className="auth-logo" />

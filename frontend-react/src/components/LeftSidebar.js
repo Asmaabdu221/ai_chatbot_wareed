@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { formatArabicText } from '../utils/arabicFormatters';
+import { getErrorMessage } from '../utils/errorUtils';
 import EditProfileModal from './EditProfileModal';
 import ChatItemDropdown, { ThreeDotsIcon } from './ChatItemDropdown';
 import ShareModal from './ShareModal';
@@ -176,6 +177,13 @@ const PanelRightIcon = () => (
   </svg>
 );
 
+const QUICK_ACTION_PROMPTS = [
+  { label: '\u0627\u0636\u0641 \u0635\u0648\u0631\u0629 \u0648\u0648\u0635\u0641\u0629 \u0637\u0628\u064a\u0629', message: '\u0623\u0631\u063a\u0628 \u0628\u0631\u0641\u0639 \u0635\u0648\u0631\u0629 \u0623\u0648 \u0645\u0644\u0641 \u062a\u062d\u0644\u064a\u0644/\u0648\u0635\u0641\u0629 \u0637\u0628\u064a\u0629.' },
+  { label: '\u0627\u0633\u062a\u0639\u0644\u0645 \u0639\u0646 \u0627\u0644\u0623\u0633\u0639\u0627\u0631', message: '\u0623\u0631\u064a\u062f \u0627\u0644\u0627\u0633\u062a\u0639\u0644\u0627\u0645 \u0639\u0646 \u0627\u0644\u0623\u0633\u0639\u0627\u0631.' },
+  { label: '\u0628\u0627\u0642\u0627\u062a \u0648\u0631\u064a\u062f', message: '\u0623\u0631\u064a\u062f \u0645\u0639\u0631\u0641\u0629 \u0628\u0627\u0642\u0627\u062a \u0648\u0631\u064a\u062f.' },
+  { label: '\u0634\u0631\u062d \u0646\u062a\u0627\u0626\u062c \u0627\u0644\u062a\u062d\u0644\u064a\u0644', message: '\u0623\u0631\u064a\u062f \u0634\u0631\u062d \u0646\u062a\u0627\u0626\u062c \u0627\u0644\u062a\u062d\u0644\u064a\u0644.' },
+];
+
 const LeftSidebar = ({
   conversations,
   pinnedConversationIds = [],
@@ -195,6 +203,7 @@ const LeftSidebar = ({
   onThemeChange,
   onClearChats,
   onProfileUpdated,
+  onQuickAction,
   isLoading,
   showDashboardLink = false,
 }) => {
@@ -206,6 +215,7 @@ const LeftSidebar = ({
   const [dropdownConvId, setDropdownConvId] = useState(null);
   const [shareConv, setShareConv] = useState(null);
   const [renameConv, setRenameConv] = useState(null);
+  const [quickActionError, setQuickActionError] = useState(null);
   const dotsAnchorRef = useRef(null);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia?.('(max-width: 640px)')?.matches);
   const footerRef = useRef(null);
@@ -234,8 +244,8 @@ const LeftSidebar = ({
 
   const filteredConversations = searchQuery.trim()
     ? conversations.filter((c) =>
-        (c.title || 'محادثة جديدة').toLowerCase().includes(searchQuery.toLowerCase())
-      )
+      (c.title || 'محادثة جديدة').toLowerCase().includes(searchQuery.toLowerCase())
+    )
     : conversations;
 
   const sortedConversations = [...filteredConversations].sort((a, b) => {
@@ -245,6 +255,28 @@ const LeftSidebar = ({
     if (!aPinned && bPinned) return 1;
     return 0;
   });
+
+
+  const handleQuickAction = async (message) => {
+    if (!onQuickAction) return;
+    const text = typeof message === 'string' ? message.trim() : '';
+    if (!text) {
+      setQuickActionError('محتوى الرسالة مطلوب.');
+      return;
+    }
+
+    setQuickActionError(null);
+    try {
+      if (process.env.NODE_ENV === 'development') {
+        console.info('[QuickAction] sending:', { message: text });
+      }
+      await onQuickAction(text);
+      if (isMobile) onCloseSidebar?.();
+    } catch (err) {
+      console.error('[QuickAction] send failed:', err);
+      setQuickActionError(getErrorMessage(err, 'تعذر إرسال الرسالة. حاول مرة أخرى.'));
+    }
+  };
 
   if (showCollapsed) {
     return (
@@ -308,8 +340,11 @@ const LeftSidebar = ({
         </button>
         <img
           src="/images/wareed-logo.png"
-          alt="  "
+          alt="مختبرات وريد"
           className="left-sidebar-logo"
+          onClick={onNewConversation}
+          title="بدء محادثة جديدة"
+          style={{ cursor: 'pointer' }}
         />
       </div>
 
@@ -334,6 +369,24 @@ const LeftSidebar = ({
         />
       </div>
 
+      <div className="left-sidebar-quick-actions" dir="rtl">
+        {QUICK_ACTION_PROMPTS.map((action) => (
+          <button
+            key={action.label}
+            type="button"
+            className="left-sidebar-quick-action-btn"
+            onClick={() => { void handleQuickAction(action.message); }}
+          >
+            {action.label}
+          </button>
+        ))}
+        {quickActionError && (
+          <div className="left-sidebar-quick-action-error" role="alert" dir="auto">
+            {quickActionError}
+          </div>
+        )}
+      </div>
+
       {showDashboardLink && (
         <div className="sidebar-nav">
           <Link className={`nav-link ${isChat ? 'active' : ''}`} to="/">
@@ -348,58 +401,58 @@ const LeftSidebar = ({
       <div className="left-sidebar-chat-section">
         <div className="left-sidebar-chat-title" dir="auto">{formatArabicText('المحادثات السابقة')}</div>
         <div className="conversations-list">
-        {isLoading ? (
-          <div className="sidebar-skeleton">
-            <div className="sidebar-skeleton-item" />
-            <div className="sidebar-skeleton-item" />
-            <div className="sidebar-skeleton-item" />
-          </div>
-        ) : conversations.length === 0 ? (
-          <div className="empty-state arabic-text" dir="auto">
-            <p>{formatArabicText('لا توجد محادثات')}</p>
-          </div>
-        ) : filteredConversations.length === 0 ? (
-          <div className="empty-state arabic-text" dir="auto">
-            <p>{formatArabicText('لا توجد نتائج للبحث')}</p>
-          </div>
-        ) : (
-          sortedConversations.map((conv) => (
-            <div
-              key={conv.id}
-              className={`conversation-item ${conv.id === currentConversationId ? 'active' : ''}`}
-              onClick={() => onSelectConversation(conv.id)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  onSelectConversation(conv.id);
-                }
-              }}
-            >
-              <div className="conversation-content">
-                {pinnedConversationIds.includes(conv.id) && (
-                  <span className="conversation-pin-indicator" title="مثبتة">📌</span>
-                )}
-                <div className="conversation-title">{conv.title || 'محادثة جديدة'}</div>
-              </div>
-              <button
-                type="button"
-                className="chat-item-dots-btn"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  dotsAnchorRef.current = e.currentTarget;
-                  setDropdownConvId(dropdownConvId === conv.id ? null : conv.id);
-                }}
-                aria-label="خيارات المحادثة"
-                aria-haspopup="menu"
-                aria-expanded={dropdownConvId === conv.id}
-              >
-                <ThreeDotsIcon />
-              </button>
+          {isLoading ? (
+            <div className="sidebar-skeleton">
+              <div className="sidebar-skeleton-item" />
+              <div className="sidebar-skeleton-item" />
+              <div className="sidebar-skeleton-item" />
             </div>
-          ))
-        )}
+          ) : conversations.length === 0 ? (
+            <div className="empty-state arabic-text" dir="auto">
+              <p>{formatArabicText('لا توجد محادثات')}</p>
+            </div>
+          ) : filteredConversations.length === 0 ? (
+            <div className="empty-state arabic-text" dir="auto">
+              <p>{formatArabicText('لا توجد نتائج للبحث')}</p>
+            </div>
+          ) : (
+            sortedConversations.map((conv) => (
+              <div
+                key={conv.id}
+                className={`conversation-item ${conv.id === currentConversationId ? 'active' : ''}`}
+                onClick={() => onSelectConversation(conv.id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSelectConversation(conv.id);
+                  }
+                }}
+              >
+                <div className="conversation-content">
+                  {pinnedConversationIds.includes(conv.id) && (
+                    <span className="conversation-pin-indicator" title="مثبتة">📌</span>
+                  )}
+                  <div className="conversation-title">{conv.title || 'محادثة جديدة'}</div>
+                </div>
+                <button
+                  type="button"
+                  className="chat-item-dots-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    dotsAnchorRef.current = e.currentTarget;
+                    setDropdownConvId(dropdownConvId === conv.id ? null : conv.id);
+                  }}
+                  aria-label="خيارات المحادثة"
+                  aria-haspopup="menu"
+                  aria-expanded={dropdownConvId === conv.id}
+                >
+                  <ThreeDotsIcon />
+                </button>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
@@ -465,13 +518,13 @@ const LeftSidebar = ({
           }}
           onArchive={(conv) => {
             if (window.confirm('هل تريد أرشفة هذه المحادثة؟')) {
-              onDeleteConversation(conv.id);
+              onDeleteConversation ? onDeleteConversation(conv.id) : (process.env.NODE_ENV === 'development' && console.error('[Sidebar] onDeleteConversation is not provided'));
             }
           }}
           onDelete={(conv) => {
             const title = conv?.title || 'هذه المحادثة';
             if (window.confirm(`هل أنت متأكد من حذف "${title}"؟`)) {
-              onDeleteConversation(conv.id);
+              onDeleteConversation ? onDeleteConversation(conv.id) : (process.env.NODE_ENV === 'development' && console.error('[Sidebar] onDeleteConversation is not provided'));
             }
           }}
         />
@@ -502,3 +555,4 @@ const LeftSidebar = ({
 };
 
 export default LeftSidebar;
+

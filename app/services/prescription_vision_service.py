@@ -11,8 +11,23 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
-from openai import OpenAI
-from rapidfuzz import fuzz
+try:
+    from rapidfuzz import fuzz
+except Exception:
+    from difflib import SequenceMatcher
+
+    class _FuzzFallback:
+        @staticmethod
+        def partial_ratio(a: str, b: str) -> int:
+            a = (a or "").lower()
+            b = (b or "").lower()
+            if not a or not b:
+                return 0
+            if a in b or b in a:
+                return 95
+            return int(SequenceMatcher(None, a, b).ratio() * 100)
+
+    fuzz = _FuzzFallback()
 
 from app.core.config import settings
 from app.data.knowledge_loader_v2 import get_knowledge_base
@@ -120,6 +135,10 @@ def _parse_vision_response(raw: str) -> Dict[str, Any]:
 
 
 def _extract_tests_via_vision(image_bytes: bytes) -> List[Dict[str, Any]]:
+    try:
+        from openai import OpenAI
+    except Exception:
+        raise ValueError("Vision service is currently unavailable.")
     client = OpenAI(api_key=settings.OPENAI_API_KEY)
     b64 = base64.b64encode(image_bytes).decode("utf-8")
     mime = "image/png" if (len(image_bytes) >= 8 and image_bytes[:8] == b"\x89PNG\r\n\x1a\n") else "image/jpeg"

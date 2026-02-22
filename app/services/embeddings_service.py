@@ -20,7 +20,12 @@ def _get_client():
     if _client is None:
         try:
             from openai import OpenAI
-            _client = OpenAI(api_key=settings.OPENAI_API_KEY)
+            # Keep embedding calls fast-fail so RAG can gracefully fall back to lexical/KB search.
+            _client = OpenAI(
+                api_key=settings.OPENAI_API_KEY,
+                timeout=8.0,
+                max_retries=0,
+            )
         except Exception as e:
             logger.warning("OpenAI client not available for embeddings: %s", e)
     return _client

@@ -1,116 +1,253 @@
+/**
+ * Auth – Login & Register Modern Glassmorphism Styles (2025 SaaS Aesthetic)
+ * Designed for High-End UX, RTL Support, and Premium Feel.
+ */
+
 .auth-page {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 50%, #f0fdf4 100%);
+  position: relative;
+  overflow: hidden;
   padding: 20px;
+  /* Background image set via inline style in JS for Webpack compatibility */
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+  animation: fadeIn 1.2s ease-out;
 }
 
-.auth-card {
+/* Layer 1: Dark Gradient Overlay & Subtle Blur */
+.auth-page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg,
+      rgba(10, 15, 30, 0.65),
+      rgba(10, 15, 30, 0.45));
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 1;
+}
+
+/* Layer 2: Soft Lighting Glow */
+.auth-page::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
   width: 100%;
-  max-width: 400px;
-  background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
-  padding: 2rem;
+  height: 100%;
+  background: radial-gradient(circle at 80% 20%, rgba(216, 211, 247, 0.15), transparent 40%);
+  pointer-events: none;
+  z-index: 2;
 }
 
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* ── Form Card (Glassmorphism) ── */
+.auth-card {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 460px;
+  background: rgba(255, 255, 255, 0.08);
+  /* Requested transparency */
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 32px;
+  /* Smoother corners */
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.3),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  padding: 48px;
+  animation: cardScaleUp 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes cardScaleUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ── Header ── */
 .auth-header {
   text-align: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: 40px;
 }
 
 .auth-logo {
-  width: 80px;
-  height: auto;
-  margin-bottom: 1rem;
+  height: 72px;
+  width: auto;
+  margin-bottom: 24px;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
 }
 
 .auth-header h1 {
-  font-size: 1.5rem;
-  color: #0f172a;
-  margin: 0 0 0.25rem 0;
+  font-size: 32px;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0 0 8px;
+  letter-spacing: -0.02em;
 }
 
 .auth-header p {
-  font-size: 0.875rem;
-  color: #64748b;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.7);
   margin: 0;
+  font-weight: 500;
+}
+
+/* ── Form ── */
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 
 .auth-form label {
-  display: block;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #334155;
-  margin-bottom: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .auth-form input {
   width: 100%;
-  padding: 0.75rem 1rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  font-size: 1rem;
-  margin-bottom: 1rem;
-  box-sizing: border-box;
-}
-
-.auth-form input:focus {
+  padding: 14px 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 16px;
+  font-size: 16px;
+  color: #ffffff;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   outline: none;
-  border-color: #0ea5e9;
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
 }
 
 .auth-form input::placeholder {
-  color: #94a3b8;
+  color: rgba(255, 255, 255, 0.35);
 }
 
+.auth-form input:focus {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--brand-400);
+  box-shadow: 0 0 15px rgba(216, 211, 247, 0.25);
+  transform: translateY(-1px);
+}
+
+/* ── Error State ── */
 .auth-error {
-  background: #fef2f2;
-  color: #991b1b;
-  padding: 0.75rem 1rem;
-  border-radius: 10px;
-  font-size: 0.875rem;
-  margin-bottom: 1rem;
+  background: rgba(223, 59, 59, 0.15);
+  color: #ff6b6b;
+  padding: 14px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid rgba(223, 59, 59, 0.3);
+  text-align: center;
+  animation: shake 0.5s ease-in-out;
 }
 
+@keyframes shake {
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  20%,
+  60% {
+    transform: translateX(-4px);
+  }
+
+  40%,
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+/* ── Submit Button ── */
 .auth-submit {
   width: 100%;
-  padding: 0.875rem 1rem;
-  background: #0ea5e9;
-  color: #fff;
+  padding: 16px;
+  margin-top: 8px;
+  background: linear-gradient(135deg, var(--brand-400) 0%, #b9b2e2 100%);
+  color: #1a1a1c;
   border: none;
-  border-radius: 10px;
-  font-size: 1rem;
-  font-weight: 600;
+  border-radius: 18px;
+  font-size: 16px;
+  font-weight: 700;
   cursor: pointer;
-  margin-top: 0.5rem;
+  transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+  box-shadow: 0 8px 24px -6px rgba(185, 178, 226, 0.5);
 }
 
 .auth-submit:hover:not(:disabled) {
-  background: #0284c7;
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 12px 32px -6px rgba(185, 178, 226, 0.7);
+  filter: brightness(1.05);
+}
+
+.auth-submit:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
 }
 
 .auth-submit:disabled {
-  opacity: 0.7;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.3);
   cursor: not-allowed;
+  box-shadow: none;
 }
 
+/* ── Switch Section ── */
 .auth-switch {
   text-align: center;
-  margin-top: 1.5rem;
-  font-size: 0.875rem;
-  color: #64748b;
+  margin-top: 32px;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .auth-switch a {
-  color: #0ea5e9;
+  color: #ffffff;
   text-decoration: none;
-  font-weight: 500;
+  font-weight: 700;
+  margin-inline-start: 6px;
+  transition: all 0.2s;
+  border-bottom: 2px solid var(--brand-400);
 }
 
 .auth-switch a:hover {
-  text-decoration: underline;
+  color: var(--brand-300);
+  border-color: var(--brand-300);
+  opacity: 0.9;
+}
+
+/* ── Responsive ── */
+@media (max-width: 520px) {
+  .auth-card {
+    padding: 32px 24px;
+    border-radius: 24px;
+  }
+
+  .auth-header h1 {
+    font-size: 26px;
+  }
 }

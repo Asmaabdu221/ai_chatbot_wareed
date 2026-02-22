@@ -109,13 +109,13 @@ const AttachmentMenu = ({
             }
           }}
           disabled={disabled || !onFileUpload || isImageLoading || isFileLoading}
-          aria-label="رفع ملف وتحليل الوصفة"
+          aria-label="رفع ملف وتحليله (PDF, DOC, TXT)"
         >
           <span className="attachment-menu-icon" aria-hidden="true">
             {isFileLoading ? '⏳' : '📎'}
           </span>
           <span className="attachment-menu-label">
-            {isFileLoading ? 'جاري المعالجة...' : 'رفع ملف (PDF, DOC, TXT)'}
+            {isFileLoading ? 'جاري المعالجة...' : 'رفع ملف وتحليله (PDF, DOC, TXT)'}
           </span>
         </button>
       )}

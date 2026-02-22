@@ -5,8 +5,15 @@ Handles all interactions with OpenAI API for Arabic medical chatbot responses
 
 import logging
 from typing import Optional, Dict, Any
-from openai import OpenAI, OpenAIError
 from app.core.config import settings
+
+try:
+    from openai import OpenAI, OpenAIError
+except Exception:  # Keep backend running even if OpenAI package runtime is broken.
+    OpenAI = None
+
+    class OpenAIError(Exception):
+        pass
 
 # Get logger
 logger = logging.getLogger(__name__)
@@ -23,14 +30,20 @@ class OpenAIService:
         Initialize OpenAI client with API key from settings
         """
         try:
-            self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
+            self.client = OpenAI(api_key=settings.OPENAI_API_KEY) if OpenAI is not None else None
             self.model = settings.OPENAI_MODEL
             self.max_tokens = settings.OPENAI_MAX_TOKENS
             self.temperature = settings.OPENAI_TEMPERATURE
-            logger.info(f"✅ OpenAI Service initialized with model: {self.model}")
+            if self.client is not None:
+                logger.info(f"✅ OpenAI Service initialized with model: {self.model}")
+            else:
+                logger.warning("⚠️ OpenAI runtime is unavailable; fallback responses will be used.")
         except Exception as e:
+            self.client = None
+            self.model = settings.OPENAI_MODEL
+            self.max_tokens = settings.OPENAI_MAX_TOKENS
+            self.temperature = settings.OPENAI_TEMPERATURE
             logger.error(f"❌ Failed to initialize OpenAI Service: {str(e)}")
-            raise
     
     def _build_system_prompt(self, knowledge_context: Optional[str] = None) -> str:
         """
@@ -39,8 +52,24 @@ class OpenAIService:
         """
         base_prompt = """أنت "وريد"، مساعد معلومات طبية لمختبرات وريد. أسلوبك احترافي وودود.
 
+=== VOICE & POV RULE (إلزامي) ===
+- أنت تتحدث بصوت مختبرات وريد مباشرة مع العميل.
+- استخدم دائماً صيغة المتكلم الجمع: نحن / عندنا / نوفر / نقدم.
+- خاطب العميل مباشرة بصيغة سعودية طبيعية: تقدر/تقدرين.
+- ممنوع تتكلم عن "مختبرات وريد" كجهة خارجية.
+- ممنوع عبارات الطرف الثالث مثل: "مختبرات وريد تقدم..." أو "يمكنك التواصل مع مختبرات وريد...".
+
+=== قواعد اللغة (إلزامي) ===
+- أجب دائمًا باللغة العربية.
+- استخدم لهجة سعودية طبيعية ومفهومة.
+- جميع الردود لازم تكون بالعربية باللهجة السعودية المهنية الواضحة.
+- حافظ على أسلوب مهني مناسب لمختبر طبي، مع شرح واضح ولطيف.
+- لا تنتقل للإنجليزية إلا إذا طلب المستخدم ذلك صراحة.
+- إذا كتب المستخدم بالعربية: أجب بالعربية.
+- إذا كتب المستخدم بالإنجليزية: أجب بالعربية أيضًا ما لم يطلب غير ذلك صراحة.
+
 === قواعد صارمة ===
-- عرض الأسعار معطّل. أي سؤال عن السعر/التكلفة: أعد فقط "للاستفسار عن الأسعار يرجى التواصل مع أقرب فرع لمختبرات وريد على الرقم: 800-122-1220"
+- عرض الأسعار معطّل. أي سؤال عن السعر/التكلفة: أعد فقط "للاستفسار عن الأسعار تقدر تتواصل معنا على الرقم: 800-122-1220"
 - لا تستخدم معرفة خارج النتائج المسترجعة. لا تفسر طبياً. لا تشخص. لا تنصح علاجياً.
 - لا تخترع تحاليلاً أو أسعاراً.
 
@@ -91,6 +120,14 @@ class OpenAIService:
             }
         """
         try:
+            if self.client is None:
+                return {
+                    "success": False,
+                    "response": "حالياً خدمة الذكاء الاصطناعي عندنا غير متاحة بشكل مؤقت، وبنخدمك بالمعلومة المتوفرة من قاعدة المعرفة.",
+                    "model": self.model,
+                    "tokens_used": 0,
+                    "error": "OpenAI runtime unavailable",
+                }
             logger.info(f"📨 Generating response for message: {user_message[:50]}...")
             
             # Build messages array
@@ -137,7 +174,7 @@ class OpenAIService:
             logger.error(f"❌ {error_msg}")
             return {
                 "success": False,
-                "response": "عذراً، حدث خطأ في الاتصال بخدمة الذكاء الاصطناعي. يرجى المحاولة مرة أخرى.",
+                "response": "عذراً، واجهنا خطأ في الاتصال بخدمة الذكاء الاصطناعي. نرجو المحاولة مرة ثانية.",
                 "model": self.model,
                 "tokens_used": 0,
                 "error": error_msg
@@ -148,7 +185,7 @@ class OpenAIService:
             logger.error(f"❌ {error_msg}")
             return {
                 "success": False,
-                "response": "عذراً، حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى لاحقاً.",
+                "response": "عذراً، واجهنا خطأ غير متوقع. نرجو المحاولة مرة ثانية لاحقاً.",
                 "model": self.model,
                 "tokens_used": 0,
                 "error": error_msg
@@ -162,6 +199,13 @@ class OpenAIService:
             Dictionary with connection test results
         """
         try:
+            if self.client is None:
+                return {
+                    "success": False,
+                    "message": "OpenAI runtime unavailable",
+                    "response": None,
+                    "model": self.model,
+                }
             logger.info("🔍 Testing OpenAI API connection...")
             
             # Simple test message

@@ -15,7 +15,24 @@ import os
 import re
 import logging
 from typing import Optional, Dict, Any, List, Tuple
-from rapidfuzz import fuzz, process
+try:
+    from rapidfuzz import fuzz, process
+except Exception:
+    from difflib import SequenceMatcher
+
+    class _FuzzFallback:
+        @staticmethod
+        def partial_ratio(a: str, b: str) -> int:
+            a = (a or "").lower()
+            b = (b or "").lower()
+            if not a or not b:
+                return 0
+            if a in b or b in a:
+                return 95
+            return int(SequenceMatcher(None, a, b).ratio() * 100)
+
+    fuzz = _FuzzFallback()
+    process = None
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +143,16 @@ class KnowledgeBaseV2:
             return []
         
         if search_in is None:
-            search_in = ['analysis_name_ar', 'analysis_name_en', 'symptoms', 'description']
+            search_in = [
+                'analysis_name_ar',
+                'analysis_name_en',
+                'analysis_code',
+                'synonyms',
+                'related_tests',
+                'alternative_tests',
+                'symptoms',
+                'description',
+            ]
         
         results = []
         query_lower = query.strip().lower()

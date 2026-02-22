@@ -234,11 +234,21 @@ export const getConversationMessages = async (conversationId, limit = 100, offse
  * Send message in conversation (AI reply saved on backend). Returns { user_message, assistant_message }.
  * Timeout 120s - AI response can take 30-60+ seconds (RAG + OpenAI).
  */
-export const sendConversationMessage = async (conversationId, content) => {
+export const sendConversationMessage = async (conversationId, content, attachment = null, attachmentType = null) => {
   const token = getAccessToken();
+  const data = new FormData();
+  const safeContent = typeof content === "string" ? content : "";
+  data.append("content", safeContent);
+  data.append("message", safeContent);
+  if (attachment) {
+    data.append("attachment", attachment);
+    if (attachmentType) data.append("attachment_type", attachmentType);
+  }
+  if (conversationId) data.append("conversation_id", String(conversationId));
+
   const response = await api.post(
     `/api/conversations/${conversationId}/messages`,
-    { content },
+    data,
     {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       timeout: 120000,

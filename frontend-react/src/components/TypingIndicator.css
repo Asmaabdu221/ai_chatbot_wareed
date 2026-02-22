@@ -3,8 +3,10 @@
   align-items: center;
   gap: 4px;
   padding: 16px 20px;
-  background: var(--assistant-bg);
-  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
   border-radius: 12px;
   border-end-start-radius: 4px;
 }
@@ -41,10 +43,13 @@
 }
 
 @keyframes breathe {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 0.35;
     transform: scale(0.9);
   }
+
   50% {
     opacity: 0.85;
     transform: scale(1);

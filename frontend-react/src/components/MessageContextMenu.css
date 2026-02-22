@@ -1,0 +1,106 @@
+.message-context-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: transparent;
+}
+
+.message-context-menu-backdrop.mobile {
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+
+.message-context-menu {
+    position: absolute;
+    background: var(--surface, #ffffff);
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    min-width: 180px;
+    overflow: hidden;
+    animation: contextMenuScale 0.2s ease-out;
+    direction: rtl;
+    border: 1px solid var(--border, rgba(0, 0, 0, 0.08));
+}
+
+.message-context-menu.popup {
+    transform-origin: top right;
+}
+
+.message-context-menu.bottom-sheet {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: auto;
+    border-radius: 24px 24px 0 0;
+    animation: contextMenuSlideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+.bottom-sheet-drag-handle {
+    width: 40px;
+    height: 4px;
+    background: var(--gray-300, #e5e7eb);
+    border-radius: 2px;
+    margin: 12px auto 8px;
+}
+
+.message-menu-list {
+    list-style: none;
+    padding: 8px 0;
+    margin: 0;
+}
+
+.message-menu-item {
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+    color: var(--text-primary, #111827);
+    font-size: 15px;
+    font-weight: 500;
+}
+
+.message-menu-item:hover {
+    background: var(--gray-50, #f9fafb);
+}
+
+.message-menu-item:active {
+    background: var(--gray-100, #f3f4f6);
+}
+
+@keyframes contextMenuScale {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(-5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+@keyframes contextMenuSlideUp {
+    from {
+        transform: translateY(100%);
+    }
+
+    to {
+        transform: translateY(0);
+    }
+}
+
+/* Dark Mode Adjustment */
+[data-theme="dark"] .message-context-menu {
+    background: #1f2937;
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] .message-menu-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}

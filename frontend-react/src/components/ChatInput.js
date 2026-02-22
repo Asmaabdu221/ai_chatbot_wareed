@@ -5,6 +5,22 @@ import './ChatInput.css';
 
 const ACCEPT_IMAGE = 'image/jpeg,image/jpg,image/png';
 
+const formatDuration = (totalSeconds) => {
+  const s = Math.max(0, Math.floor(totalSeconds || 0));
+  const mins = Math.floor(s / 60);
+  const secs = s % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
+
+const pickAudioExtension = (mimeType) => {
+  const mt = (mimeType || '').toLowerCase();
+  if (mt.includes('wav')) return 'wav';
+  if (mt.includes('mp4') || mt.includes('m4a')) return 'm4a';
+  if (mt.includes('ogg')) return 'ogg';
+  if (mt.includes('mpeg') || mt.includes('mp3')) return 'mp3';
+  return 'webm';
+};
+
 const MicrophoneIcon = ({ className }) => (
   <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
@@ -15,9 +31,9 @@ const MicrophoneIcon = ({ className }) => (
 );
 
 const SendIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="22" y1="2" x2="11" y2="13" />
-    <polygon points="22 2 15 22 11 13 2 9 22 2" />
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M3 12L21 3L13 21L10 14L3 12Z" />
+    <path d="M10 14L21 3" />
   </svg>
 );
 
@@ -29,30 +45,94 @@ const PlusIcon = () => (
 );
 
 const ChatInput = ({
+  conversationId,
   onSend,
+  onTyping,
   onVoiceMessage,
-  onImageUpload,
-  onFileUpload,
   showFileUpload = false,
   disabled,
 }) => {
   const [message, setMessage] = useState('');
+  const [pendingAttachment, setPendingAttachment] = useState(null);
+  const [pendingAudio, setPendingAudio] = useState(null);
+  const [recordingState, setRecordingState] = useState('idle');
+  const [recordingDuration, setRecordingDuration] = useState(0);
   const [isListening, setIsListening] = useState(false);
   const [voiceError, setVoiceError] = useState(null);
   const [ocrError, setOcrError] = useState(null);
-  const [isOcrLoading, setIsOcrLoading] = useState(false);
-  const [isFileLoading, setIsFileLoading] = useState(false);
   const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
   const textareaRef = useRef(null);
+
+  useEffect(() => {
+    if (conversationId === null) {
+      setMessage('');
+      setPendingAttachment(null);
+      clearPendingAudio();
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.style.height = 'auto';
+      }
+    }
+  }, [conversationId]);
+
+  useEffect(() => {
+    const focusComposer = () => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+      }
+    };
+    window.addEventListener('wareed:focus-composer', focusComposer);
+    return () => window.removeEventListener('wareed:focus-composer', focusComposer);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearRecordingTimer();
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+      releaseStream();
+      setPendingAudio((prev) => {
+        if (prev?.url) URL.revokeObjectURL(prev.url);
+        return prev;
+      });
+    };
+  }, []);
+
   const imageInputRef = useRef(null);
   const fileInputRef = useRef(null);
   const attachButtonRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const recordedChunksRef = useRef([]);
+  const recordingStartRef = useRef(0);
+  const recordingTimerRef = useRef(null);
+  const streamRef = useRef(null);
   const recognitionRef = useRef(null);
-
-  const hasSpeechRecognition = typeof window !== 'undefined' &&
-    (window.SpeechRecognition || window.webkitSpeechRecognition);
-
   const gotResultRef = useRef(false);
+  const hasSpeechRecognition = false;
+
+  const clearRecordingTimer = () => {
+    if (recordingTimerRef.current) {
+      window.clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+  };
+
+  const releaseStream = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+  };
+
+  const clearPendingAudio = () => {
+    setPendingAudio((prev) => {
+      if (prev?.url) URL.revokeObjectURL(prev.url);
+      return null;
+    });
+    setRecordingState('idle');
+    setRecordingDuration(0);
+  };
 
   useEffect(() => {
     if (!hasSpeechRecognition) return;
@@ -60,7 +140,7 @@ const ChatInput = ({
     const recognition = new SpeechRecognition();
     recognition.continuous = false;
     recognition.interimResults = false;
-    recognition.lang = document.documentElement.lang === 'ar' ? 'ar-SA' : 'ar-SA';
+    recognition.lang = 'ar-SA';
     recognitionRef.current = recognition;
 
     recognition.onresult = (event) => {
@@ -94,13 +174,132 @@ const ChatInput = ({
     };
   }, [hasSpeechRecognition, onSend]);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (message.trim() && !disabled) {
-      onSend(message);
+  const startRecording = async () => {
+    if (disabled) return;
+    if (typeof window === 'undefined' || !navigator.mediaDevices?.getUserMedia || typeof window.MediaRecorder === 'undefined') {
+      setVoiceError('Voice recording is not supported in this browser.');
+      return;
+    }
+
+    try {
+      setVoiceError(null);
+      clearPendingAudio();
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
+      const mimeCandidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
+      const mimeType = mimeCandidates.find((mt) => window.MediaRecorder.isTypeSupported?.(mt));
+      const recorder = mimeType ? new window.MediaRecorder(stream, { mimeType }) : new window.MediaRecorder(stream);
+
+      recordedChunksRef.current = [];
+      recordingStartRef.current = Date.now();
+      setRecordingDuration(0);
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          recordedChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        clearRecordingTimer();
+        setIsListening(false);
+        const total = Math.max(1, Math.round((Date.now() - recordingStartRef.current) / 1000));
+        const blobType = recorder.mimeType || 'audio/webm';
+        const blob = new Blob(recordedChunksRef.current, { type: blobType });
+        if (!blob.size) {
+          setVoiceError('No audio was captured. Please try again.');
+          setRecordingState('idle');
+          releaseStream();
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        setPendingAudio({ blob, url, duration: total });
+        setRecordingDuration(total);
+        setRecordingState('preview');
+        releaseStream();
+      };
+
+      recorder.onerror = () => {
+        clearRecordingTimer();
+        setIsListening(false);
+        setRecordingState('idle');
+        setVoiceError('Recording failed. Please try again.');
+        releaseStream();
+      };
+
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setRecordingState('recording');
+      setIsListening(true);
+      recordingTimerRef.current = window.setInterval(() => {
+        setRecordingDuration(Math.max(0, Math.round((Date.now() - recordingStartRef.current) / 1000)));
+      }, 500);
+    } catch (err) {
+      setRecordingState('idle');
+      setIsListening(false);
+      setVoiceError(getErrorMessage(err, 'Unable to access microphone.'));
+      releaseStream();
+    }
+  };
+
+  const stopRecording = () => {
+    const rec = mediaRecorderRef.current;
+    if (rec && rec.state !== 'inactive') {
+      rec.stop();
+    }
+  };
+
+  const sendPendingAudio = async () => {
+    if (!pendingAudio || disabled) return;
+
+    const text = message.trim();
+    const ext = pickAudioExtension(pendingAudio.blob.type);
+    const file = new File([pendingAudio.blob], `voice-message-${Date.now()}.${ext}`, {
+      type: pendingAudio.blob.type || 'audio/webm',
+    });
+
+    try {
+      await onSend(text, file, 'audio');
+      clearPendingAudio();
       setMessage('');
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
+      }
+    } catch (err) {
+      setVoiceError(getErrorMessage(err, 'Failed to send voice message.'));
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (pendingAudio) {
+      await sendPendingAudio();
+      return;
+    }
+
+    const content = message.trim();
+
+    if (!content && !pendingAttachment) {
+      setOcrError('محتوى الرسالة مطلوب.');
+      return;
+    }
+
+    if (pendingAttachment && !content) {
+      setOcrError('يرجى كتابة سؤالك حول المرفق قبل الإرسال.');
+      return;
+    }
+
+    if (content && !disabled) {
+      try {
+        await onSend(content, pendingAttachment?.file, pendingAttachment?.type);
+        setMessage('');
+        setPendingAttachment(null);
+        if (textareaRef.current) {
+          textareaRef.current.style.height = 'auto';
+        }
+      } catch (err) {
+        setOcrError(getErrorMessage(err, 'Failed to send message.'));
       }
     }
   };
@@ -108,13 +307,15 @@ const ChatInput = ({
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit(e);
+      void handleSubmit(e);
     }
   };
 
   const handleChange = (e) => {
     setMessage(e.target.value);
     setVoiceError(null);
+    setOcrError(null);
+    if (onTyping) onTyping();
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 150)}px`;
@@ -124,7 +325,7 @@ const ChatInput = ({
   const toggleVoiceInput = () => {
     if (disabled) return;
     setVoiceError(null);
-    if (!hasSpeechRecognition) {
+    if (recordingState === 'recording') {
       setVoiceError('المتصفح لا يدعم التعرف على الصوت. استخدم Chrome أو Edge');
       return;
     }
@@ -143,8 +344,18 @@ const ChatInput = ({
     }
   };
 
+  const handleVoiceRecordingToggle = () => {
+    if (disabled) return;
+    setVoiceError(null);
+    if (recordingState === 'recording') {
+      stopRecording();
+      return;
+    }
+    void startRecording();
+  };
+
   const handleAttachClick = () => {
-    if (disabled || isOcrLoading) return;
+    if (disabled) return;
     setAttachmentMenuOpen((prev) => !prev);
   };
 
@@ -158,50 +369,92 @@ const ChatInput = ({
 
   const handleImageChange = async (e) => {
     const file = e.target.files?.[0];
-    if (!file || !onImageUpload) return;
+    if (!file) return;
     const ext = '.' + (file.name?.split('.').pop() || '').toLowerCase();
     if (!['.jpg', '.jpeg', '.png'].includes(ext)) {
       setOcrError('يرجى اختيار صورة بصيغة JPEG أو PNG');
       return;
     }
+
     setOcrError(null);
-    setIsOcrLoading(true);
-    try {
-      await onImageUpload(file);
-    } catch (err) {
-      setOcrError(getErrorMessage(err, 'فشل استخراج النص من الصورة'));
-    } finally {
-      setIsOcrLoading(false);
-      e.target.value = '';
-    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setPendingAttachment({
+        file,
+        name: file.name,
+        type: 'image',
+        preview: event.target.result
+      });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+    setAttachmentMenuOpen(false);
   };
 
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
-    if (!file || !onFileUpload) return;
+    if (!file) return;
     const ext = '.' + (file.name?.split('.').pop() || '').toLowerCase();
+
+    // Convert extension for backend mapping
+    let attachmentType = 'pdf';
+    if (ext === '.doc' || ext === '.docx') attachmentType = 'doc';
+    else if (ext === '.txt') attachmentType = 'txt';
+
     if (!['.pdf', '.doc', '.docx', '.txt'].includes(ext)) {
       setOcrError('يرجى اختيار ملف بصيغة PDF أو DOC أو DOCX أو TXT');
       e.target.value = '';
       return;
     }
+
     setOcrError(null);
-    setIsFileLoading(true);
-    try {
-      await onFileUpload(file);
-    } catch (err) {
-      setOcrError(getErrorMessage(err, 'فشل استخراج النص من الملف'));
-    } finally {
-      setIsFileLoading(false);
-      e.target.value = '';
-    }
+    setPendingAttachment({
+      file,
+      name: file.name,
+      type: attachmentType,
+      preview: null
+    });
+    e.target.value = '';
+    setAttachmentMenuOpen(false);
   };
 
-  const hasAttachmentOption = onImageUpload || (showFileUpload && onFileUpload);
+  const removeAttachment = () => {
+    setPendingAttachment(null);
+    setOcrError(null);
+  };
+
+  const hasAttachmentOption = true;
   const hasText = message.trim().length > 0;
 
   return (
     <div className="chat-input-container">
+      {pendingAttachment && (
+        <div className="chat-input-attachment-preview">
+          {pendingAttachment.preview ? (
+            <div className="attachment-thumbnail">
+              <img src={pendingAttachment.preview} alt="preview" />
+              <button type="button" className="remove-attachment" onClick={removeAttachment} aria-label="إزالة المرفق">✕</button>
+            </div>
+          ) : (
+            <div className="attachment-chip">
+              <span className="attachment-icon">📄</span>
+              <span className="attachment-name">{pendingAttachment.name}</span>
+              <button type="button" className="remove-attachment" onClick={removeAttachment} aria-label="إزالة المرفق">✕</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {pendingAudio && (
+        <div className="chat-input-audio-preview" role="group" aria-label="Voice message preview">
+          <span className="audio-preview-icon" aria-hidden="true">🎙️</span>
+          <audio className="audio-preview-player" controls src={pendingAudio.url} />
+          <span className="audio-preview-duration">{formatDuration(pendingAudio.duration)}</span>
+          <button type="button" className="audio-preview-action" onClick={clearPendingAudio} aria-label="Cancel voice message">✕</button>
+          <button type="button" className="audio-preview-action audio-preview-send" onClick={() => void sendPendingAudio()} aria-label="Send voice message">✓</button>
+        </div>
+      )}
+
       <form className="chat-input-form chat-input-pill" onSubmit={handleSubmit}>
         <input
           ref={imageInputRef}
@@ -228,7 +481,7 @@ const ChatInput = ({
               ref={attachButtonRef}
               type="button"
               className="chat-input-icon-btn chat-input-plus-btn"
-              disabled={disabled || isOcrLoading || isFileLoading}
+              disabled={disabled}
               onClick={handleAttachClick}
               aria-label="إضافة مرفق"
               aria-haspopup="menu"
@@ -244,11 +497,18 @@ const ChatInput = ({
               onImageUpload={handleImageSelect}
               onFileUpload={showFileUpload ? handleFileSelect : undefined}
               showFileUpload={showFileUpload}
-              isImageLoading={isOcrLoading}
-              isFileLoading={isFileLoading}
+              isImageLoading={false}
+              isFileLoading={false}
               disabled={disabled}
             />
           </div>
+        )}
+
+        {recordingState === 'recording' && (
+          <span className="chat-input-recording-indicator" aria-live="polite">
+            <span className="chat-input-recording-dot" aria-hidden="true" />
+            Recording... {formatDuration(recordingDuration)}
+          </span>
         )}
 
         <textarea
@@ -258,23 +518,23 @@ const ChatInput = ({
           value={message}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          disabled={disabled || isListening}
+          disabled={disabled || recordingState === 'recording'}
           rows={1}
         />
 
         <button
           type="button"
-          className={`chat-input-mic-btn ${isListening ? 'listening' : ''}`}
-          onClick={toggleVoiceInput}
+          className={`chat-input-mic-btn ${recordingState === 'recording' ? 'listening' : ''}`}
+          onClick={handleVoiceRecordingToggle}
           disabled={disabled}
-          title={isListening ? 'جاري الاستماع...' : 'اضغط للتحدث'}
+          title={recordingState === 'recording' ? 'Stop recording' : 'Start recording'}
         >
           <MicrophoneIcon />
         </button>
         <button
           type="submit"
           className="chat-input-send-btn"
-          disabled={disabled || !message.trim()}
+          disabled={disabled || (!message.trim() && !pendingAttachment && !pendingAudio)}
           title="إرسال"
         >
           <SendIcon />
@@ -296,15 +556,15 @@ const ChatInput = ({
       )}
 
       <div className="chat-input-hint">
-        {isListening
+        {recordingState === 'recording'
           ? 'جاري الاستماع... تحدث الآن'
-          : isOcrLoading
-          ? 'جاري استخراج النص من الصورة...'
-          : isFileLoading
-          ? 'جاري استخراج النص من الملف...'
-          : hasText
-          ? 'اضغط Enter للإرسال'
-          : 'اضغط على الميكروفون للتحدث أو اكتب رسالتك'}
+          : pendingAudio
+            ? 'Review your voice message then send with ✓'
+            : pendingAttachment
+            ? 'اكتب سؤالك حول المرفق واضغط Enter'
+            : hasText
+              ? 'اضغط Enter للإرسال'
+              : 'اضغط على الميكروفون للتحدث أو اكتب رسالتك'}
       </div>
     </div>
   );

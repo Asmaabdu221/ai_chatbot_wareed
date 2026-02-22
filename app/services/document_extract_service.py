@@ -6,7 +6,6 @@ For prescription analysis from document files.
 import io
 import logging
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -19,11 +18,21 @@ def _extract_pdf(content: bytes) -> str:
     try:
         from pypdf import PdfReader
     except ImportError:
-        raise ValueError("pypdf غير مثبت. قم بتثبيته: pip install pypdf")
-    reader = PdfReader(io.BytesIO(content))
+        raise ValueError("PDF processing is currently unavailable. Please try again later.")
+
+    try:
+        reader = PdfReader(io.BytesIO(content))
+    except Exception as exc:
+        logger.warning("Failed to parse PDF: %s", exc)
+        raise ValueError("Failed to read the PDF file. Please upload a valid PDF.")
+
     parts = []
     for page in reader.pages:
-        text = page.extract_text()
+        try:
+            text = page.extract_text()
+        except Exception as exc:
+            logger.warning("Failed to extract text from PDF page: %s", exc)
+            continue
         if text:
             parts.append(text)
     return "\n".join(parts).strip()
@@ -34,8 +43,14 @@ def _extract_docx(content: bytes) -> str:
     try:
         from docx import Document
     except ImportError:
-        raise ValueError("python-docx غير مثبت. قم بتثبيته: pip install python-docx")
-    doc = Document(io.BytesIO(content))
+        raise ValueError("DOCX processing is currently unavailable. Please try again later.")
+
+    try:
+        doc = Document(io.BytesIO(content))
+    except Exception as exc:
+        logger.warning("Failed to parse DOCX: %s", exc)
+        raise ValueError("Failed to read the document file. Please upload a valid DOCX file.")
+
     parts = [p.text for p in doc.paragraphs if p.text.strip()]
     return "\n".join(parts).strip()
 
@@ -57,9 +72,10 @@ def extract_text_from_document(content: bytes, filename: str) -> str:
     Returns extracted text or raises ValueError.
     """
     if not content or len(content) == 0:
-        raise ValueError("الملف فارغ")
+        raise ValueError("The uploaded file is empty.")
     if len(content) > MAX_FILE_SIZE:
-        raise ValueError("حجم الملف يتجاوز 10 ميجابايت")
+        raise ValueError("File size exceeds 10 MB.")
+
     ext = Path(filename or "").suffix.lower()
     if ext == ".pdf":
         text = _extract_pdf(content)
@@ -68,7 +84,9 @@ def extract_text_from_document(content: bytes, filename: str) -> str:
     elif ext == ".txt":
         text = _extract_txt(content)
     else:
-        raise ValueError("صيغة غير مدعومة. استخدم PDF أو DOCX أو TXT.")
+        raise ValueError("Unsupported file format. Use PDF, DOCX, DOC, or TXT.")
+
     if not text or not text.strip():
-        raise ValueError("لم يتم استخراج نص من الملف. تأكد من أن الملف يحتوي على نص.")
+        raise ValueError("No text could be extracted from the file. Ensure the file contains selectable text.")
+
     return text.strip()
