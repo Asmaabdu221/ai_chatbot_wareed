@@ -1,36 +1,15 @@
 import axios from "axios";
 import { getAccessToken } from "./auth";
 
-// Development: use proxy (empty baseURL) - React dev server forwards /api to backend
-// Production: use env or full URL
-const getApiBaseUrl = () => {
-  if (process.env.NODE_ENV === "development") {
-    return ""; // proxy in package.json forwards to http://127.0.0.1:8000
-  }
-  if (typeof window !== "undefined" && window.location?.hostname) {
-    const host = window.location.hostname;
-    if (host !== "localhost" && host !== "127.0.0.1") {
-      return `http://${host}:8000`;
-    }
-  }
-  return (
-    process.env.REACT_APP_API_BASE_URL ||
-    process.env.REACT_APP_API_URL ||
-    "http://127.0.0.1:8000"
-  );
-};
+const API_BASE_URL =
+  process.env.REACT_APP_API_BASE_URL ||
+  "https://ai-chatbot-wareed.onrender.com";
 
-const API_BASE_URL = getApiBaseUrl();
-
-/** For error messages: show backend URL (127.0.0.1:8000 when using proxy) */
-const getApiUrlForDisplay = () =>
-  process.env.NODE_ENV === "development"
-    ? "http://127.0.0.1:8000"
-    : API_BASE_URL || "http://127.0.0.1:8000";
+const getApiUrlForDisplay = () => API_BASE_URL;
 
 export { API_BASE_URL, getApiUrlForDisplay };
 
-console.log("[API] Base URL:", API_BASE_URL || "(proxy → http://127.0.0.1:8000)");
+console.log("[API] Base URL:", API_BASE_URL);
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -350,3 +329,4 @@ export const sendVoiceMessage = async (audioBlob, userId = null, conversationId 
 };
 
 export default api;
+
