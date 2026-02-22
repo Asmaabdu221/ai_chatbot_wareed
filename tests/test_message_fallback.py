@@ -17,5 +17,14 @@ def test_context_fallback_uses_context_and_not_generic_error():
 
 
 def test_context_fallback_contact_when_no_context():
-    out = compose_context_fallback("كم سعر تحليل فيتامين د", "pricing_inquiry", {}, "")
+    out = compose_context_fallback("كم سعر تحليل فيتامين د", "pricing_inquiry", {"analysis_name": "فيتامين د"}, "")
     assert "800-122-1220" in out
+
+def test_fallback_offers_does_not_use_analysis_clarification():
+    out = compose_context_fallback("هل عندكم عروض حالياً؟", "offers_discounts", {}, "")
+    assert "أي تحليل" not in out
+
+
+def test_fallback_home_visit_does_not_use_analysis_clarification():
+    out = compose_context_fallback("عندكم سحب عينات منزلي؟", "home_visit", {}, "")
+    assert "أي تحليل" not in out

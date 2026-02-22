@@ -60,3 +60,31 @@ def test_short_code_queries_detect_intent_and_slots(message, expected_intent, ex
     assert payload["intent"] == expected_intent
     assert payload["needs_clarification"] is False
     assert str(payload["slots"].get("analysis_name", "")).upper() == expected_code
+
+
+def test_offers_question_does_not_trigger_analysis_clarification():
+    payload = classify_intent("هل عندكم عروض حالياً؟")
+    assert payload["intent"] == "offers_discounts"
+    assert payload["needs_clarification"] is False
+    assert "أي تحليل" not in (payload.get("clarifying_question") or "")
+
+
+def test_home_visit_question_does_not_trigger_analysis_clarification():
+    payload = classify_intent("عندكم سحب عينات منزلي؟")
+    assert payload["intent"] == "home_visit"
+    assert payload["needs_clarification"] is False
+    assert "أي تحليل" not in (payload.get("clarifying_question") or "")
+
+
+def test_generic_price_question_asks_price_specific_clarification():
+    payload = classify_intent("كم سعر التحاليل؟")
+    assert payload["intent"] == "pricing_inquiry"
+    assert payload["needs_clarification"] is True
+    assert "لأي تحليل أو باقة" in (payload.get("clarifying_question") or "")
+
+
+def test_availability_with_code_does_not_need_clarification():
+    payload = classify_intent("عندكم HbA1c؟")
+    assert payload["intent"] == "test_availability"
+    assert payload["needs_clarification"] is False
+    assert str(payload["slots"].get("analysis_name", "")).upper() == "HBA1C"

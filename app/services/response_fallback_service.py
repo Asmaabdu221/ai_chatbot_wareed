@@ -1,4 +1,4 @@
-"""
+﻿"""
 Fallback response helpers for non-LLM flows.
 """
 
@@ -26,8 +26,17 @@ def compose_context_fallback(
         lines = [f"بناءً على المعلومات المتوفرة عندنا عن سؤالك: {question}"]
         lines.extend([ln for ln in context.splitlines() if ln.strip()][:8])
         lines.append("")
-        lines.append("إذا تبغى/تبغين تفاصيل أدق على حالة معينة، اكتب/ي اسم التحليل أو أرفق/ي التقرير بوضوح.")
+        lines.append("إذا تبغى/تبغين تفاصيل أدق على حالة معيّنة، اكتب/ي اسم التحليل أو أرفق/ي التقرير بوضوح.")
         return sanitize_for_ui("\n".join(lines))
+
+    try:
+        from app.services.question_router import evaluate_clarification_for_intent
+
+        needs_clarify, clarify_q = evaluate_clarification_for_intent(question, intent, slots or {})
+        if needs_clarify and clarify_q:
+            return sanitize_for_ui(clarify_q)
+    except Exception:
+        pass
 
     if intent in {"branches_locations", "working_hours", "contact_support", "home_visit"}:
         return "حالياً ما عندنا تفاصيل كافية عن الفرع المطلوب. تقدر/تقدرين تتواصل معنا على 800-122-1220 ونخدمك فوراً."

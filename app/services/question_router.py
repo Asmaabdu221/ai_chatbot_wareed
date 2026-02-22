@@ -43,6 +43,102 @@ _CITIES = [
     "الرياض", "جدة", "مكة", "المدينة", "الدمام", "الخبر", "القصيم", "تبوك", "أبها", "حائل", "جازان",
 ]
 
+INTENT_SLOT_CONTRACT: Dict[str, Dict[str, Any]] = {
+    "greeting": {"required_slots": [], "required_any": [], "optional_slots": [], "clarification_question": ""},
+    "services_overview": {"required_slots": [], "required_any": [], "optional_slots": [], "clarification_question": ""},
+    "test_availability": {
+        "required_slots": [],
+        "required_any": ["analysis_name", "analysis_code"],
+        "optional_slots": [],
+        "clarification_question": "أكيد، اسم التحليل أو رمزه لو تكرمت/ي؟",
+    },
+    "test_definition": {
+        "required_slots": [],
+        "required_any": ["analysis_name", "analysis_code"],
+        "optional_slots": [],
+        "clarification_question": "وش اسم التحليل أو رمزه عشان أشرحه لك؟",
+    },
+    "test_preparation": {
+        "required_slots": [],
+        "required_any": ["analysis_name", "analysis_code"],
+        "optional_slots": [],
+        "clarification_question": "أكيد، وش اسم التحليل أو رمزه عشان نعطيك التحضير الصحيح؟",
+    },
+    "sample_type": {
+        "required_slots": [],
+        "required_any": ["analysis_name", "analysis_code"],
+        "optional_slots": [],
+        "clarification_question": "وش اسم التحليل أو رمزه عشان نحدد نوع العينة؟",
+    },
+    "pricing_inquiry": {
+        "required_slots": [],
+        "required_any": ["analysis_name", "analysis_code", "package_name"],
+        "optional_slots": ["city"],
+        "clarification_question": "أكيد، لأي تحليل أو باقة تبين السعر؟",
+    },
+    "packages_inquiry": {
+        "required_slots": [],
+        "required_any": [],
+        "optional_slots": ["package_name", "campaign_period"],
+        "clarification_question": "تبين عروض على باقة معيّنة ولا بشكل عام؟",
+    },
+    "offers_discounts": {
+        "required_slots": [],
+        "required_any": [],
+        "optional_slots": ["package_name", "campaign_period"],
+        "clarification_question": "تبين عروض على باقة معيّنة ولا بشكل عام؟",
+    },
+    "branches_locations": {
+        "required_slots": [],
+        "required_any": [],
+        "optional_slots": ["city"],
+        "clarification_question": "تمام، بأي مدينة تبين أقرب فرع؟",
+    },
+    "working_hours": {
+        "required_slots": [],
+        "required_any": [],
+        "optional_slots": ["city"],
+        "clarification_question": "تمام، لأي مدينة تبين ساعات الدوام؟",
+    },
+    "contact_support": {"required_slots": [], "required_any": [], "optional_slots": ["channel"], "clarification_question": ""},
+    "home_visit": {
+        "required_slots": [],
+        "required_any": [],
+        "optional_slots": ["city", "location_type"],
+        "clarification_question": "تمام، بأي مدينة تبين السحب المنزلي؟",
+    },
+    "booking_appointment": {
+        "required_slots": [],
+        "required_any": [],
+        "optional_slots": ["city", "service_name"],
+        "clarification_question": "",
+    },
+    "report_explanation": {
+        "required_slots": [],
+        "required_any": [],
+        "optional_slots": ["analysis_name", "attachment_hint"],
+        "clarification_question": "",
+    },
+    "upload_report_guidance": {
+        "required_slots": [],
+        "required_any": [],
+        "optional_slots": ["attachment_hint"],
+        "clarification_question": "",
+    },
+    "symptom_based_suggestion": {
+        "required_slots": [],
+        "required_any": [],
+        "optional_slots": ["symptom"],
+        "clarification_question": "",
+    },
+    "payment_insurance_privacy": {
+        "required_slots": [],
+        "required_any": [],
+        "optional_slots": ["payment_method"],
+        "clarification_question": "",
+    },
+}
+
 _KEYWORDS_BY_INTENT = {
     "greeting": ["السلام", "اهلا", "مرحباً", "مرحبا", "هلا", "hi", "hello"],
     "services_overview": ["خدماتكم", "ايش تقدمون", "وش تقدمون", "services", "service"],
@@ -50,18 +146,18 @@ _KEYWORDS_BY_INTENT = {
     "test_definition": ["ما هو", "وش هو", "وش معنى", "ما معنى", "يعني ايش", "شرح تحليل", "definition", "meaning"],
     "test_preparation": ["تحضير", "صيام", "قبل التحليل", "preparation", "fasting"],
     "sample_type": ["نوع العينة", "دم او بول", "sample", "specimen"],
-    "pricing_inquiry": ["سعر", "تكلفة", "كم يكلف", "price", "cost"],
+    "pricing_inquiry": ["سعر", "تكلفة", "كم يكلف", "الأسعار", "price", "cost"],
     "packages_inquiry": ["باقة", "باقات", "package", "packages"],
-    "offers_discounts": ["عرض", "عروض", "خصم", "discount", "offer"],
+    "offers_discounts": ["عرض", "عروض", "خصم", "خصومات", "برومو", "رمضان", "ساري", "discount", "offer"],
     "branches_locations": ["فرع", "فروع", "الموقع", "وين", "location", "branch"],
     "working_hours": HOURS_KEYWORDS + ["مواعيد العمل", "ساعات العمل", "hours", "open", "close"],
-    "contact_support": ["رقم", "تواصل", "خدمة العملاء", "واتساب", "email", "contact"],
-    "home_visit": ["منزل", "زيارة منزلية", "سحب منزلي", "home visit"],
+    "contact_support": ["رقم", "تواصل", "خدمة العملاء", "واتساب", "email", "contact", "ايميل"],
+    "home_visit": ["منزل", "زيارة منزلية", "سحب منزلي", "سحب عينات منزلي", "سحب من المنزل", "وريد كير", "home visit"],
     "booking_appointment": ["حجز", "موعد", "book", "appointment"],
     "report_explanation": ["حلل النتيجة", "فسر النتائج", "اشرح التحاليل", "وش معنى النتيجة", "result explanation"],
     "upload_report_guidance": ["ارفق", "رفع صورة", "رفع ملف", "وصفة", "pdf", "upload"],
     "symptom_based_suggestion": ["عندي", "اعاني", "أعاني", "تساقط", "دوخة", "خمول", "اعراض", "symptom"],
-    "payment_insurance_privacy": ["تأمين", "تامين", "دفع", "فاتورة", "خصوصية", "بياناتي", "privacy", "insurance", "payment"],
+    "payment_insurance_privacy": ["تأمين", "تامين", "دفع", "فاتورة", "خصوصية", "بياناتي", "فيزا", "مدى", "تمارا", "تحويل", "privacy", "insurance", "payment"],
 }
 
 LAB_CODE_PATTERN = re.compile(r"\b([A-Za-z]{2,10}\d{0,3}[A-Za-z]{0,3}\d{0,2})\b")
@@ -69,14 +165,15 @@ LAB_CODE_STOPWORDS = {
     "and", "the", "for", "with", "from", "this", "that", "what", "mean", "meaning",
     "test", "analysis", "pdf", "doc", "docx", "txt", "jpg", "jpeg", "png", "upload",
 }
-DEFINITION_PHRASES = [
-    "ÙˆØ´ Ù…Ø¹Ù†Ù‰", "Ù…Ø§ Ù…Ø¹Ù†Ù‰", "ÙŠØ¹Ù†ÙŠ Ø§ÙŠØ´", "Ù…Ø§ Ù‡Ùˆ", "Ø´Ø±Ø­ ØªØ­Ù„ÙŠÙ„", "Ø´Ø±Ø­ ÙØ­Øµ", "Ø§Ø´Ø±Ø­ ØªØ­Ù„ÙŠÙ„", "Ø§Ø´Ø±Ø­ ÙØ­Øµ",
-]
-AVAILABILITY_PHRASES = [
-    "Ø¹Ù†Ø¯ÙƒÙ…", "Ù…ØªÙˆÙØ±", "Ù…ØªØ§Ø­Ø©", "Ù…ØªØ§Ø­", "Ù‡Ù„ ÙŠÙˆØ¬Ø¯", "Ù‡Ù„ Ù…ØªÙˆÙØ±", "Ù‡Ù„ Ù…ØªØ§Ø­Ø©", "ØªÙˆÙØ±ÙˆÙ†",
-]
-PREPARATION_PHRASES = ["ØªØ­Ø¶ÙŠØ±", "ØµÙŠØ§Ù…", "Ù‚Ø¨Ù„ Ø§Ù„ØªØ­Ù„ÙŠÙ„", "Ù‚Ø¨Ù„ Ø§Ù„ÙØ­Øµ", "fasting", "preparation"]
-SAMPLE_PHRASES = ["Ù†ÙˆØ¹ Ø§Ù„Ø¹ÙŠÙ†Ø©", "Ø¯Ù… Ø§Ùˆ Ø¨ÙˆÙ„", "Ø¯Ù… Ø£Ùˆ Ø¨ÙˆÙ„", "sample", "specimen"]
+DEFINITION_PHRASES = ["وش معنى", "ما معنى", "يعني ايش", "ما هو", "شرح تحليل", "شرح فحص", "اشرح تحليل", "اشرح فحص"]
+AVAILABILITY_PHRASES = ["عندكم", "متوفر", "متاحة", "متاح", "هل يوجد", "هل متوفر", "هل متاحة", "توفرون"]
+PREPARATION_PHRASES = ["تحضير", "صيام", "قبل التحليل", "قبل الفحص", "fasting", "preparation"]
+SAMPLE_PHRASES = ["نوع العينة", "دم او بول", "دم أو بول", "sample", "specimen"]
+OFFERS_KEYWORDS = ["عروض", "خصومات", "عرض", "برومو", "رمضان", "ساري"]
+HOME_VISIT_KEYWORDS = ["سحب منزلي", "زيارة منزلية", "عينات من البيت", "وريد كير", "سحب من المنزل", "سحب عينات منزلي"]
+PAYMENT_KEYWORDS = ["الدفع", "فيزا", "مدى", "تمارا", "تحويل", "تأمين", "تامين", "خصوصية"]
+RESULTS_DELIVERY_KEYWORDS = ["واتساب", "ايميل", "email", "تطبيق"]
+BRANCH_KEYWORDS = ["فرع", "فروع", "أقرب فرع", "وين الفرع", "الموقع"]
 
 
 def _normalize(text: str) -> str:
@@ -130,7 +227,7 @@ def _clean_analysis_name(candidate: str, detected_tokens: List[str]) -> str:
     for token in detected_tokens:
         if re.search(rf"\b{re.escape(token)}\b", value, re.IGNORECASE):
             return token
-    value = re.sub(r"^(Ù‡Ø°Ø§|Ù‡Ø§Ø°Ø§|Ù‡Ø°ÙŠ|Ù‡Ø°Ø§ Ø§Ù„ØªØ­Ù„ÙŠÙ„|Ø§Ù„ØªØ­Ù„ÙŠÙ„ Ù‡Ø°Ø§|ØªØ­Ù„ÙŠÙ„|ÙØ­Øµ)\s+", "", value, flags=re.IGNORECASE)
+    value = re.sub(r"^(هذا|هاذا|هذي|هذا التحليل|التحليل هذا|تحليل|فحص)\s+", "", value, flags=re.IGNORECASE)
     return value.strip()
 
 
@@ -152,6 +249,7 @@ def _extract_slots(message: str) -> Dict[str, Any]:
     detected_tokens = _detect_lab_tokens(text)
     if detected_tokens:
         slots["detected_tokens"] = detected_tokens
+        slots["analysis_code"] = detected_tokens[0]
     for city in _CITIES:
         if city in text:
             slots["city"] = city
@@ -175,12 +273,37 @@ def _extract_slots(message: str) -> Dict[str, Any]:
         slots["attachment_hint"] = "image"
     return slots
 
+def _priority_non_analysis_intent(normalized: str, toks: set[str]) -> Optional[Tuple[str, float]]:
+    if _has_any_phrase(normalized, HOURS_KEYWORDS):
+        return "working_hours", 0.98
+    if _has_any_phrase(normalized, HOME_VISIT_KEYWORDS) or ({"سحب", "منزلي"} <= toks):
+        return "home_visit", 0.97
+    if _has_any_phrase(normalized, OFFERS_KEYWORDS):
+        return "offers_discounts", 0.97
+    if _has_any_phrase(normalized, PAYMENT_KEYWORDS):
+        return "payment_insurance_privacy", 0.96
+    if _has_any_phrase(normalized, BRANCH_KEYWORDS):
+        return "branches_locations", 0.95
+    if _has_any_phrase(normalized, RESULTS_DELIVERY_KEYWORDS) and "نتيجة" not in normalized:
+        return "contact_support", 0.92
+    return None
+
+
 def _heuristic_intent(message: str) -> Tuple[str, float]:
     normalized = _normalize(message)
     toks = _tokens(normalized)
     detected_tokens = _detect_lab_tokens(message)
     if not normalized:
         return "greeting", 0.2
+
+    if _has_any_phrase(normalized, _KEYWORDS_BY_INTENT["upload_report_guidance"]):
+        return "upload_report_guidance", 0.97
+    if _has_any_phrase(normalized, _KEYWORDS_BY_INTENT["report_explanation"]):
+        return "report_explanation", 0.96
+
+    priority_intent = _priority_non_analysis_intent(normalized, toks)
+    if priority_intent:
+        return priority_intent
 
     if detected_tokens:
         if _has_any_phrase(normalized, DEFINITION_PHRASES):
@@ -206,7 +329,7 @@ def _heuristic_intent(message: str) -> Tuple[str, float]:
         return "symptom_based_suggestion", 0.88
     if {"تأمين", "تامين", "دفع", "الدفع", "خصوصية", "privacy", "insurance", "payment"} & toks:
         return "payment_insurance_privacy", 0.9
-    if any(_contains_keyword(normalized, k) for k in ["وش معنى", "ما معنى", "يعني ايش", "ما هو"]):
+    if any(_contains_keyword(normalized, k) for k in DEFINITION_PHRASES):
         if _contains_keyword(normalized, "النتيجة") or _contains_keyword(normalized, "النتايج"):
             return "report_explanation", 0.92
         return "test_definition", 0.9
@@ -260,10 +383,41 @@ def _llm_fallback_classify(message: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _resolve_clarification(intent: str, slots: Dict[str, Any]) -> Tuple[bool, str]:
+    contract = INTENT_SLOT_CONTRACT.get(intent, {})
+    required_slots = contract.get("required_slots") or []
+    required_any = contract.get("required_any") or []
+    question = contract.get("clarification_question") or ""
+
+    missing_required = [slot for slot in required_slots if not slots.get(slot)]
+    if missing_required:
+        return True, question
+
+    if required_any:
+        has_any = any(bool(slots.get(slot)) for slot in required_any)
+        if not has_any:
+            return True, question
+
+    return False, ""
+
+
+def get_intent_contract(intent: str) -> Dict[str, Any]:
+    return INTENT_SLOT_CONTRACT.get(intent, {
+        "required_slots": [],
+        "required_any": [],
+        "optional_slots": [],
+        "clarification_question": "",
+    })
+
+
+def evaluate_clarification_for_intent(message: str, intent: str, slots: Dict[str, Any]) -> Tuple[bool, str]:
+    _ = message  # reserved for future intent-specific conditional logic.
+    return _resolve_clarification(intent, slots)
+
+
 def classify_intent(message: str) -> Dict[str, Any]:
     intent, confidence = _heuristic_intent(message)
     slots = _extract_slots(message)
-    detected_tokens = slots.get("detected_tokens") or []
 
     if confidence < 0.5 and str(__import__("os").environ.get("INTENT_LLM_FALLBACK", "")).lower() in {"1", "true", "yes"}:
         llm_pick = _llm_fallback_classify(message)
@@ -271,21 +425,9 @@ def classify_intent(message: str) -> Dict[str, Any]:
             intent = llm_pick["intent"]
             confidence = float(llm_pick.get("confidence") or 0.6)
 
-    needs_clarification = False
-    clarifying_question = ""
-    if "analysis_name" not in slots and detected_tokens:
-        slots["analysis_name"] = detected_tokens[0]
-
-    if intent in {"pricing_inquiry", "test_availability", "test_definition", "test_preparation", "sample_type"}:
-        if "analysis_name" not in slots:
-            needs_clarification = True
-            clarifying_question = "أكيد، تقصد/ين أي تحليل بالضبط؟"
-    elif intent == "branches_locations" and "city" not in slots:
-        needs_clarification = True
-        clarifying_question = "أي مدينة حاب/ة تعرف/ين عنها؟"
-    elif intent == "packages_inquiry" and "package_name" not in slots:
-        clarifying_question = "تبغى/ين باقات فحص عام ولا باقة معينة؟"
-        needs_clarification = True
+    if "analysis_name" not in slots and slots.get("analysis_code"):
+        slots["analysis_name"] = slots["analysis_code"]
+    needs_clarification, clarifying_question = evaluate_clarification_for_intent(message, intent, slots)
 
     return {
         "intent": intent,
@@ -319,9 +461,6 @@ def route(message: str) -> Tuple[str, Optional[str]]:
 
     if intent == "upload_report_guidance":
         return "upload_guide", ATTACHMENT_GUIDE_RESPONSE
-
-    if intent in {"pricing_inquiry", "offers_discounts", "packages_inquiry"}:
-        return "price", CONTACT_RESPONSE
 
     if intent == "working_hours":
         hours = _resolve_hours_answer(message)
