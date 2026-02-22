@@ -104,14 +104,15 @@ async def request_logging_middleware(request: Request, call_next):
     logger.info("Response %s %s - %s - %.2f ms", request.method, request.url.path, response.status_code, duration_ms)
     return response
 
-# Add CORS middleware
-# allow_origin_regex: localhost, 127.0.0.1, and private IPs (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_origin_regex=r"^http://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}):\d+$",
+    allow_origins=[
+        "https://ai-chatbot-wareed-1.onrender.com",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
