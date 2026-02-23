@@ -10,12 +10,20 @@ from uuid import UUID
 
 import jwt
 from passlib.context import CryptContext
+from passlib.exc import UnknownHashError
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# New passwords are hashed with Argon2; existing bcrypt hashes remain verifiable.
+pwd_context = CryptContext(
+    schemes=["argon2", "bcrypt"],
+    deprecated="auto",
+)
+
+MAX_PASSWORD_BYTES = 1024
+BCRYPT_MAX_PASSWORD_BYTES = 72
 
 # Token type claims
 TOKEN_TYPE_ACCESS = "access"
@@ -24,12 +32,45 @@ TOKEN_TYPE_REFRESH = "refresh"
 
 def hash_password(plain_password: str) -> str:
     """Hash a plain password for storage."""
+    _validate_password_for_hashing(plain_password)
     return pwd_context.hash(plain_password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a plain password against a hash."""
-    return pwd_context.verify(plain_password, hashed_password)
+    if not hashed_password:
+        return False
+
+    password_bytes_len = _password_bytes_len(plain_password)
+    scheme = pwd_context.identify(hashed_password)
+
+    if scheme == "bcrypt" and password_bytes_len > BCRYPT_MAX_PASSWORD_BYTES:
+        raise ValueError("كلمة المرور طويلة جدًا لهذا الحساب. يرجى إدخال كلمة مرور أقصر من 72 بايت.")
+
+    if scheme is None:
+        return False
+
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except UnknownHashError:
+        return False
+
+
+def _password_bytes_len(password: str) -> int:
+    if not isinstance(password, str):
+        raise ValueError("صيغة كلمة المرور غير صالحة.")
+    try:
+        return len(password.encode("utf-8"))
+    except UnicodeEncodeError:
+        raise ValueError("كلمة المرور تحتوي على محارف غير صالحة.")
+
+
+def _validate_password_for_hashing(password: str) -> None:
+    password_bytes_len = _password_bytes_len(password)
+    if password_bytes_len == 0:
+        raise ValueError("كلمة المرور مطلوبة.")
+    if password_bytes_len > MAX_PASSWORD_BYTES:
+        raise ValueError("كلمة المرور طويلة جدًا. الحد الأقصى هو 1024 بايت.")
 
 
 def _make_payload(

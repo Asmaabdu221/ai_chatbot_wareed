@@ -127,9 +127,23 @@ async def register(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="البريد الإلكتروني مسجّل مسبقاً.",
             )
+        try:
+            hashed_password = hash_password(body.password)
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(e),
+            )
+        except Exception:
+            password_bytes = len((body.password or "").encode("utf-8", errors="ignore"))
+            logger.warning("Registration failed: password hashing error (password_bytes=%s)", password_bytes)
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="تعذر معالجة كلمة المرور. تأكد من أنها نص صالح وبطول مناسب.",
+            )
         user = User(
             email=email,
-            password_hash=hash_password(body.password),
+            password_hash=hashed_password,
         )
         db.add(user)
         db.commit()
@@ -159,7 +173,21 @@ async def login(
 
     def _login_sync() -> UUID:
         user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
-        if not user or not user.password_hash or not verify_password(body.password, user.password_hash):
+        try:
+            is_valid_password = bool(user and user.password_hash and verify_password(body.password, user.password_hash))
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(e),
+            )
+        except Exception:
+            password_bytes = len((body.password or "").encode("utf-8", errors="ignore"))
+            logger.warning("Login failed: password verification error (password_bytes=%s)", password_bytes)
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="تعذر التحقق من كلمة المرور. تأكد من أنها نص صالح وبطول مناسب.",
+            )
+        if not is_valid_password:
             logger.warning("Login failed: invalid credentials")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

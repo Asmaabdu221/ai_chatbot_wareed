@@ -27,6 +27,8 @@ python-multipart==0.0.18
 # Authentication (JWT + password hashing) - platform-agnostic
 PyJWT==2.10.1
 passlib[bcrypt]==1.7.4
+passlib[argon2]==1.7.4
+argon2-cffi==23.1.0
 email-validator>=2.0.0
 
 # Knowledge Base - Fuzzy Search (used by knowledge_loader_v2.py)
