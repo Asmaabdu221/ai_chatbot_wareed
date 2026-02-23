@@ -29,10 +29,9 @@ const getAvatarSrcWithVersion = (user) => {
   const raw = user?.avatar_url;
   if (!raw) return null;
   const normalized = raw.startsWith('http') ? raw : (raw.startsWith('/') ? raw : `/${raw}`);
-  const version = user?.avatar_version || user?.updated_at || null;
-  if (!version) return normalized;
+  const version = Date.now();
   const sep = normalized.includes('?') ? '&' : '?';
-  return `${normalized}${sep}v=${encodeURIComponent(version)}`;
+  return `${normalized}${sep}t=${encodeURIComponent(version)}`;
 };
 
 const SettingsIcon = () => (

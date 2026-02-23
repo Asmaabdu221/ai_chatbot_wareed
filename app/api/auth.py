@@ -7,7 +7,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
@@ -357,7 +357,7 @@ async def upload_avatar(
     if len(data) > 5 * 1024 * 1024:  # 5MB
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="حجم الصورة كبير جداً (الحد 5 ميجابايت).")
     avatars_dir = _get_avatars_dir()
-    filename = f"{current_user.id}{ext}"
+    filename = f"{current_user.id}_{uuid4().hex}{ext}"
     filepath = avatars_dir / filename
     try:
         with open(filepath, "wb") as f:
@@ -369,4 +369,12 @@ async def upload_avatar(
     current_user.avatar_url = avatar_url
     db.commit()
     db.refresh(current_user)
-    return {"avatar_url": avatar_url}
+    response_payload = {"avatar_url": avatar_url}
+    logger.info(
+        "Avatar upload saved for user_id=%s path=%s bytes=%s response=%s",
+        str(current_user.id),
+        str(filepath),
+        len(data),
+        response_payload,
+    )
+    return response_payload

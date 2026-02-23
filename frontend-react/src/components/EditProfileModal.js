@@ -27,14 +27,14 @@ const CameraIcon = () => (
   </svg>
 );
 
-const getAvatarSrc = (avatarUrl, version = null) => {
+const getAvatarSrc = (avatarUrl) => {
   if (!avatarUrl) return null;
   const normalized = avatarUrl.startsWith('http')
     ? avatarUrl
     : (avatarUrl.startsWith('/') ? avatarUrl : `/${avatarUrl}`);
-  if (!version) return normalized;
+  const version = Date.now();
   const sep = normalized.includes('?') ? '&' : '?';
-  return `${normalized}${sep}v=${encodeURIComponent(version)}`;
+  return `${normalized}${sep}t=${encodeURIComponent(version)}`;
 };
 
 const EditProfileModal = ({ user, onClose, onProfileUpdated }) => {
@@ -42,7 +42,6 @@ const EditProfileModal = ({ user, onClose, onProfileUpdated }) => {
   const [displayNameVal, setDisplayNameVal] = useState('');
   const [usernameVal, setUsernameVal] = useState('');
   const [avatarUrl, setAvatarUrl] = useState(null);
-  const [avatarVersion, setAvatarVersion] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
@@ -55,7 +54,6 @@ const EditProfileModal = ({ user, onClose, onProfileUpdated }) => {
     setDisplayNameVal(displayName || '');
     setUsernameVal(username || '');
     setAvatarUrl(user?.avatar_url || null);
-    setAvatarVersion(user?.avatar_version || null);
     setAvatarPreview(null);
   }, [user, displayName, username]);
 
@@ -77,13 +75,11 @@ const EditProfileModal = ({ user, onClose, onProfileUpdated }) => {
     setIsUploadingAvatar(true);
     try {
       const { avatar_url } = await uploadAvatar(file);
-      const nextVersion = Date.now();
+      console.log("[Avatar Upload] returned avatar_url:", avatar_url);
       setAvatarUrl(avatar_url);
-      setAvatarVersion(nextVersion);
       onProfileUpdated?.({
         ...(user || {}),
         avatar_url,
-        avatar_version: nextVersion,
       });
     } catch (err) {
       setError(getErrorMessage(err, 'فشل رفع الصورة.'));
@@ -101,7 +97,6 @@ const EditProfileModal = ({ user, onClose, onProfileUpdated }) => {
       const updated = await getMe();
       onProfileUpdated?.({
         ...updated,
-        avatar_version: avatarVersion || Date.now(),
       });
       onClose();
     } catch (err) {
@@ -111,7 +106,7 @@ const EditProfileModal = ({ user, onClose, onProfileUpdated }) => {
     }
   };
 
-  const avatarSrc = avatarPreview || getAvatarSrc(avatarUrl, avatarVersion);
+  const avatarSrc = avatarPreview || getAvatarSrc(avatarUrl);
   const initials = getInitials(displayNameVal || displayName, user?.email);
 
   return (

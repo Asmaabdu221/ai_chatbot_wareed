@@ -280,11 +280,20 @@ function ChatView() {
       onClearChats={handleClearChats}
       onProfileUpdated={(updatedUser) => {
         if (!updatedUser) return;
-        setUser((prev) => ({
+        setUser((prev) => {
+          const nextUser = {
           ...(prev || {}),
           ...updatedUser,
           avatar_version: updatedUser.avatar_version || Date.now(),
-        }));
+          };
+          console.log("[Avatar State] setUser next state:", {
+            id: nextUser?.id,
+            email: nextUser?.email,
+            avatar_url: nextUser?.avatar_url,
+            avatar_version: nextUser?.avatar_version,
+          });
+          return nextUser;
+        });
       }}
       onQuickAction={handleQuickAction}
     />

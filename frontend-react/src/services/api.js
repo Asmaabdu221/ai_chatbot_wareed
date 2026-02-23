@@ -126,11 +126,15 @@ export const uploadAvatar = async (file) => {
   const token = getAccessToken();
   const formData = new FormData();
   formData.append("file", file, file.name || "avatar.jpg");
-  const { data } = await api.post("/api/auth/profile/avatar", formData, {
+  const response = await api.post("/api/auth/profile/avatar", formData, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     timeout: 30000,
   });
-  return data;
+  console.log("[Avatar Upload] response:", {
+    status: response.status,
+    data: response.data,
+  });
+  return response.data;
 };
 
 /**
