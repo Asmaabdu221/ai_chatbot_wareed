@@ -29,12 +29,9 @@ const CameraIcon = () => (
 
 const getAvatarSrc = (avatarUrl) => {
   if (!avatarUrl) return null;
-  const normalized = avatarUrl.startsWith('http')
-    ? avatarUrl
-    : (avatarUrl.startsWith('/') ? avatarUrl : `/${avatarUrl}`);
   const version = Date.now();
-  const sep = normalized.includes('?') ? '&' : '?';
-  return `${normalized}${sep}t=${encodeURIComponent(version)}`;
+  const sep = avatarUrl.includes('?') ? '&' : '?';
+  return `${avatarUrl}${sep}t=${encodeURIComponent(version)}`;
 };
 
 const EditProfileModal = ({ user, onClose, onProfileUpdated }) => {

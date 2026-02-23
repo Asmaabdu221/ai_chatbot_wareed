@@ -4,6 +4,7 @@ No cookies, no server-side sessions. Same flow for all clients.
 """
 
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -272,7 +273,7 @@ def me(
 def _get_avatars_dir() -> Path:
     """Return avatars upload directory, create if needed."""
     root = Path(__file__).resolve().parents[2]
-    avatars_dir = root / "static" / "uploads" / "avatars"
+    avatars_dir = root / "media" / "avatars"
     avatars_dir.mkdir(parents=True, exist_ok=True)
     return avatars_dir
 
@@ -365,16 +366,19 @@ async def upload_avatar(
     except Exception as e:
         logger.error("Failed to save avatar: %s", e)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="فشل حفظ الصورة.")
-    avatar_url = f"/uploads/avatars/{filename}"
+    file_exists = os.path.exists(filepath)
+    avatar_url = f"/media/avatars/{filename}"
     current_user.avatar_url = avatar_url
     db.commit()
     db.refresh(current_user)
     response_payload = {"avatar_url": avatar_url}
     logger.info(
-        "Avatar upload saved for user_id=%s path=%s bytes=%s response=%s",
+        "Avatar upload saved for user_id=%s abs_path=%s bytes=%s file_exists=%s avatar_url=%s response=%s",
         str(current_user.id),
-        str(filepath),
+        str(filepath.resolve()),
         len(data),
+        file_exists,
+        avatar_url,
         response_payload,
     )
     return response_payload

@@ -28,10 +28,9 @@ const getInitials = (email) => {
 const getAvatarSrcWithVersion = (user) => {
   const raw = user?.avatar_url;
   if (!raw) return null;
-  const normalized = raw.startsWith('http') ? raw : (raw.startsWith('/') ? raw : `/${raw}`);
   const version = Date.now();
-  const sep = normalized.includes('?') ? '&' : '?';
-  return `${normalized}${sep}t=${encodeURIComponent(version)}`;
+  const sep = raw.includes('?') ? '&' : '?';
+  return `${raw}${sep}t=${encodeURIComponent(version)}`;
 };
 
 const SettingsIcon = () => (

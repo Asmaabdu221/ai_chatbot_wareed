@@ -322,7 +322,7 @@ function ChatView() {
           onCancelReply={() => setReplyingToMessage(null)}
           userName={user?.display_name || user?.username}
           isFetchingMessages={isFetchingMessages}
-          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          onToggleSidebar={() => setSidebarOpen(true)}
         />
       </ChatLayout>
     </div>

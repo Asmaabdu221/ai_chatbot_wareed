@@ -3,7 +3,7 @@
  * Sidebar on LEFT, main chat on right. Flexbox-based, responsive.
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import './ChatLayout.css';
 
 const ChatLayout = ({
@@ -14,10 +14,25 @@ const ChatLayout = ({
   onToggleSidebarCollapse,
   children,
 }) => {
+  useEffect(() => {
+    const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+    if (!isMobile) return undefined;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = sidebarOpen ? 'hidden' : prevOverflow || '';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [sidebarOpen]);
+
   return (
     <div className="chat-layout">
       <main className="chat-layout-main">{children}</main>
-      <aside className={`chat-layout-sidebar ${sidebarOpen ? 'open' : ''} ${sidebarCollapsed ? 'collapsed' : ''}`}>{sidebar}</aside>
+      <aside
+        className={`chat-layout-sidebar ${sidebarOpen ? 'open' : ''} ${sidebarCollapsed ? 'collapsed' : ''}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {sidebar}
+      </aside>
       {sidebarCollapsed && (
         <button
           type="button"

@@ -65,6 +65,8 @@
   color: var(--text-secondary);
   cursor: pointer;
   transition: background-color 120ms ease, color 120ms ease;
+  position: relative;
+  z-index: 60;
 }
 
 .left-sidebar-close-btn:hover {
