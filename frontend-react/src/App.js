@@ -274,9 +274,18 @@ function ChatView() {
       onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
       sidebarCollapsed={sidebarCollapsed}
       user={user}
+      userEmail={user?.email}
       theme={theme}
       onThemeChange={(next) => { setTheme(next); localStorage.setItem('wareed_theme', next); }}
       onClearChats={handleClearChats}
+      onProfileUpdated={(updatedUser) => {
+        if (!updatedUser) return;
+        setUser((prev) => ({
+          ...(prev || {}),
+          ...updatedUser,
+          avatar_version: updatedUser.avatar_version || Date.now(),
+        }));
+      }}
       onQuickAction={handleQuickAction}
     />
   );

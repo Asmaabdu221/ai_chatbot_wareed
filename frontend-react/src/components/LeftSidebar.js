@@ -25,6 +25,16 @@ const getInitials = (email) => {
   return part.toUpperCase();
 };
 
+const getAvatarSrcWithVersion = (user) => {
+  const raw = user?.avatar_url;
+  if (!raw) return null;
+  const normalized = raw.startsWith('http') ? raw : (raw.startsWith('/') ? raw : `/${raw}`);
+  const version = user?.avatar_version || user?.updated_at || null;
+  if (!version) return normalized;
+  const sep = normalized.includes('?') ? '&' : '?';
+  return `${normalized}${sep}v=${encodeURIComponent(version)}`;
+};
+
 const SettingsIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="3" />
@@ -52,9 +62,7 @@ const UserPanel = ({ user, userEmail, theme, onThemeChange, onLogout, onCloseSid
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsRef = useRef(null);
   const displayName = user?.display_name || user?.username || getUserName(userEmail);
-  const avatarSrc = user?.avatar_url
-    ? (user.avatar_url.startsWith('/') ? user.avatar_url : `/${user.avatar_url}`)
-    : null;
+  const avatarSrc = getAvatarSrcWithVersion(user);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -467,7 +475,7 @@ const LeftSidebar = ({
           <span className="left-sidebar-name-text">{user?.display_name || user?.username || getUserName(userEmail)}</span>
           <span className="left-sidebar-name-avatar">
             {user?.avatar_url ? (
-              <img src={user.avatar_url.startsWith('/') ? user.avatar_url : `/${user.avatar_url}`} alt="" />
+              <img src={getAvatarSrcWithVersion(user)} alt="" />
             ) : (
               getInitials(userEmail)
             )}
