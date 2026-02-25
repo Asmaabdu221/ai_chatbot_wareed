@@ -259,6 +259,12 @@
   display: block;
 }
 
+.message-text a {
+  color: var(--brand-600);
+  text-decoration: underline;
+  word-break: break-all;
+}
+
 .code-block {
   background: var(--code-bg);
   color: var(--code-text);

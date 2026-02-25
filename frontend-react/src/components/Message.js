@@ -27,20 +27,46 @@ const parseContent = (text) => {
   });
 };
 
+const URL_REGEX = /(https?:\/\/[^\s]+)/g;
+const TRAILING_PUNCTUATION_REGEX = /[).,!?؛:،]+$/;
+
+const renderTextWithLinks = (text, keyPrefix) => {
+  const value = String(text || '');
+  const parts = value.split(URL_REGEX);
+
+  return parts.filter(Boolean).map((part, idx) => {
+    const key = `${keyPrefix}-link-${idx}`;
+    if (!/^https?:\/\//i.test(part)) {
+      return <React.Fragment key={key}>{part}</React.Fragment>;
+    }
+
+    const trimmed = part.replace(TRAILING_PUNCTUATION_REGEX, '');
+    const trailing = part.slice(trimmed.length);
+    return (
+      <React.Fragment key={key}>
+        <a href={trimmed} target="_blank" rel="noopener noreferrer">
+          {trimmed}
+        </a>
+        {trailing}
+      </React.Fragment>
+    );
+  });
+};
+
 const renderInlineMarkdown = (text, keyPrefix) => {
   const tokens = String(text || '').split(/(\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|_[^_]+_|`[^`]+`)/g);
   return tokens.filter(Boolean).map((token, idx) => {
     const key = `${keyPrefix}-inline-${idx}`;
     if ((token.startsWith('**') && token.endsWith('**')) || (token.startsWith('__') && token.endsWith('__'))) {
-      return <strong key={key}>{token.slice(2, -2)}</strong>;
+      return <strong key={key}>{renderTextWithLinks(token.slice(2, -2), `${key}-strong`)}</strong>;
     }
     if ((token.startsWith('*') && token.endsWith('*')) || (token.startsWith('_') && token.endsWith('_'))) {
-      return <em key={key}>{token.slice(1, -1)}</em>;
+      return <em key={key}>{renderTextWithLinks(token.slice(1, -1), `${key}-em`)}</em>;
     }
     if (token.startsWith('`') && token.endsWith('`')) {
       return <code key={key}>{token.slice(1, -1)}</code>;
     }
-    return <React.Fragment key={key}>{token}</React.Fragment>;
+    return <React.Fragment key={key}>{renderTextWithLinks(token, `${key}-plain`)}</React.Fragment>;
   });
 };
 
@@ -229,7 +255,7 @@ const Message = ({
                 ? <CodeBlock key={i} code={b.content} lang={b.lang} />
                 : (
                   isUser
-                    ? <span key={i} className="text-block">{b.content}</span>
+                    ? <span key={i} className="text-block">{renderTextWithLinks(b.content, `user-${i}`)}</span>
                     : <React.Fragment key={i}>{renderAssistantTextBlock(b.content, `assistant-${i}`)}</React.Fragment>
                 )
             ))}
