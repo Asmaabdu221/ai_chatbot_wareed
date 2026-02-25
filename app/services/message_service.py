@@ -34,6 +34,7 @@ from app.services.report_parser_service import parse_lab_report_text, compose_re
 from app.services.response_fallback_service import sanitize_for_ui, compose_context_fallback
 from app.data.style_pipeline import search_style_examples
 from app.services.context_cache import get_context_cache
+from app.utils.text_normalize import normalize_text
 from app.data.branches_service import (
     get_available_cities,
     find_branches_by_city,
@@ -77,12 +78,9 @@ _LIGHT_INTENT_CITIES = {
 
 
 def _normalize_light(text: str) -> str:
-    value = (text or "").strip().lower()
+    value = normalize_text(text)
     if not value:
         return ""
-    value = re.sub(r"[\u064B-\u065F\u0670]", "", value)
-    value = value.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
-    value = value.replace("ى", "ي").replace("ؤ", "و").replace("ئ", "ي")
     value = re.sub(r"[^\w\s\u0600-\u06FF]", " ", value)
     return re.sub(r"\s+", " ", value).strip()
 
@@ -387,25 +385,46 @@ def _is_number_selection(text: str, n: int) -> int | None:
     return choice if 1 <= choice <= n else None
 
 
-def _detect_topic_switch(text: str) -> str | None:
+_FLOW_KEYWORDS_ORDER: list[tuple[str, set[str]]] = [
+    (
+        "branch_flow",
+        {"اقرب فرع", "وين الفرع", "موقع الفرع", "الفرع القريب", "فروع", "branch", "location"},
+    ),
+    (
+        "pricing_flow",
+        {"كم سعر", "سعر", "اسعار", "تكلفه", "تكلفة", "price", "pricing", "cost"},
+    ),
+    (
+        "result_flow",
+        {"نتيجه", "نتيجة", "نتايج", "متى تطلع", "رقم الطلب", "order", "result"},
+    ),
+    (
+        "complaint_flow",
+        {"شكوى", "شكوي", "مشكلة", "مشكله", "complaint", "اعتراض"},
+    ),
+]
+
+
+def _detect_bypass_flow(text: str) -> str | None:
     n = _normalize_light(text)
-    if any(k in n for k in {"اقرب فرع", "أقرب فرع", "وين الفرع", "موقع الفرع", "الفرع القريب", "branch"}):
-        return "branch_location"
-    if any(k in n for k in {"كم سعر", "سعر", "تكلفة", "تكلفه", "price", "pricing"}):
-        return "pricing_flow"
-    if any(k in n for k in {"نتيجتي", "نتيجه", "نتيجة", "رقم الطلب", "order id", "order", "زيارة", "visit date"}):
-        return "result_flow"
-    if any(k in n for k in {"شكوى", "شكوي", "مشكلة", "مشكله", "complaint"}):
-        return "complaint_flow"
+    if not n:
+        return None
+    for flow_name, keywords in _FLOW_KEYWORDS_ORDER:
+        if any(k in n for k in keywords):
+            return flow_name
     return None
 
 
+def _detect_topic_switch(text: str) -> str | None:
+    return _detect_bypass_flow(text)
+
+
 def _extract_test_name_for_pricing(text: str) -> str:
-    n = (text or "").strip()
+    n = _normalize_light(text)
     if not n:
         return ""
     cleaned = re.sub(r"[؟?]", " ", n)
-    cleaned = re.sub(r"\b(كم|سعر|تكلفة|تكلفه|في|الرياض|جدة|جده|price|pricing)\b", " ", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\b(كم|سعر|تكلفه|في|الرياض|جده|price|pricing)\b", " ", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     return cleaned
 
@@ -480,13 +499,17 @@ def _format_selected_branch(choice: int, branch: dict) -> str:
     maps_url = (branch.get("maps_url") or "").strip()
     hours = (branch.get("hours") or "").strip()
     phone = (branch.get("phone") or "").strip()
-    lines = [f"الفرع رقم {choice}: {branch_name}"]
+    lines = [f"الفرع رقم {choice}: {branch_name}", ""]
     if maps_url:
-        lines.append(f"رابط الموقع: [اضغط هنا لفتح الموقع]({maps_url})")
-    if hours:
-        lines.append(f"ساعات العمل: {hours}")
+        lines.append("رابط الموقع:")
+        lines.append(maps_url)
     if _is_real_phone_number(phone):
+        lines.append("")
         lines.append(f"هاتف الفرع: {phone}")
+    if hours:
+        if not _is_real_phone_number(phone):
+            lines.append("")
+        lines.append(f"ساعات العمل: {hours}")
     return "\n".join(lines)
 
 
@@ -504,7 +527,7 @@ def _save_branch_selection_state(conversation_id: UUID, city: str, branches: lis
     _save_state(
         conversation_id,
         {
-            "active_flow": "branch_location",
+            "active_flow": "branch_flow",
             "step": "awaiting_branch_number",
             "slots": {"city": city},
             "last_city": city,
@@ -528,7 +551,7 @@ def _match_city_in_catalog(city_query: str) -> str:
 
 def _branch_lookup_bypass_reply(question: str, conversation_id: UUID, light_intent: str) -> str | None:
     state = _get_state(conversation_id)
-    if state.get("active_flow") == "branch_location" and state.get("step") == "awaiting_branch_number":
+    if state.get("active_flow") in {"branch_flow", "branch_location"} and state.get("step") == "awaiting_branch_number":
         options = state.get("last_options") or []
         selected = _is_number_selection(question, len(options))
         if selected is not None:
@@ -587,7 +610,7 @@ def _start_flow(flow_name: str) -> dict:
     state["active_flow"] = flow_name
     state["slots"] = {}
     if flow_name in {"branch_flow", "branch_location"}:
-        state["active_flow"] = "branch_location"
+        state["active_flow"] = "branch_flow"
         state["step"] = "awaiting_city"
         state["last_prompt"] = "عشان أحدد أقرب فرع، اكتب اسم المدينة (مثال: الرياض / جدة) أو المدينة + الحي."
     elif flow_name == "pricing_flow":
@@ -615,7 +638,7 @@ def _complete_flow(state: dict) -> dict:
     return out
 
 
-def _run_branch_flow(message: str, state: dict) -> tuple[str, dict]:
+def _run_branch_flow(message: str, state: dict) -> tuple[str, dict, bool]:
     step = state.get("step") or "awaiting_city"
     slots = state.get("slots") or {}
     options = state.get("last_options") or []
@@ -623,7 +646,7 @@ def _run_branch_flow(message: str, state: dict) -> tuple[str, dict]:
     if step in {"showing_branches", "awaiting_selection", "awaiting_branch_number"} and options:
         selected = _is_number_selection(message, len(options))
         if selected is not None:
-            return _format_selected_branch(selected, options[selected - 1]), _complete_flow(state)
+            return _format_selected_branch(selected, options[selected - 1]), _complete_flow(state), True
 
     city_raw, district = _extract_city_and_district(message)
     if not city_raw:
@@ -634,15 +657,15 @@ def _run_branch_flow(message: str, state: dict) -> tuple[str, dict]:
     if not city_raw:
         state["step"] = "awaiting_city"
         state["last_prompt"] = "عشان أحدد أقرب فرع، اكتب اسم المدينة (مثال: الرياض / جدة) أو المدينة + الحي."
-        return state["last_prompt"], state
+        return state["last_prompt"], state, False
 
     city = _match_city_in_catalog(city_raw)
     if not city:
-        return _format_city_not_found_reply(city_raw), _complete_flow(state)
+        return _format_city_not_found_reply(city_raw), _complete_flow(state), True
 
     city_branches = find_branches_by_city(city)
     if not city_branches:
-        return _format_city_not_found_reply(city), _complete_flow(state)
+        return _format_city_not_found_reply(city), _complete_flow(state), True
 
     if district:
         qn = _normalize_light(district)
@@ -654,14 +677,14 @@ def _run_branch_flow(message: str, state: dict) -> tuple[str, dict]:
         if district_hits:
             state["slots"] = {"city": city, "district": district}
             state["step"] = "awaiting_branch_number"
-            state["active_flow"] = "branch_location"
+            state["active_flow"] = "branch_flow"
             state["last_city"] = city
             state["last_options"] = district_hits
             state["last_prompt"] = "حددي رقم الفرع الأقرب لك لأزوّدك برابط الموقع."
-            return _format_branch_names_only(city, district_hits), state
+            return _format_branch_names_only(city, district_hits), state, False
         state["slots"] = {"city": city, "district": district}
         state["step"] = "awaiting_branch_number"
-        state["active_flow"] = "branch_location"
+        state["active_flow"] = "branch_flow"
         state["last_city"] = city
         state["last_options"] = city_branches
         state["last_prompt"] = "حددي رقم الفرع الأقرب لك لأزوّدك برابط الموقع."
@@ -670,18 +693,18 @@ def _run_branch_flow(message: str, state: dict) -> tuple[str, dict]:
             + "\n"
             + _format_branch_names_only(city, city_branches)
         )
-        return msg, state
+        return msg, state, False
 
     state["slots"] = {"city": city}
     state["step"] = "awaiting_branch_number"
-    state["active_flow"] = "branch_location"
+    state["active_flow"] = "branch_flow"
     state["last_city"] = city
     state["last_options"] = city_branches
     state["last_prompt"] = "حددي رقم الفرع الأقرب لك لأزوّدك برابط الموقع."
-    return _format_branch_names_only(city, city_branches), state
+    return _format_branch_names_only(city, city_branches), state, False
 
 
-def _run_pricing_flow(message: str, state: dict) -> tuple[str, dict]:
+def _run_pricing_flow(message: str, state: dict) -> tuple[str, dict, bool]:
     step = state.get("step") or "awaiting_test_name"
     slots = state.get("slots") or {}
 
@@ -689,12 +712,12 @@ def _run_pricing_flow(message: str, state: dict) -> tuple[str, dict]:
         test_name = _extract_test_name_for_pricing(message)
         if not test_name:
             state["last_prompt"] = "وش اسم التحليل اللي تبغى سعره؟"
-            return state["last_prompt"], state
+            return state["last_prompt"], state, False
         slots["test_name"] = test_name
         state["slots"] = slots
         state["step"] = "awaiting_city"
         state["last_prompt"] = "اكتب المدينة إذا تحب (مثال: الرياض)، أو اكتب: بدون مدينة."
-        return state["last_prompt"], state
+        return state["last_prompt"], state, False
 
     if step == "awaiting_city":
         city, _district = _extract_city_and_district(message)
@@ -705,31 +728,65 @@ def _run_pricing_flow(message: str, state: dict) -> tuple[str, dict]:
             + (f" في {slots['city']}" if slots.get("city") else "")
             + f"، للاستفسار الدقيق تقدر تتواصل مع خدمة العملاء على {_branch_phone()}."
         )
-        return reply, _complete_flow(state)
+        return reply, _complete_flow(state), True
 
     state["last_prompt"] = "وش اسم التحليل اللي تبغى سعره؟"
     state["step"] = "awaiting_test_name"
-    return state["last_prompt"], state
+    return state["last_prompt"], state, False
 
 
-def _run_result_flow(message: str, state: dict) -> tuple[str, dict]:
+def _run_result_flow(message: str, state: dict) -> tuple[str, dict, bool]:
     ident = _extract_identifier(message)
     if not ident:
         state["step"] = "awaiting_identifier"
         state["last_prompt"] = "زوّدني برقم الطلب أو رقم الجوال أو تاريخ الزيارة عشان نساعدك."
-        return state["last_prompt"], state
+        return state["last_prompt"], state, False
     reply = f"لخدمة النتائج بشكل مباشر، تقدر تتواصل مع خدمة العملاء على {_branch_phone()}."
-    return reply, _complete_flow(state)
+    return reply, _complete_flow(state), True
 
 
-def _run_complaint_flow(message: str, state: dict) -> tuple[str, dict]:
+def _run_complaint_flow(message: str, state: dict) -> tuple[str, dict, bool]:
     ident = _extract_identifier(message)
     if not ident:
         state["step"] = "awaiting_identifier"
         state["last_prompt"] = "لفتح شكوى بشكل صحيح، زوّدني برقم الطلب أو تاريخ الزيارة."
-        return state["last_prompt"], state
+        return state["last_prompt"], state, False
     reply = f"تم استلام طلبك. لإكمال معالجة الشكوى بسرعة، تواصل مع خدمة العملاء على {_branch_phone()}."
-    return reply, _complete_flow(state)
+    return reply, _complete_flow(state), True
+
+
+_FLOW_DEFINITIONS = {
+    "branch_flow": {
+        "required_slots": ["city"],
+        "handler": _run_branch_flow,
+    },
+    "pricing_flow": {
+        "required_slots": ["test_name"],
+        "handler": _run_pricing_flow,
+    },
+    "result_flow": {
+        "required_slots": ["order_id_or_phone_or_visit_date"],
+        "handler": _run_result_flow,
+    },
+    "complaint_flow": {
+        "required_slots": ["order_id_or_visit_date"],
+        "handler": _run_complaint_flow,
+    },
+    "default_chat_flow": {
+        "required_slots": [],
+        "handler": None,
+    },
+}
+
+
+def _run_flow_by_name(flow_name: str, message: str, state: dict) -> tuple[str, dict, bool] | None:
+    definition = _FLOW_DEFINITIONS.get(flow_name)
+    if not definition:
+        return None
+    handler = definition.get("handler")
+    if handler is None:
+        return None
+    return handler(message, state)
 
 
 def _handle_stateful_conversation(conversation_id: UUID, message: str) -> str | None:
@@ -738,29 +795,31 @@ def _handle_stateful_conversation(conversation_id: UUID, message: str) -> str | 
         return "تم إلغاء العملية. نقدر نبدأ من جديد، كيف أقدر أخدمك؟"
 
     state = _get_state(conversation_id)
-    active_flow = state.get("active_flow")
-    topic_switch = _detect_topic_switch(message)
+    active_flow = state.get("active_flow") or None
+    topic_switch = _detect_bypass_flow(message)
 
     if active_flow and topic_switch and topic_switch != active_flow:
         state = _start_flow(topic_switch)
         active_flow = topic_switch
-    elif not active_flow and topic_switch:
+    elif active_flow:
+        # Continue active flow first if no strong topic switch.
+        pass
+    elif topic_switch:
         state = _start_flow(topic_switch)
         active_flow = topic_switch
 
     if not active_flow or active_flow == "default_chat_flow":
         return None
 
-    if active_flow in {"branch_flow", "branch_location"}:
-        reply, next_state = _run_branch_flow(message, state)
-    elif active_flow == "pricing_flow":
-        reply, next_state = _run_pricing_flow(message, state)
-    elif active_flow == "result_flow":
-        reply, next_state = _run_result_flow(message, state)
-    elif active_flow == "complaint_flow":
-        reply, next_state = _run_complaint_flow(message, state)
-    else:
+    if active_flow == "branch_location":
+        # Backward compatibility for older cached states.
+        active_flow = "branch_flow"
+        state["active_flow"] = "branch_flow"
+
+    result = _run_flow_by_name(active_flow, message, state)
+    if result is None:
         return None
+    reply, next_state, _done = result
 
     _save_state(conversation_id, next_state)
     return reply
