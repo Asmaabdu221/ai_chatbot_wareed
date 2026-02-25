@@ -6,6 +6,7 @@ AI logic isolated here (OpenAI or other providers).
 
 import logging
 import os
+import re
 import tempfile
 from uuid import UUID
 
@@ -19,7 +20,6 @@ from app.services.question_router import route as route_question, classify_inten
 from app.data.knowledge_loader_v2 import get_knowledge_context
 from app.data.knowledge_loader_v2 import get_knowledge_base
 from app.data.rag_pipeline import (
-    get_grounded_context,
     is_rag_ready,
     NO_INFO_MESSAGE,
     retrieve,
@@ -63,26 +63,149 @@ def _enforce_escalation_policy(text: str) -> str:
     return content
 
 
-def _build_style_guidance_block(query: str) -> str:
+_LIGHT_INTENT_CITIES = {
+    "الرياض", "جدة", "مكة", "المدينه", "المدينة", "الدمام", "الخبر", "القصيم", "تبوك", "ابها", "أبها",
+    "حائل", "جازان", "الطايف", "الطائف", "الجبيل", "خميس مشيط", "نجران", "الاحساء", "الأحساء",
+}
+
+
+def _normalize_light(text: str) -> str:
+    n = normalize_for_matching(text or "").lower()
+    return re.sub(r"\s+", " ", n).strip()
+
+
+def _contains_any(text: str, keywords: set[str]) -> bool:
+    return any(k in text for k in keywords)
+
+
+def _detect_city_or_area(text: str) -> tuple[bool, str]:
+    n = _normalize_light(text)
+    for city in _LIGHT_INTENT_CITIES:
+        if _normalize_light(city) in n:
+            return True, city
+    if any(w in n for w in {"حي", "الحي", "المنطقة", "منطقه", "المنطقه", "district", "area"}):
+        return True, "area"
+    return False, ""
+
+
+def _classify_light_intent(text: str) -> tuple[str, dict]:
+    n = _normalize_light(text)
+    has_city, city = _detect_city_or_area(text)
+    meta = {"has_city_or_area": has_city, "city_or_area": city}
+
+    if _contains_any(n, {"متى تطلع", "متى تجهز", "مدة النتيجة", "مده النتيجه", "وقت النتيجة", "وقت النتيجه", "كم يوم", "turnaround", "results time"}):
+        return "result_time", meta
+    if _contains_any(n, {"اقرب فرع", "أقرب فرع", "وين الفرع", "مكان الفرع", "موقع الفرع", "branch", "location", "وين اقرب", "وين اقرب فرع"}):
+        return "branch_location", meta
+    if _contains_any(n, {"كم سعر", "السعر", "اسعار", "أسعار", "تكلفة", "تكلفه", "price", "cost"}):
+        return "pricing", meta
+    if _contains_any(n, {"استلام النتيجه", "استلام النتيجة", "كيف استلم", "كيف توصل النتيجه", "واتساب", "ايميل", "email", "تطبيق", "delivery"}):
+        return "result_delivery", meta
+    if _contains_any(n, {"شكوى", "شكوي", "مشكلة", "مشكله", "غير راضي", "مو راضي", "سيئة", "سيئه", "complaint"}):
+        return "complaint", meta
+    return "other", meta
+
+
+def _example_matches_intent(example: str, intent_label: str) -> bool:
+    if intent_label == "other":
+        return True
+    n = _normalize_light(example)
+    keywords_map = {
+        "result_time": {"نتيجه", "نتيجة", "تطلع", "جاهزه", "جاهزة", "وقت"},
+        "branch_location": {"فرع", "عنوان", "موقع", "اقرب"},
+        "pricing": {"سعر", "تكلفه", "تكلفة", "price", "cost"},
+        "result_delivery": {"واتساب", "ايميل", "email", "تطبيق", "استلام"},
+        "complaint": {"شكوى", "شكوي", "اعتذار", "تعويض", "اسفين", "مشكلة", "مشكله"},
+    }
+    return _contains_any(n, keywords_map.get(intent_label, set()))
+
+
+def _build_style_guidance_block_for_intent(query: str, intent_label: str) -> str:
     if not getattr(settings, "ENABLE_STYLE_RAG", True):
         return ""
     try:
-        examples = search_style_examples(
+        raw_examples = search_style_examples(
             query=query,
-            top_k=getattr(settings, "STYLE_TOP_K", 3),
+            top_k=max(getattr(settings, "STYLE_TOP_K", 3) * 4, 3),
         )
     except Exception as exc:
         logger.debug("Style retrieval skipped: %s", exc)
         return ""
+    if not raw_examples:
+        return ""
 
-    if not examples:
+    filtered = [ex for ex in raw_examples if _example_matches_intent(ex, intent_label)]
+    chosen = filtered[: getattr(settings, "STYLE_TOP_K", 3)] if filtered else raw_examples[: getattr(settings, "STYLE_TOP_K", 3)]
+    if not chosen:
         return ""
 
     lines = ["🎯 **Style Guidance Examples (tone only):**"]
-    for i, ex in enumerate(examples, 1):
+    for i, ex in enumerate(chosen, 1):
         lines.append(f"{i}. {ex}")
     lines.append("Use these examples for tone and phrasing only, not for medical facts.")
     return "\n".join(lines)
+
+
+def _filter_rag_results_by_intent(rag_results: list[dict], intent_label: str) -> list[dict]:
+    if intent_label in {"branch_location", "result_delivery", "complaint"}:
+        return []
+    if intent_label != "pricing":
+        return rag_results
+    filtered: list[dict] = []
+    for row in rag_results:
+        test = row.get("test") or {}
+        if test.get("price") is not None:
+            filtered.append(row)
+    return filtered
+
+
+def _format_rag_results_context(rag_results: list[dict], include_prices: bool = True) -> str:
+    if not rag_results:
+        return ""
+    parts = ["📊 **معلومات التحاليل ذات الصلة:**\n"]
+    for i, row in enumerate(rag_results[:3], 1):
+        test = row.get("test") or {}
+        lines = [f"🔬 **{test.get('analysis_name_ar', 'غير متوفر')}**"]
+        if test.get("analysis_name_en"):
+            lines.append(f"   ({test.get('analysis_name_en')})")
+        if test.get("description"):
+            lines.append(f"\n📝 **الوصف:** {test.get('description')}")
+        if include_prices and test.get("price") is not None:
+            lines.append(f"\n💵 **السعر:** {test.get('price')}")
+        if test.get("category"):
+            lines.append(f"\n📂 **التصنيف:** {test.get('category')}")
+        parts.append(f"\n{i}. " + "\n".join(lines) + "\n" + "-" * 50 + "\n")
+    return "".join(parts)
+
+
+def _branch_location_prompt(city_or_area: str = "") -> str:
+    if city_or_area and city_or_area != "area":
+        return f"لتحديد أقرب فرع في {city_or_area} بدقة، شاركنا اسم الحي/المنطقة."
+    return "عشان نحدد أقرب فرع لك بدقة، اكتب المدينة أو الحي."
+
+
+def _sanitize_branch_location_response(text: str, has_city_or_area: bool) -> str:
+    n = _normalize_light(text)
+    if any(k in n for k in {"زيارة منزلية", "سحب منزلي", "home visit", "منزلي"}):
+        if not has_city_or_area:
+            return _branch_location_prompt()
+        return (
+            "لتحديد أقرب فرع بدقة داخل مدينتك، اكتب اسم الحي/المنطقة "
+            f"أو تواصل مع خدمة العملاء على {settings.CUSTOMER_SERVICE_PHONE}."
+        )
+    return text
+
+
+def _ensure_result_time_clause(text: str, light_intent: str) -> str:
+    if light_intent != "result_time":
+        return text
+    required_clause = "بعض الفحوصات قد تحتاج وقت أطول حسب نوعها"
+    if required_clause in (text or ""):
+        return text
+    clean = (text or "").strip()
+    if not clean:
+        return required_clause
+    return f"{clean}\n\n{required_clause}"
 
 
 def _direct_kb_faq_answer(question: str, intent: str) -> str | None:
@@ -333,6 +456,25 @@ def send_message_with_attachment(
 
     history = get_conversation_history_for_ai(db, conv, max_messages=20)
 
+    light_intent, light_intent_meta = _classify_light_intent(question_for_ai)
+    logger.info(
+        "light intent classification | intent=%s | meta=%s",
+        light_intent,
+        light_intent_meta,
+    )
+
+    if light_intent == "branch_location" and not light_intent_meta.get("has_city_or_area"):
+        assistant_msg = add_message(
+            db,
+            conversation_id,
+            MessageRole.ASSISTANT,
+            _branch_location_prompt(),
+            token_count=0,
+        )
+        db.commit()
+        db.refresh(assistant_msg)
+        return user_msg, assistant_msg
+
     intent_payload = classify_intent(question_for_ai)
     intent = intent_payload.get("intent", "services_overview")
     slots = intent_payload.get("slots", {}) or {}
@@ -382,6 +524,10 @@ def send_message_with_attachment(
     }:
         faq_answer = _direct_kb_faq_answer(question_for_ai, intent)
         if faq_answer:
+            if light_intent == "branch_location":
+                faq_answer = _sanitize_branch_location_response(
+                    faq_answer, bool(light_intent_meta.get("has_city_or_area"))
+                )
             assistant_msg = add_message(db, conversation_id, MessageRole.ASSISTANT, faq_answer, token_count=0)
             db.commit()
             db.refresh(assistant_msg)
@@ -434,6 +580,8 @@ def send_message_with_attachment(
                 max_results=3,
                 similarity_threshold=threshold,
             )
+            rag_results = _filter_rag_results_by_intent(rag_results, light_intent)
+            rag_has_hit = bool(rag_results)
             rag_chunk_count = len(rag_results)
             rag_top_score = float(rag_results[0]["score"]) if rag_results else 0.0
             logger.info(
@@ -443,12 +591,7 @@ def send_message_with_attachment(
                 bool(rag_has_hit),
             )
             if rag_has_hit:
-                rag_context, _ = get_grounded_context(
-                    user_message=question_for_ai,
-                    max_tests=3,
-                    similarity_threshold=threshold,
-                    include_prices=True,
-                )
+                rag_context = _format_rag_results_context(rag_results, include_prices=True)
                 if rag_context:
                     merged_context_parts.append(rag_context)
         except Exception as e:
@@ -487,16 +630,19 @@ def send_message_with_attachment(
         if unique_parts:
             knowledge_context = "\n\n".join(unique_parts)
 
-    style_guidance_block = _build_style_guidance_block(question_for_ai)
+    style_guidance_block = _build_style_guidance_block_for_intent(question_for_ai, light_intent)
+    intent_guidance_block = f"Intent: {light_intent}"
     combined_context = knowledge_context
-    if style_guidance_block:
-        combined_context = "\n\n".join([part for part in [knowledge_context, style_guidance_block] if part])
+    combined_context = "\n\n".join(
+        [part for part in [knowledge_context, intent_guidance_block, style_guidance_block] if part]
+    ) or None
 
     logger.info(
-        "prompt context injection | context_injected=%s | context_len=%s | style_examples=%s",
+        "prompt context injection | context_injected=%s | context_len=%s | style_examples=%s | light_intent=%s",
         bool(combined_context),
         len(combined_context or ""),
         bool(style_guidance_block),
+        light_intent,
     )
 
     ai_result = openai_service.generate_response(
@@ -553,6 +699,11 @@ def send_message_with_attachment(
             assistant_content = retry_response
             tokens = retry_result.get("tokens_used") or tokens
 
+    if light_intent == "branch_location":
+        assistant_content = _sanitize_branch_location_response(
+            assistant_content, bool(light_intent_meta.get("has_city_or_area"))
+        )
+    assistant_content = _ensure_result_time_clause(assistant_content, light_intent)
     assistant_content = _enforce_escalation_policy(assistant_content)
 
     assistant_msg = add_message(
