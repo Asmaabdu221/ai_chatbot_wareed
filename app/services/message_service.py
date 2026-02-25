@@ -9,6 +9,7 @@ import os
 import re
 import tempfile
 import json
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import select, func
@@ -296,6 +297,129 @@ def _branch_phone() -> str:
     return "920003694"
 
 
+def _flow_state_key(conversation_id: UUID) -> str:
+    return f"flow_state:{conversation_id}"
+
+
+def _default_flow_state() -> dict:
+    return {
+        "active_flow": None,
+        "step": None,
+        "slots": {},
+        "last_options": None,
+        "last_prompt": None,
+        "updated_at": None,
+        "expires_at": None,
+    }
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _is_state_expired(state: dict) -> bool:
+    expiry = (state or {}).get("expires_at")
+    if not expiry:
+        return True
+    try:
+        dt = datetime.fromisoformat(str(expiry))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt <= _utc_now()
+    except Exception:
+        return True
+
+
+def _get_state(conversation_id: UUID) -> dict:
+    raw = get_context_cache().get(_flow_state_key(conversation_id))
+    if not raw:
+        return _default_flow_state()
+    try:
+        state = json.loads(raw)
+    except Exception:
+        return _default_flow_state()
+    if not isinstance(state, dict):
+        return _default_flow_state()
+    merged = _default_flow_state()
+    merged.update(state)
+    if _is_state_expired(merged):
+        _reset_state(conversation_id)
+        return _default_flow_state()
+    return merged
+
+
+def _save_state(conversation_id: UUID, state: dict) -> dict:
+    out = _default_flow_state()
+    out.update(state or {})
+    now = _utc_now()
+    out["updated_at"] = now.isoformat()
+    out["expires_at"] = (now + timedelta(minutes=15)).isoformat()
+    get_context_cache().set(_flow_state_key(conversation_id), json.dumps(out, ensure_ascii=False))
+    return out
+
+
+def _reset_state(conversation_id: UUID) -> None:
+    _save_state(conversation_id, _default_flow_state())
+
+
+def _is_cancel_message(text: str) -> bool:
+    n = _normalize_light(text)
+    return any(
+        token in n
+        for token in {
+            "إلغاء",
+            "الغاء",
+            "cancel",
+            "restart",
+            "ابدا من جديد",
+            "ابدأ من جديد",
+        }
+    )
+
+
+def _is_number_selection(text: str, n: int) -> int | None:
+    if n <= 0:
+        return None
+    choice = _extract_number_choice(text)
+    if choice is None:
+        return None
+    return choice if 1 <= choice <= n else None
+
+
+def _detect_topic_switch(text: str) -> str | None:
+    n = _normalize_light(text)
+    if any(k in n for k in {"اقرب فرع", "أقرب فرع", "وين الفرع", "موقع الفرع", "الفرع القريب", "branch"}):
+        return "branch_flow"
+    if any(k in n for k in {"كم سعر", "سعر", "تكلفة", "تكلفه", "price", "pricing"}):
+        return "pricing_flow"
+    if any(k in n for k in {"نتيجتي", "نتيجه", "نتيجة", "رقم الطلب", "order id", "order", "زيارة", "visit date"}):
+        return "result_flow"
+    if any(k in n for k in {"شكوى", "شكوي", "مشكلة", "مشكله", "complaint"}):
+        return "complaint_flow"
+    return None
+
+
+def _extract_test_name_for_pricing(text: str) -> str:
+    n = (text or "").strip()
+    if not n:
+        return ""
+    cleaned = re.sub(r"[؟?]", " ", n)
+    cleaned = re.sub(r"\b(كم|سعر|تكلفة|تكلفه|في|الرياض|جدة|جده|price|pricing)\b", " ", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
+
+
+def _extract_identifier(text: str) -> str:
+    raw = _to_western_digits(text or "")
+    m = re.search(r"\b\d{4,}\b", raw)
+    if m:
+        return m.group(0)
+    m = re.search(r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b", raw)
+    if m:
+        return m.group(0)
+    return ""
+
+
 def _format_branch_item(idx: int, branch: dict) -> str:
     lines = [f"{idx}) {branch.get('branch_name', '').strip()}"]
     if branch.get("hours"):
@@ -409,6 +533,199 @@ def _branch_lookup_bypass_reply(question: str, conversation_id: UUID, light_inte
     # Case B: city only
     _store_branch_selection(conversation_id, city, city_branches)
     return _format_city_branches_reply(city, city_branches)
+
+
+def _start_flow(flow_name: str) -> dict:
+    state = _default_flow_state()
+    state["active_flow"] = flow_name
+    state["slots"] = {}
+    if flow_name == "branch_flow":
+        state["step"] = "awaiting_city"
+        state["last_prompt"] = "عشان أحدد أقرب فرع، اكتب اسم المدينة (مثال: الرياض / جدة) أو المدينة + الحي."
+    elif flow_name == "pricing_flow":
+        state["step"] = "awaiting_test_name"
+        state["last_prompt"] = "وش اسم التحليل اللي تبغى سعره؟"
+    elif flow_name == "result_flow":
+        state["step"] = "awaiting_identifier"
+        state["last_prompt"] = "زوّدني برقم الطلب أو رقم الجوال أو تاريخ الزيارة عشان نساعدك."
+    elif flow_name == "complaint_flow":
+        state["step"] = "awaiting_identifier"
+        state["last_prompt"] = "لفتح شكوى بشكل صحيح، زوّدني برقم الطلب أو تاريخ الزيارة."
+    else:
+        state["step"] = None
+        state["last_prompt"] = None
+    return state
+
+
+def _complete_flow(state: dict) -> dict:
+    out = _default_flow_state()
+    out["active_flow"] = None
+    out["step"] = "done"
+    out["slots"] = {}
+    out["last_options"] = None
+    out["last_prompt"] = None
+    return out
+
+
+def _run_branch_flow(message: str, state: dict) -> tuple[str, dict]:
+    step = state.get("step") or "awaiting_city"
+    slots = state.get("slots") or {}
+    options = state.get("last_options") or []
+
+    if step in {"showing_branches", "awaiting_selection"} and options:
+        selected = _is_number_selection(message, len(options))
+        if selected is not None:
+            b = options[selected - 1]
+            lines = [f"الفرع رقم {selected}:", b.get("branch_name", "").strip()]
+            if b.get("hours"):
+                lines.append(b["hours"].strip())
+            lines.append(f"رابط الموقع: {b.get('maps_url', '').strip()}")
+            lines.append(f"ولأي مساعدة إضافية تقدر تتواصل مع خدمة العملاء على {_branch_phone()}")
+            return "\n".join(lines), _complete_flow(state)
+
+    city_raw, district = _extract_city_and_district(message)
+    if not city_raw:
+        # allow using already captured city in ongoing branch flow
+        city_raw = (slots.get("city") or "").strip()
+        district = district or ""
+
+    if not city_raw:
+        state["step"] = "awaiting_city"
+        state["last_prompt"] = "عشان أحدد أقرب فرع، اكتب اسم المدينة (مثال: الرياض / جدة) أو المدينة + الحي."
+        return state["last_prompt"], state
+
+    city = _match_city_in_catalog(city_raw)
+    if not city:
+        cities = get_available_cities()
+        lines = [f"حالياً لا يوجد لدينا فروع في {city_raw}.", "", "الفروع المتوفرة لدينا حالياً في:"]
+        for c in cities:
+            lines.append(f"- {c}")
+        lines.append("")
+        lines.append(f"ولأي مساعدة إضافية تقدر تتواصل مع خدمة العملاء على {_branch_phone()}")
+        return "\n".join(lines), _complete_flow(state)
+
+    city_branches = find_branches_by_city(city)
+    if not city_branches:
+        lines = [f"حالياً لا يوجد لدينا فروع في {city}.", "", "الفروع المتوفرة لدينا حالياً في:"]
+        for c in get_available_cities():
+            lines.append(f"- {c}")
+        lines.append("")
+        lines.append(f"ولأي مساعدة إضافية تقدر تتواصل مع خدمة العملاء على {_branch_phone()}")
+        return "\n".join(lines), _complete_flow(state)
+
+    if district:
+        qn = _normalize_light(district)
+        district_hits = [
+            b
+            for b in city_branches
+            if qn and (qn in _normalize_light(b.get("branch_name", "")) or qn in _normalize_light(b.get("group", "")))
+        ]
+        if district_hits:
+            state["slots"] = {"city": city, "district": district}
+            state["step"] = "awaiting_selection"
+            state["last_options"] = district_hits
+            state["last_prompt"] = "اكتب رقم الفرع من القائمة."
+            return _format_city_branches_reply(city, district_hits), state
+        state["slots"] = {"city": city, "district": district}
+        state["step"] = "awaiting_selection"
+        state["last_options"] = city_branches
+        state["last_prompt"] = "اكتب رقم الفرع من القائمة."
+        msg = (
+            f"ما لقينا الحي المذكور بالاسم داخل قائمتنا، لكن هذه فروع {city} المتوفرة:\n\n"
+            + _format_city_branches_reply(city, city_branches).replace(f"هذه فروعنا المتوفرة في {city}:\n", "", 1)
+        )
+        return msg, state
+
+    state["slots"] = {"city": city}
+    state["step"] = "awaiting_selection"
+    state["last_options"] = city_branches
+    state["last_prompt"] = "اكتب رقم الفرع من القائمة."
+    return _format_city_branches_reply(city, city_branches), state
+
+
+def _run_pricing_flow(message: str, state: dict) -> tuple[str, dict]:
+    step = state.get("step") or "awaiting_test_name"
+    slots = state.get("slots") or {}
+
+    if step == "awaiting_test_name":
+        test_name = _extract_test_name_for_pricing(message)
+        if not test_name:
+            state["last_prompt"] = "وش اسم التحليل اللي تبغى سعره؟"
+            return state["last_prompt"], state
+        slots["test_name"] = test_name
+        state["slots"] = slots
+        state["step"] = "awaiting_city"
+        state["last_prompt"] = "اكتب المدينة إذا تحب (مثال: الرياض)، أو اكتب: بدون مدينة."
+        return state["last_prompt"], state
+
+    if step == "awaiting_city":
+        city, _district = _extract_city_and_district(message)
+        if city and _match_city_in_catalog(city):
+            slots["city"] = _match_city_in_catalog(city)
+        reply = (
+            f"بالنسبة لسعر {slots.get('test_name', 'التحليل المطلوب')}"
+            + (f" في {slots['city']}" if slots.get("city") else "")
+            + f"، للاستفسار الدقيق تقدر تتواصل مع خدمة العملاء على {_branch_phone()}."
+        )
+        return reply, _complete_flow(state)
+
+    state["last_prompt"] = "وش اسم التحليل اللي تبغى سعره؟"
+    state["step"] = "awaiting_test_name"
+    return state["last_prompt"], state
+
+
+def _run_result_flow(message: str, state: dict) -> tuple[str, dict]:
+    ident = _extract_identifier(message)
+    if not ident:
+        state["step"] = "awaiting_identifier"
+        state["last_prompt"] = "زوّدني برقم الطلب أو رقم الجوال أو تاريخ الزيارة عشان نساعدك."
+        return state["last_prompt"], state
+    reply = f"لخدمة النتائج بشكل مباشر، تقدر تتواصل مع خدمة العملاء على {_branch_phone()}."
+    return reply, _complete_flow(state)
+
+
+def _run_complaint_flow(message: str, state: dict) -> tuple[str, dict]:
+    ident = _extract_identifier(message)
+    if not ident:
+        state["step"] = "awaiting_identifier"
+        state["last_prompt"] = "لفتح شكوى بشكل صحيح، زوّدني برقم الطلب أو تاريخ الزيارة."
+        return state["last_prompt"], state
+    reply = f"تم استلام طلبك. لإكمال معالجة الشكوى بسرعة، تواصل مع خدمة العملاء على {_branch_phone()}."
+    return reply, _complete_flow(state)
+
+
+def _handle_stateful_conversation(conversation_id: UUID, message: str) -> str | None:
+    if _is_cancel_message(message):
+        _reset_state(conversation_id)
+        return "تم إلغاء العملية. نقدر نبدأ من جديد، كيف أقدر أخدمك؟"
+
+    state = _get_state(conversation_id)
+    active_flow = state.get("active_flow")
+    topic_switch = _detect_topic_switch(message)
+
+    if active_flow and topic_switch and topic_switch != active_flow:
+        state = _start_flow(topic_switch)
+        active_flow = topic_switch
+    elif not active_flow and topic_switch:
+        state = _start_flow(topic_switch)
+        active_flow = topic_switch
+
+    if not active_flow or active_flow == "default_chat_flow":
+        return None
+
+    if active_flow == "branch_flow":
+        reply, next_state = _run_branch_flow(message, state)
+    elif active_flow == "pricing_flow":
+        reply, next_state = _run_pricing_flow(message, state)
+    elif active_flow == "result_flow":
+        reply, next_state = _run_result_flow(message, state)
+    elif active_flow == "complaint_flow":
+        reply, next_state = _run_complaint_flow(message, state)
+    else:
+        return None
+
+    _save_state(conversation_id, next_state)
+    return reply
 
 
 def _direct_kb_faq_answer(question: str, intent: str) -> str | None:
@@ -658,6 +975,20 @@ def send_message_with_attachment(
     db.refresh(user_msg)
 
     history = get_conversation_history_for_ai(db, conv, max_messages=20)
+
+    stateful_reply = _handle_stateful_conversation(conversation_id, question_for_ai)
+    if stateful_reply:
+        assistant_msg = add_message(
+            db,
+            conversation_id,
+            MessageRole.ASSISTANT,
+            sanitize_for_ui(stateful_reply),
+            token_count=0,
+        )
+        db.commit()
+        db.refresh(assistant_msg)
+        return user_msg, assistant_msg
+
     user_asked_home_visit = _user_explicitly_asked_home_visit(question_for_ai)
 
     light_intent, light_intent_meta = _classify_light_intent(question_for_ai)
