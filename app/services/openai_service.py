@@ -33,7 +33,7 @@ class OpenAIService:
             self.client = OpenAI(api_key=settings.OPENAI_API_KEY) if OpenAI is not None else None
             self.model = settings.OPENAI_MODEL
             self.max_tokens = settings.OPENAI_MAX_TOKENS
-            self.temperature = settings.OPENAI_TEMPERATURE
+            self.temperature = min(0.1, float(getattr(settings, "OPENAI_TEMPERATURE", 0.0)))
             if self.client is not None:
                 logger.info(f"✅ OpenAI Service initialized with model: {self.model}")
             else:
@@ -42,7 +42,7 @@ class OpenAIService:
             self.client = None
             self.model = settings.OPENAI_MODEL
             self.max_tokens = settings.OPENAI_MAX_TOKENS
-            self.temperature = settings.OPENAI_TEMPERATURE
+            self.temperature = min(0.1, float(getattr(settings, "OPENAI_TEMPERATURE", 0.0)))
             logger.error(f"❌ Failed to initialize OpenAI Service: {str(e)}")
     
     def _build_system_prompt(self, knowledge_context: Optional[str] = None) -> str:

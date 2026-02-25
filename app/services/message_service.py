@@ -70,8 +70,14 @@ _LIGHT_INTENT_CITIES = {
 
 
 def _normalize_light(text: str) -> str:
-    n = normalize_for_matching(text or "").lower()
-    return re.sub(r"\s+", " ", n).strip()
+    value = (text or "").strip().lower()
+    if not value:
+        return ""
+    value = re.sub(r"[\u064B-\u065F\u0670]", "", value)
+    value = value.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
+    value = value.replace("ى", "ي").replace("ؤ", "و").replace("ئ", "ي")
+    value = re.sub(r"[^\w\s\u0600-\u06FF]", " ", value)
+    return re.sub(r"\s+", " ", value).strip()
 
 
 def _contains_any(text: str, keywords: set[str]) -> bool:
@@ -89,19 +95,21 @@ def _detect_city_or_area(text: str) -> tuple[bool, str]:
 
 
 def _classify_light_intent(text: str) -> tuple[str, dict]:
+    raw = (text or "").strip().lower()
     n = _normalize_light(text)
+    merged = f"{raw} {n}".strip()
     has_city, city = _detect_city_or_area(text)
     meta = {"has_city_or_area": has_city, "city_or_area": city}
 
-    if _contains_any(n, {"متى تطلع", "متى تجهز", "مدة النتيجة", "مده النتيجه", "وقت النتيجة", "وقت النتيجه", "كم يوم", "turnaround", "results time"}):
+    if _contains_any(merged, {"متى تطلع", "متى تجهز", "مدة النتيجة", "مده النتيجه", "وقت النتيجة", "وقت النتيجه", "كم يوم", "النتائج", "النتايج", "turnaround", "results time"}):
         return "result_time", meta
-    if _contains_any(n, {"اقرب فرع", "أقرب فرع", "وين الفرع", "مكان الفرع", "موقع الفرع", "branch", "location", "وين اقرب", "وين اقرب فرع"}):
+    if _contains_any(merged, {"اقرب فرع", "أقرب فرع", "وين الفرع", "مكان الفرع", "موقع الفرع", "branch", "location", "وين اقرب", "وين اقرب فرع"}):
         return "branch_location", meta
-    if _contains_any(n, {"كم سعر", "السعر", "اسعار", "أسعار", "تكلفة", "تكلفه", "price", "cost"}):
+    if _contains_any(merged, {"كم سعر", "السعر", "اسعار", "أسعار", "تكلفة", "تكلفه", "price", "cost"}):
         return "pricing", meta
-    if _contains_any(n, {"استلام النتيجه", "استلام النتيجة", "كيف استلم", "كيف توصل النتيجه", "واتساب", "ايميل", "email", "تطبيق", "delivery"}):
+    if _contains_any(merged, {"استلام النتيجه", "استلام النتيجة", "كيف استلم", "كيف توصل النتيجه", "واتساب", "ايميل", "email", "تطبيق", "delivery"}):
         return "result_delivery", meta
-    if _contains_any(n, {"شكوى", "شكوي", "مشكلة", "مشكله", "غير راضي", "مو راضي", "سيئة", "سيئه", "complaint"}):
+    if _contains_any(merged, {"شكوى", "شكوي", "مشكلة", "مشكله", "غير راضي", "مو راضي", "سيئة", "سيئه", "complaint"}):
         return "complaint", meta
     return "other", meta
 
@@ -180,13 +188,24 @@ def _format_rag_results_context(rag_results: list[dict], include_prices: bool = 
 
 def _branch_location_prompt(city_or_area: str = "") -> str:
     if city_or_area and city_or_area != "area":
-        return f"لتحديد أقرب فرع في {city_or_area} بدقة، شاركنا اسم الحي/المنطقة."
-    return "عشان نحدد أقرب فرع لك بدقة، اكتب المدينة أو الحي."
+        return (
+            f"لتحديد أقرب فرع في {city_or_area} بدقة، شاركنا اسم الحي/المنطقة. "
+            f"وللدعم المباشر تقدر تتواصل على {settings.CUSTOMER_SERVICE_PHONE}."
+        )
+    return (
+        "عشان نحدد أقرب فرع لك بدقة، اكتب المدينة أو الحي. "
+        f"وللدعم المباشر تقدر تتواصل على {settings.CUSTOMER_SERVICE_PHONE}."
+    )
 
 
-def _sanitize_branch_location_response(text: str, has_city_or_area: bool) -> str:
+def _user_explicitly_asked_home_visit(text: str) -> bool:
     n = _normalize_light(text)
-    if any(k in n for k in {"زيارة منزلية", "سحب منزلي", "home visit", "منزلي"}):
+    return any(k in n for k in {"زيارة منزلية", "سحب منزلي", "home visit", "منزلي"})
+
+
+def _sanitize_branch_location_response(text: str, has_city_or_area: bool, allow_home_visit: bool = False) -> str:
+    n = _normalize_light(text)
+    if not allow_home_visit and any(k in n for k in {"زيارة منزلية", "سحب منزلي", "home visit", "منزلي"}):
         if not has_city_or_area:
             return _branch_location_prompt()
         return (
@@ -194,6 +213,27 @@ def _sanitize_branch_location_response(text: str, has_city_or_area: bool) -> str
             f"أو تواصل مع خدمة العملاء على {settings.CUSTOMER_SERVICE_PHONE}."
         )
     return text
+
+
+def _has_verified_branch_info(kb_context: str) -> bool:
+    raw_text = (kb_context or "").lower()
+    text = _normalize_light(kb_context or "")
+    if not raw_text and not text:
+        return False
+    raw_signals = ("العنوان", "ساعات العمل", "اوقات العمل", "مواعيد العمل", "أوقات العمل")
+    if any(sig in raw_text for sig in raw_signals):
+        return True
+    strong_signals = (
+        "العنوان",
+        "ساعات العمل",
+        "اوقات العمل",
+        "مواعيد العمل",
+    )
+    if "العنوان" in text and any(sig in text for sig in ("ساعات العمل", "اوقات العمل", "مواعيد العمل", "دوام")):
+        return True
+    if any(sig in text for sig in strong_signals):
+        return True
+    return bool(re.search(r"(فرع|branch).{0,40}(العنوان|ساعات|دوام|مواعيد)", text))
 
 
 def _ensure_result_time_clause(text: str, light_intent: str) -> str:
@@ -455,6 +495,7 @@ def send_message_with_attachment(
     db.refresh(user_msg)
 
     history = get_conversation_history_for_ai(db, conv, max_messages=20)
+    user_asked_home_visit = _user_explicitly_asked_home_visit(question_for_ai)
 
     light_intent, light_intent_meta = _classify_light_intent(question_for_ai)
     logger.info(
@@ -515,6 +556,35 @@ def send_message_with_attachment(
         db.refresh(assistant_msg)
         return user_msg, assistant_msg
 
+    if light_intent == "branch_location":
+        verified_branch_answer = _direct_kb_faq_answer(question_for_ai, "branches_locations")
+        if verified_branch_answer and _has_verified_branch_info(verified_branch_answer):
+            verified_branch_answer = _sanitize_branch_location_response(
+                verified_branch_answer,
+                bool(light_intent_meta.get("has_city_or_area")),
+                allow_home_visit=user_asked_home_visit,
+            )
+            assistant_msg = add_message(
+                db,
+                conversation_id,
+                MessageRole.ASSISTANT,
+                verified_branch_answer,
+                token_count=0,
+            )
+            db.commit()
+            db.refresh(assistant_msg)
+            return user_msg, assistant_msg
+        assistant_msg = add_message(
+            db,
+            conversation_id,
+            MessageRole.ASSISTANT,
+            _branch_location_prompt(light_intent_meta.get("city_or_area") or ""),
+            token_count=0,
+        )
+        db.commit()
+        db.refresh(assistant_msg)
+        return user_msg, assistant_msg
+
     if intent in {
         "branches_locations",
         "working_hours",
@@ -523,11 +593,28 @@ def send_message_with_attachment(
         "payment_insurance_privacy",
     }:
         faq_answer = _direct_kb_faq_answer(question_for_ai, intent)
-        if faq_answer:
-            if light_intent == "branch_location":
-                faq_answer = _sanitize_branch_location_response(
-                    faq_answer, bool(light_intent_meta.get("has_city_or_area"))
+        if light_intent == "branch_location" or intent == "working_hours":
+            if not faq_answer or not _has_verified_branch_info(faq_answer):
+                assistant_msg = add_message(
+                    db,
+                    conversation_id,
+                    MessageRole.ASSISTANT,
+                    _branch_location_prompt(light_intent_meta.get("city_or_area") or ""),
+                    token_count=0,
                 )
+                db.commit()
+                db.refresh(assistant_msg)
+                return user_msg, assistant_msg
+            faq_answer = _sanitize_branch_location_response(
+                faq_answer,
+                bool(light_intent_meta.get("has_city_or_area")),
+                allow_home_visit=user_asked_home_visit,
+            )
+            assistant_msg = add_message(db, conversation_id, MessageRole.ASSISTANT, faq_answer, token_count=0)
+            db.commit()
+            db.refresh(assistant_msg)
+            return user_msg, assistant_msg
+        if faq_answer:
             assistant_msg = add_message(db, conversation_id, MessageRole.ASSISTANT, faq_answer, token_count=0)
             db.commit()
             db.refresh(assistant_msg)
@@ -701,7 +788,9 @@ def send_message_with_attachment(
 
     if light_intent == "branch_location":
         assistant_content = _sanitize_branch_location_response(
-            assistant_content, bool(light_intent_meta.get("has_city_or_area"))
+            assistant_content,
+            bool(light_intent_meta.get("has_city_or_area")),
+            allow_home_visit=user_asked_home_visit,
         )
     assistant_content = _ensure_result_time_clause(assistant_content, light_intent)
     assistant_content = _enforce_escalation_policy(assistant_content)
