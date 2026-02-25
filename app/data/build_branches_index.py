@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 SOURCE_XLSX = Path(__file__).resolve().parent / "branches.xlsx"
 OUTPUT_JSON = Path(__file__).resolve().parent / "branches_index.json"
-DEFAULT_PHONE = "920003694"
 CITY_CANONICAL = [
     "الرياض",
     "جدة",
@@ -150,7 +149,7 @@ def build_branches_index(source_path: Path = SOURCE_XLSX, output_path: Path = OU
 
     rows: List[dict] = []
     current_group = "غير محدد"
-    current_phone = DEFAULT_PHONE
+    current_phone = ""
 
     for r in range(1, ws.max_row + 1):
         cell_a = ws.cell(r, 1).value
@@ -172,7 +171,7 @@ def build_branches_index(source_path: Path = SOURCE_XLSX, output_path: Path = OU
                     "branch_name": branch_name,
                     "hours": hours,
                     "maps_url": raw_b,
-                    "phone": current_phone or DEFAULT_PHONE,
+                    "phone": current_phone or "",
                 }
             )
             continue
@@ -183,8 +182,7 @@ def build_branches_index(source_path: Path = SOURCE_XLSX, output_path: Path = OU
                 continue
             current_group = _clean_group_title(raw_a)
             maybe_phone = _extract_phone(raw_a) or _extract_phone(raw_b)
-            if maybe_phone:
-                current_phone = maybe_phone
+            current_phone = maybe_phone or ""
 
     with output_path.open("w", encoding="utf-8") as f:
         json.dump(rows, f, ensure_ascii=False, indent=2)

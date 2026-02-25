@@ -307,6 +307,7 @@ def _default_flow_state() -> dict:
         "step": None,
         "slots": {},
         "last_options": None,
+        "last_city": None,
         "last_prompt": None,
         "updated_at": None,
         "expires_at": None,
@@ -389,7 +390,7 @@ def _is_number_selection(text: str, n: int) -> int | None:
 def _detect_topic_switch(text: str) -> str | None:
     n = _normalize_light(text)
     if any(k in n for k in {"اقرب فرع", "أقرب فرع", "وين الفرع", "موقع الفرع", "الفرع القريب", "branch"}):
-        return "branch_flow"
+        return "branch_location"
     if any(k in n for k in {"كم سعر", "سعر", "تكلفة", "تكلفه", "price", "pricing"}):
         return "pricing_flow"
     if any(k in n for k in {"نتيجتي", "نتيجه", "نتيجة", "رقم الطلب", "order id", "order", "زيارة", "visit date"}):
@@ -421,11 +422,7 @@ def _extract_identifier(text: str) -> str:
 
 
 def _format_branch_item(idx: int, branch: dict) -> str:
-    lines = [f"{idx}) {branch.get('branch_name', '').strip()}"]
-    if branch.get("hours"):
-        lines.append(branch["hours"].strip())
-    lines.append(f"رابط الموقع: {branch.get('maps_url', '').strip()}")
-    return "\n".join(lines)
+    return f"{idx}) {branch.get('branch_name', '').strip()}"
 
 
 def _format_city_branches_reply(city: str, branches: list[dict]) -> str:
@@ -459,6 +456,64 @@ def _extract_city_and_district(query: str) -> tuple[str, str]:
     return city, n
 
 
+def _is_real_phone_number(value: str) -> bool:
+    raw = (value or "").strip()
+    if not raw:
+        return False
+    lowered = raw.lower()
+    if "xxxx" in lowered or "xxx" in lowered:
+        return False
+    digits = re.sub(r"\D", "", _to_western_digits(raw))
+    return 8 <= len(digits) <= 12
+
+
+def _format_branch_names_only(city: str, branches: list[dict]) -> str:
+    lines = [f"هذه الفروع المتوفرة في {city}:"]
+    for i, b in enumerate(branches, 1):
+        lines.append(f"{i}) {b.get('branch_name', '').strip()}")
+    lines.append("حددي رقم الفرع الأقرب لك لأزوّدك برابط الموقع.")
+    return "\n".join(lines)
+
+
+def _format_selected_branch(choice: int, branch: dict) -> str:
+    branch_name = (branch.get("branch_name") or "").strip()
+    maps_url = (branch.get("maps_url") or "").strip()
+    hours = (branch.get("hours") or "").strip()
+    phone = (branch.get("phone") or "").strip()
+    lines = [f"الفرع رقم {choice}: {branch_name}"]
+    if maps_url:
+        lines.append(f"رابط الموقع: [اضغط هنا لفتح الموقع]({maps_url})")
+    if hours:
+        lines.append(f"ساعات العمل: {hours}")
+    if _is_real_phone_number(phone):
+        lines.append(f"هاتف الفرع: {phone}")
+    return "\n".join(lines)
+
+
+def _format_city_not_found_reply(city: str) -> str:
+    cities = get_available_cities()
+    cities_text = "، ".join(cities) if cities else "-"
+    return (
+        f"حالياً لا يوجد لدينا فروع في {city}.\n"
+        f"المدن المتوفرة لدينا حالياً في: {cities_text}\n"
+        f"ولأي مساعدة إضافية: {_branch_phone()}"
+    )
+
+
+def _save_branch_selection_state(conversation_id: UUID, city: str, branches: list[dict]) -> None:
+    _save_state(
+        conversation_id,
+        {
+            "active_flow": "branch_location",
+            "step": "awaiting_branch_number",
+            "slots": {"city": city},
+            "last_city": city,
+            "last_options": branches,
+            "last_prompt": "حددي رقم الفرع الأقرب لك لأزوّدك برابط الموقع.",
+        },
+    )
+
+
 def _match_city_in_catalog(city_query: str) -> str:
     if not city_query:
         return ""
@@ -472,20 +527,22 @@ def _match_city_in_catalog(city_query: str) -> str:
 
 
 def _branch_lookup_bypass_reply(question: str, conversation_id: UUID, light_intent: str) -> str | None:
-    # Step 4: numeric selection from previously shown list
+    state = _get_state(conversation_id)
+    if state.get("active_flow") == "branch_location" and state.get("step") == "awaiting_branch_number":
+        options = state.get("last_options") or []
+        selected = _is_number_selection(question, len(options))
+        if selected is not None:
+            _save_state(conversation_id, _complete_flow(state))
+            return _format_selected_branch(selected, options[selected - 1])
+
+    # Backward-compatible numeric selection cache.
     choice = _extract_number_choice(question)
     if choice is not None:
         cached = _load_branch_selection(conversation_id)
         if cached and isinstance(cached.get("branches"), list):
             branches = cached["branches"]
             if 1 <= choice <= len(branches):
-                b = branches[choice - 1]
-                lines = [f"الفرع رقم {choice}:", b.get("branch_name", "").strip()]
-                if b.get("hours"):
-                    lines.append(b["hours"].strip())
-                lines.append(f"رابط الموقع: {b.get('maps_url', '').strip()}")
-                lines.append(f"ولأي مساعدة إضافية تقدر تتواصل مع خدمة العملاء على {_branch_phone()}")
-                return "\n".join(lines)
+                return _format_selected_branch(choice, branches[choice - 1])
 
     if light_intent != "branch_location":
         return None
@@ -497,22 +554,11 @@ def _branch_lookup_bypass_reply(question: str, conversation_id: UUID, light_inte
 
     city = _match_city_in_catalog(city_raw)
     if not city:
-        cities = get_available_cities()
-        lines = [f"حالياً لا يوجد لدينا فروع في {city_raw}.", "", "الفروع المتوفرة لدينا حالياً في:"]
-        for c in cities:
-            lines.append(f"- {c}")
-        lines.append("")
-        lines.append(f"ولأي مساعدة إضافية تقدر تتواصل مع خدمة العملاء على {_branch_phone()}")
-        return "\n".join(lines)
+        return _format_city_not_found_reply(city_raw)
 
     city_branches = find_branches_by_city(city)
     if not city_branches:
-        lines = [f"حالياً لا يوجد لدينا فروع في {city}.", "", "الفروع المتوفرة لدينا حالياً في:"]
-        for c in get_available_cities():
-            lines.append(f"- {c}")
-        lines.append("")
-        lines.append(f"ولأي مساعدة إضافية تقدر تتواصل مع خدمة العملاء على {_branch_phone()}")
-        return "\n".join(lines)
+        return _format_city_not_found_reply(city)
 
     # Case C: city + district
     if district:
@@ -522,24 +568,26 @@ def _branch_lookup_bypass_reply(question: str, conversation_id: UUID, light_inte
             if qn and (qn in _normalize_light(b.get("branch_name", "")) or qn in _normalize_light(b.get("group", ""))):
                 district_hits.append(b)
         if district_hits:
-            _store_branch_selection(conversation_id, city, district_hits)
-            return _format_city_branches_reply(city, district_hits)
-        _store_branch_selection(conversation_id, city, city_branches)
+            _save_branch_selection_state(conversation_id, city, district_hits)
+            return _format_branch_names_only(city, district_hits)
+        _save_branch_selection_state(conversation_id, city, city_branches)
         return (
-            f"ما لقينا الحي المذكور بالاسم داخل قائمتنا، لكن هذه فروع {city} المتوفرة:\n\n"
-            + _format_city_branches_reply(city, city_branches).replace(f"هذه فروعنا المتوفرة في {city}:\n", "", 1)
+            f"ما لقينا الحي المذكور بالاسم داخل قائمتنا، لكن هذه فروع {city} المتوفرة:\n"
+            + "\n"
+            + _format_branch_names_only(city, city_branches)
         )
 
     # Case B: city only
-    _store_branch_selection(conversation_id, city, city_branches)
-    return _format_city_branches_reply(city, city_branches)
+    _save_branch_selection_state(conversation_id, city, city_branches)
+    return _format_branch_names_only(city, city_branches)
 
 
 def _start_flow(flow_name: str) -> dict:
     state = _default_flow_state()
     state["active_flow"] = flow_name
     state["slots"] = {}
-    if flow_name == "branch_flow":
+    if flow_name in {"branch_flow", "branch_location"}:
+        state["active_flow"] = "branch_location"
         state["step"] = "awaiting_city"
         state["last_prompt"] = "عشان أحدد أقرب فرع، اكتب اسم المدينة (مثال: الرياض / جدة) أو المدينة + الحي."
     elif flow_name == "pricing_flow":
@@ -572,16 +620,10 @@ def _run_branch_flow(message: str, state: dict) -> tuple[str, dict]:
     slots = state.get("slots") or {}
     options = state.get("last_options") or []
 
-    if step in {"showing_branches", "awaiting_selection"} and options:
+    if step in {"showing_branches", "awaiting_selection", "awaiting_branch_number"} and options:
         selected = _is_number_selection(message, len(options))
         if selected is not None:
-            b = options[selected - 1]
-            lines = [f"الفرع رقم {selected}:", b.get("branch_name", "").strip()]
-            if b.get("hours"):
-                lines.append(b["hours"].strip())
-            lines.append(f"رابط الموقع: {b.get('maps_url', '').strip()}")
-            lines.append(f"ولأي مساعدة إضافية تقدر تتواصل مع خدمة العملاء على {_branch_phone()}")
-            return "\n".join(lines), _complete_flow(state)
+            return _format_selected_branch(selected, options[selected - 1]), _complete_flow(state)
 
     city_raw, district = _extract_city_and_district(message)
     if not city_raw:
@@ -596,22 +638,11 @@ def _run_branch_flow(message: str, state: dict) -> tuple[str, dict]:
 
     city = _match_city_in_catalog(city_raw)
     if not city:
-        cities = get_available_cities()
-        lines = [f"حالياً لا يوجد لدينا فروع في {city_raw}.", "", "الفروع المتوفرة لدينا حالياً في:"]
-        for c in cities:
-            lines.append(f"- {c}")
-        lines.append("")
-        lines.append(f"ولأي مساعدة إضافية تقدر تتواصل مع خدمة العملاء على {_branch_phone()}")
-        return "\n".join(lines), _complete_flow(state)
+        return _format_city_not_found_reply(city_raw), _complete_flow(state)
 
     city_branches = find_branches_by_city(city)
     if not city_branches:
-        lines = [f"حالياً لا يوجد لدينا فروع في {city}.", "", "الفروع المتوفرة لدينا حالياً في:"]
-        for c in get_available_cities():
-            lines.append(f"- {c}")
-        lines.append("")
-        lines.append(f"ولأي مساعدة إضافية تقدر تتواصل مع خدمة العملاء على {_branch_phone()}")
-        return "\n".join(lines), _complete_flow(state)
+        return _format_city_not_found_reply(city), _complete_flow(state)
 
     if district:
         qn = _normalize_light(district)
@@ -622,25 +653,32 @@ def _run_branch_flow(message: str, state: dict) -> tuple[str, dict]:
         ]
         if district_hits:
             state["slots"] = {"city": city, "district": district}
-            state["step"] = "awaiting_selection"
+            state["step"] = "awaiting_branch_number"
+            state["active_flow"] = "branch_location"
+            state["last_city"] = city
             state["last_options"] = district_hits
-            state["last_prompt"] = "اكتب رقم الفرع من القائمة."
-            return _format_city_branches_reply(city, district_hits), state
+            state["last_prompt"] = "حددي رقم الفرع الأقرب لك لأزوّدك برابط الموقع."
+            return _format_branch_names_only(city, district_hits), state
         state["slots"] = {"city": city, "district": district}
-        state["step"] = "awaiting_selection"
+        state["step"] = "awaiting_branch_number"
+        state["active_flow"] = "branch_location"
+        state["last_city"] = city
         state["last_options"] = city_branches
-        state["last_prompt"] = "اكتب رقم الفرع من القائمة."
+        state["last_prompt"] = "حددي رقم الفرع الأقرب لك لأزوّدك برابط الموقع."
         msg = (
-            f"ما لقينا الحي المذكور بالاسم داخل قائمتنا، لكن هذه فروع {city} المتوفرة:\n\n"
-            + _format_city_branches_reply(city, city_branches).replace(f"هذه فروعنا المتوفرة في {city}:\n", "", 1)
+            f"ما لقينا الحي المذكور بالاسم داخل قائمتنا، لكن هذه فروع {city} المتوفرة:\n"
+            + "\n"
+            + _format_branch_names_only(city, city_branches)
         )
         return msg, state
 
     state["slots"] = {"city": city}
-    state["step"] = "awaiting_selection"
+    state["step"] = "awaiting_branch_number"
+    state["active_flow"] = "branch_location"
+    state["last_city"] = city
     state["last_options"] = city_branches
-    state["last_prompt"] = "اكتب رقم الفرع من القائمة."
-    return _format_city_branches_reply(city, city_branches), state
+    state["last_prompt"] = "حددي رقم الفرع الأقرب لك لأزوّدك برابط الموقع."
+    return _format_branch_names_only(city, city_branches), state
 
 
 def _run_pricing_flow(message: str, state: dict) -> tuple[str, dict]:
@@ -713,7 +751,7 @@ def _handle_stateful_conversation(conversation_id: UUID, message: str) -> str | 
     if not active_flow or active_flow == "default_chat_flow":
         return None
 
-    if active_flow == "branch_flow":
+    if active_flow in {"branch_flow", "branch_location"}:
         reply, next_state = _run_branch_flow(message, state)
     elif active_flow == "pricing_flow":
         reply, next_state = _run_pricing_flow(message, state)
