@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import tempfile
+import json
 from uuid import UUID
 
 from sqlalchemy import select, func
@@ -31,6 +32,11 @@ from app.utils.arabic_normalizer import normalize_for_matching
 from app.services.report_parser_service import parse_lab_report_text, compose_report_summary, is_report_explanation_request
 from app.services.response_fallback_service import sanitize_for_ui, compose_context_fallback
 from app.data.style_pipeline import search_style_examples
+from app.services.context_cache import get_context_cache
+from app.data.branches_service import (
+    get_available_cities,
+    find_branches_by_city,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -246,6 +252,163 @@ def _ensure_result_time_clause(text: str, light_intent: str) -> str:
     if not clean:
         return required_clause
     return f"{clean}\n\n{required_clause}"
+
+
+def _branch_state_key(conversation_id: UUID) -> str:
+    return f"branch_selection:{conversation_id}"
+
+
+def _to_western_digits(text: str) -> str:
+    trans = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
+    return (text or "").translate(trans)
+
+
+def _extract_number_choice(text: str) -> int | None:
+    raw = _to_western_digits((text or "").strip())
+    m = re.fullmatch(r"\s*(\d{1,2})\s*", raw)
+    if not m:
+        return None
+    return int(m.group(1))
+
+
+def _store_branch_selection(conversation_id: UUID, city: str, branches: list[dict]) -> None:
+    payload = {"city": city, "branches": branches}
+    get_context_cache().set(_branch_state_key(conversation_id), json.dumps(payload, ensure_ascii=False))
+
+
+def _load_branch_selection(conversation_id: UUID) -> dict | None:
+    raw = get_context_cache().get(_branch_state_key(conversation_id))
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        return None
+    return None
+
+
+def _branch_phone() -> str:
+    configured = (getattr(settings, "CUSTOMER_SERVICE_PHONE", "") or "").strip()
+    if configured:
+        return configured
+    return "920003694"
+
+
+def _format_branch_item(idx: int, branch: dict) -> str:
+    lines = [f"{idx}) {branch.get('branch_name', '').strip()}"]
+    if branch.get("hours"):
+        lines.append(branch["hours"].strip())
+    lines.append(f"رابط الموقع: {branch.get('maps_url', '').strip()}")
+    return "\n".join(lines)
+
+
+def _format_city_branches_reply(city: str, branches: list[dict]) -> str:
+    lines = [f"هذه فروعنا المتوفرة في {city}:"]
+    for i, b in enumerate(branches, 1):
+        lines.append("")
+        lines.append(_format_branch_item(i, b))
+    lines.append("")
+    lines.append("اكتب اسم الحي أو رقم الفرع إذا تحب أحدد لك الأنسب.")
+    return "\n".join(lines)
+
+
+def _extract_city_from_query(query: str) -> str:
+    n = _normalize_light(query)
+    cities = sorted(get_available_cities(), key=lambda x: len(_normalize_light(x)), reverse=True)
+    for city in cities:
+        city_n = _normalize_light(city)
+        if city_n and city_n in n:
+            return city
+    return ""
+
+
+def _extract_city_and_district(query: str) -> tuple[str, str]:
+    city = _extract_city_from_query(query)
+    n = _normalize_light(query)
+    if city:
+        city_n = _normalize_light(city)
+        n = n.replace(city_n, " ")
+    n = re.sub(r"\b(وين|اقرب|أقرب|فرع|الفروع|مدينة|مدينه|في|ابي|ابغى|لو سمحت|حدد|لي|لوسمحت)\b", " ", n)
+    n = re.sub(r"\s+", " ", n).strip()
+    return city, n
+
+
+def _match_city_in_catalog(city_query: str) -> str:
+    if not city_query:
+        return ""
+    cands = get_available_cities()
+    qn = _normalize_light(city_query)
+    for c in cands:
+        cn = _normalize_light(c)
+        if qn == cn or qn in cn or cn in qn:
+            return c
+    return ""
+
+
+def _branch_lookup_bypass_reply(question: str, conversation_id: UUID, light_intent: str) -> str | None:
+    # Step 4: numeric selection from previously shown list
+    choice = _extract_number_choice(question)
+    if choice is not None:
+        cached = _load_branch_selection(conversation_id)
+        if cached and isinstance(cached.get("branches"), list):
+            branches = cached["branches"]
+            if 1 <= choice <= len(branches):
+                b = branches[choice - 1]
+                lines = [f"الفرع رقم {choice}:", b.get("branch_name", "").strip()]
+                if b.get("hours"):
+                    lines.append(b["hours"].strip())
+                lines.append(f"رابط الموقع: {b.get('maps_url', '').strip()}")
+                lines.append(f"ولأي مساعدة إضافية تقدر تتواصل مع خدمة العملاء على {_branch_phone()}")
+                return "\n".join(lines)
+
+    if light_intent != "branch_location":
+        return None
+
+    # Case A: no city
+    city_raw, district = _extract_city_and_district(question)
+    if not city_raw:
+        return "عشان أحدد أقرب فرع، اكتب اسم المدينة (مثال: الرياض / جدة) أو المدينة + الحي."
+
+    city = _match_city_in_catalog(city_raw)
+    if not city:
+        cities = get_available_cities()
+        lines = [f"حالياً لا يوجد لدينا فروع في {city_raw}.", "", "الفروع المتوفرة لدينا حالياً في:"]
+        for c in cities:
+            lines.append(f"- {c}")
+        lines.append("")
+        lines.append(f"ولأي مساعدة إضافية تقدر تتواصل مع خدمة العملاء على {_branch_phone()}")
+        return "\n".join(lines)
+
+    city_branches = find_branches_by_city(city)
+    if not city_branches:
+        lines = [f"حالياً لا يوجد لدينا فروع في {city}.", "", "الفروع المتوفرة لدينا حالياً في:"]
+        for c in get_available_cities():
+            lines.append(f"- {c}")
+        lines.append("")
+        lines.append(f"ولأي مساعدة إضافية تقدر تتواصل مع خدمة العملاء على {_branch_phone()}")
+        return "\n".join(lines)
+
+    # Case C: city + district
+    if district:
+        district_hits = []
+        qn = _normalize_light(district)
+        for b in city_branches:
+            if qn and (qn in _normalize_light(b.get("branch_name", "")) or qn in _normalize_light(b.get("group", ""))):
+                district_hits.append(b)
+        if district_hits:
+            _store_branch_selection(conversation_id, city, district_hits)
+            return _format_city_branches_reply(city, district_hits)
+        _store_branch_selection(conversation_id, city, city_branches)
+        return (
+            f"ما لقينا الحي المذكور بالاسم داخل قائمتنا، لكن هذه فروع {city} المتوفرة:\n\n"
+            + _format_city_branches_reply(city, city_branches).replace(f"هذه فروعنا المتوفرة في {city}:\n", "", 1)
+        )
+
+    # Case B: city only
+    _store_branch_selection(conversation_id, city, city_branches)
+    return _format_city_branches_reply(city, city_branches)
 
 
 def _direct_kb_faq_answer(question: str, intent: str) -> str | None:
@@ -503,6 +666,19 @@ def send_message_with_attachment(
         light_intent,
         light_intent_meta,
     )
+
+    branch_bypass_reply = _branch_lookup_bypass_reply(question_for_ai, conversation_id, light_intent)
+    if branch_bypass_reply:
+        assistant_msg = add_message(
+            db,
+            conversation_id,
+            MessageRole.ASSISTANT,
+            branch_bypass_reply,
+            token_count=0,
+        )
+        db.commit()
+        db.refresh(assistant_msg)
+        return user_msg, assistant_msg
 
     if light_intent == "branch_location" and not light_intent_meta.get("has_city_or_area"):
         assistant_msg = add_message(
