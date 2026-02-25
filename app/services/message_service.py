@@ -464,15 +464,92 @@ def _extract_city_from_query(query: str) -> str:
     return ""
 
 
+_BRANCH_FILLER_WORDS = {
+    "فروعكم",
+    "الفروع",
+    "فروع",
+    "المتوفره",
+    "المتوفرة",
+    "عندكم",
+    "معاكم",
+    "في",
+    "وين",
+    "اقرب",
+    "فرع",
+    "الفرع",
+    "موجوده",
+    "موجودة",
+    "ماهي",
+    "ما",
+    "هي",
+    "وش",
+    "ايش",
+    "ابي",
+    "ابغى",
+    "لو",
+    "سمحت",
+    "لوسمحت",
+    "حدد",
+    "لي",
+    "مدينه",
+    "مدينة",
+}
+
+_BRANCH_DISTRICT_IGNORE_TOKENS = {
+    "فروعكم",
+    "الفروع",
+    "المتوفره",
+    "المتوفرة",
+    "عندكم",
+    "معاكم",
+    "في",
+    "وين",
+    "اقرب",
+    "فرع",
+    "الفرع",
+    "موجوده",
+    "موجودة",
+}
+
+
+def _extract_branch_district_from_query(query: str, city: str) -> str:
+    normalized = _normalize_light(query)
+    if not normalized:
+        return ""
+
+    city_n = _normalize_light(city)
+    if city_n:
+        normalized = normalized.replace(city_n, " ")
+
+    normalized = re.sub(r"[^\w\s\u0600-\u06FF]", " ", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    if not normalized:
+        return ""
+
+    tokens = normalized.split()
+    cleaned_tokens = []
+    for token in tokens:
+        if token in _BRANCH_FILLER_WORDS:
+            continue
+        if len(token) < 3:
+            continue
+        if token in _BRANCH_DISTRICT_IGNORE_TOKENS:
+            continue
+        if token.isdigit():
+            continue
+        cleaned_tokens.append(token)
+
+    if not cleaned_tokens:
+        return ""
+    return " ".join(cleaned_tokens)
+
+
 def _extract_city_and_district(query: str) -> tuple[str, str]:
     city = _extract_city_from_query(query)
-    n = _normalize_light(query)
-    if city:
-        city_n = _normalize_light(city)
-        n = n.replace(city_n, " ")
-    n = re.sub(r"\b(وين|اقرب|أقرب|فرع|الفروع|مدينة|مدينه|في|ابي|ابغى|لو سمحت|حدد|لي|لوسمحت)\b", " ", n)
-    n = re.sub(r"\s+", " ", n).strip()
-    return city, n
+    if not city:
+        return "", ""
+    district = _extract_branch_district_from_query(query, city)
+    return city, district
 
 
 def _is_real_phone_number(value: str) -> bool:
