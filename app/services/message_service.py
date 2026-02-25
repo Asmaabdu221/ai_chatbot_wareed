@@ -30,8 +30,59 @@ from app.core.config import settings
 from app.utils.arabic_normalizer import normalize_for_matching
 from app.services.report_parser_service import parse_lab_report_text, compose_report_summary, is_report_explanation_request
 from app.services.response_fallback_service import sanitize_for_ui, compose_context_fallback
+from app.data.style_pipeline import search_style_examples
 
 logger = logging.getLogger(__name__)
+
+_ESCALATION_BLOCKED_PHRASES = (
+    "we will contact you",
+    "we'll contact you",
+    "someone will reach out",
+    "we will forward your request",
+    "سوف نتواصل",
+    "سنقوم بالتواصل",
+    "سيتم التواصل",
+    "راح نتواصل",
+    "سنحول طلبك",
+    "راح نحول طلبك",
+)
+
+
+def _build_direct_support_message() -> str:
+    return (
+        "للحصول على دعم مباشر، تقدر تتواصل مع خدمة العملاء على الرقم التالي: "
+        f"{settings.CUSTOMER_SERVICE_PHONE}"
+    )
+
+
+def _enforce_escalation_policy(text: str) -> str:
+    content = (text or "").strip()
+    lowered = content.lower()
+    if any(phrase in lowered for phrase in _ESCALATION_BLOCKED_PHRASES):
+        return _build_direct_support_message()
+    return content
+
+
+def _build_style_guidance_block(query: str) -> str:
+    if not getattr(settings, "ENABLE_STYLE_RAG", True):
+        return ""
+    try:
+        examples = search_style_examples(
+            query=query,
+            top_k=getattr(settings, "STYLE_TOP_K", 3),
+        )
+    except Exception as exc:
+        logger.debug("Style retrieval skipped: %s", exc)
+        return ""
+
+    if not examples:
+        return ""
+
+    lines = ["🎯 **Style Guidance Examples (tone only):**"]
+    for i, ex in enumerate(examples, 1):
+        lines.append(f"{i}. {ex}")
+    lines.append("Use these examples for tone and phrasing only, not for medical facts.")
+    return "\n".join(lines)
 
 
 def _direct_kb_faq_answer(question: str, intent: str) -> str | None:
@@ -435,15 +486,22 @@ def send_message_with_attachment(
                 unique_parts.append(part)
         if unique_parts:
             knowledge_context = "\n\n".join(unique_parts)
+
+    style_guidance_block = _build_style_guidance_block(question_for_ai)
+    combined_context = knowledge_context
+    if style_guidance_block:
+        combined_context = "\n\n".join([part for part in [knowledge_context, style_guidance_block] if part])
+
     logger.info(
-        "prompt context injection | context_injected=%s | context_len=%s",
-        bool(knowledge_context),
-        len(knowledge_context or ""),
+        "prompt context injection | context_injected=%s | context_len=%s | style_examples=%s",
+        bool(combined_context),
+        len(combined_context or ""),
+        bool(style_guidance_block),
     )
 
     ai_result = openai_service.generate_response(
         user_message=ai_prompt,
-        knowledge_context=knowledge_context,
+        knowledge_context=combined_context,
         conversation_history=history,
     )
     llm_success = bool(ai_result.get("success"))
@@ -487,13 +545,15 @@ def send_message_with_attachment(
         logger.info("model returned generic miss despite retrieval hit; retrying grounded answer")
         retry_result = openai_service.generate_response(
             user_message=f"استخدم المعلومات المسترجعة للإجابة بدقة على: {question_for_ai}",
-            knowledge_context=knowledge_context,
+            knowledge_context=combined_context,
             conversation_history=history,
         )
         retry_response = retry_result.get("response")
         if retry_response:
             assistant_content = retry_response
             tokens = retry_result.get("tokens_used") or tokens
+
+    assistant_content = _enforce_escalation_policy(assistant_content)
 
     assistant_msg = add_message(
         db,

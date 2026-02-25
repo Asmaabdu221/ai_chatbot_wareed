@@ -125,6 +125,15 @@ class Settings(BaseSettings):
     KB_AUTO_RELOAD_ENABLED: bool = Field(default=True, description="Enable automatic KB reload on file change")
     KB_AUTO_RELOAD_INTERVAL_SECONDS: int = Field(default=60, description="Seconds between KB file checks")
 
+    # Style Retrieval Layer (Hybrid Knowledge: RAG + Style examples)
+    ENABLE_STYLE_RAG: bool = Field(default=True, description="Enable style-example retrieval for prompt guidance")
+    STYLE_TOP_K: int = Field(default=3, description="Top style examples to retrieve")
+    STYLE_MIN_SCORE: float = Field(default=0.78, description="Minimum cosine score for style example retrieval")
+    STYLE_MAX_CHARS_PER_EXAMPLE: int = Field(default=400, description="Max chars per retrieved style example")
+    STYLE_FALLBACK_LEXICAL: bool = Field(default=True, description="Use lexical fallback when style embeddings are unavailable")
+    STYLE_FALLBACK_MIN_SCORE: float = Field(default=0.25, description="Minimum lexical similarity score for style fallback")
+    CUSTOMER_SERVICE_PHONE: str = Field(default="+XXXXXXXX", description="Customer service contact phone")
+
     model_config = SettingsConfigDict(
         env_file=None,
         env_file_encoding="utf-8",

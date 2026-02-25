@@ -170,7 +170,7 @@
 }
 
 /* على سطح المكتب: إخفاء زر الملف الشخصي - يظهر فقط في الشريط الجانبي على الموبايل */
-@media (min-width: 641px) {
+@media (min-width: 769px) {
   .chat-header-profile-btn {
     display: none !important;
   }

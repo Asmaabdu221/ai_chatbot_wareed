@@ -53,7 +53,7 @@ function Login() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="example@email.com"
+              placeholder="user@email.com"
               autoComplete="email"
               disabled={loading}
             />
