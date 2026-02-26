@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TTL_HOURS = 1.0
 DEFAULT_MAX_ENTRIES = 10_000
+STATE_TTL_MINUTES = 15
+STATE_KEY_PREFIXES = ("flow_state:", "branch_selection:", "package_selection:")
 
 
 def _normalize_message(text: str) -> str:
@@ -65,12 +67,15 @@ class ContextCache:
         if not value:
             return
         now = datetime.utcnow()
+        ttl = self._ttl
+        if isinstance(key, str) and key.startswith(STATE_KEY_PREFIXES):
+            ttl = timedelta(minutes=STATE_TTL_MINUTES)
         with self._lock:
             if len(self._store) >= self._max_entries and key not in self._store:
                 self._evict_one()
             self._store[key] = {
                 "value": value,
-                "expires_at": now + self._ttl,
+                "expires_at": now + ttl,
             }
 
     def _evict_one(self) -> None:

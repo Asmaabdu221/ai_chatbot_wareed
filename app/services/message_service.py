@@ -38,9 +38,20 @@ from app.utils.text_normalize import normalize_text
 from app.data.branches_service import (
     get_available_cities,
     find_branches_by_city,
+    load_branches_index,
 )
+from app.data.packages_service import (
+    match_single_package,
+    search_packages,
+    format_package_list,
+    format_package_details,
+    load_packages_index,
+)
+from app.services.packages_rag_service import semantic_search_packages
 
 logger = logging.getLogger(__name__)
+
+WAREED_CUSTOMER_SERVICE_PHONE = "920003694"
 
 _ESCALATION_BLOCKED_PHRASES = (
     "we will contact you",
@@ -59,7 +70,7 @@ _ESCALATION_BLOCKED_PHRASES = (
 def _build_direct_support_message() -> str:
     return (
         "للحصول على دعم مباشر، تقدر تتواصل مع خدمة العملاء على الرقم التالي: "
-        f"{settings.CUSTOMER_SERVICE_PHONE}"
+        f"{WAREED_CUSTOMER_SERVICE_PHONE}"
     )
 
 
@@ -74,6 +85,53 @@ def _enforce_escalation_policy(text: str) -> str:
 _LIGHT_INTENT_CITIES = {
     "الرياض", "جدة", "مكة", "المدينه", "المدينة", "الدمام", "الخبر", "القصيم", "تبوك", "ابها", "أبها",
     "حائل", "جازان", "الطايف", "الطائف", "الجبيل", "خميس مشيط", "نجران", "الاحساء", "الأحساء",
+}
+
+_SYMPTOM_QUERY_TOKENS = {
+    "اعراض",
+    "أعراض",
+    "عندي",
+    "احس",
+    "أحس",
+    "اشعر",
+    "أشعر",
+    "الم",
+    "ألم",
+    "ضيق",
+    "خفقان",
+    "كحه",
+    "كحة",
+    "حراره",
+    "حرارة",
+    "صداع",
+    "غثيان",
+    "اسهال",
+    "إسهال",
+    "دوخه",
+    "دوخة",
+}
+
+_WORKING_HOURS_TRIGGERS = {
+    "ساعات الدوام",
+    "دوامكم",
+    "متى تفتحون",
+    "متى تقفلون",
+    "وقت الدوام",
+    "ساعه",
+    "ساعات",
+    "وقت",
+}
+
+_GENERAL_PRICE_TRIGGERS = {
+    "الاسعار",
+    "الأسعار",
+    "كم السعر",
+    "بكم",
+    "سعر التحليل",
+    "استعلام عن الاسعار",
+    "استعلام عن الأسعار",
+    "ابي سعر",
+    "أبي سعر",
 }
 
 
@@ -108,7 +166,28 @@ def _classify_light_intent(text: str) -> tuple[str, dict]:
 
     if _contains_any(merged, {"متى تطلع", "متى تجهز", "مدة النتيجة", "مده النتيجه", "وقت النتيجة", "وقت النتيجه", "كم يوم", "النتائج", "النتايج", "turnaround", "results time"}):
         return "result_time", meta
-    if _contains_any(merged, {"اقرب فرع", "أقرب فرع", "وين الفرع", "مكان الفرع", "موقع الفرع", "branch", "location", "وين اقرب", "وين اقرب فرع"}):
+    if _contains_any(
+        merged,
+        {
+            "اقرب فرع",
+            "أقرب فرع",
+            "وين الفرع",
+            "مكان الفرع",
+            "موقع الفرع",
+            "branch",
+            "location",
+            "وين اقرب",
+            "وين اقرب فرع",
+            "مكانكم",
+            "وين مكان",
+            "موقعكم",
+            "عنوانكم",
+            "وين موقع",
+            "لوكيشن",
+            "الموقع",
+            "مكانك",
+        },
+    ):
         return "branch_location", meta
     if _contains_any(merged, {"كم سعر", "السعر", "اسعار", "أسعار", "تكلفة", "تكلفه", "price", "cost"}):
         return "pricing", meta
@@ -117,6 +196,88 @@ def _classify_light_intent(text: str) -> tuple[str, dict]:
     if _contains_any(merged, {"شكوى", "شكوي", "مشكلة", "مشكله", "غير راضي", "مو راضي", "سيئة", "سيئه", "complaint"}):
         return "complaint", meta
     return "other", meta
+
+
+def _is_working_hours_query(text: str) -> bool:
+    n = _normalize_light(text)
+    if not n:
+        return False
+
+    # Avoid clashing with results/turnaround timing questions.
+    result_time_markers = {
+        "نتيجه",
+        "نتيجة",
+        "نتايج",
+        "متى تطلع",
+        "مدة النتيجة",
+        "مده النتيجه",
+        "وقت النتيجة",
+        "وقت النتيجه",
+    }
+    if any(m in n for m in result_time_markers):
+        return False
+
+    return any(t in n for t in _WORKING_HOURS_TRIGGERS)
+
+
+def _working_hours_deterministic_reply() -> str:
+    return "ساعات الدوام: 24 ساعة يومياً.\nومتوفر أيضاً السحب المنزلي للحجز: 920003694"
+
+
+def _is_general_price_query(text: str) -> bool:
+    n = _normalize_light(text)
+    if not n:
+        return False
+    return any(t in n for t in {_normalize_light(x) for x in _GENERAL_PRICE_TRIGGERS})
+
+
+def _is_symptoms_query(text: str) -> bool:
+    n = _normalize_light(text)
+    if not n:
+        return False
+    hits = 0
+    seen = set()
+    for token in _SYMPTOM_QUERY_TOKENS:
+        t = _normalize_light(token)
+        if t and t not in seen and t in n:
+            seen.add(t)
+            hits += 1
+    return hits >= 2
+
+
+def _extract_tests_list_from_rag_test(test: dict) -> str:
+    for key in ("complementary_tests", "related_tests", "alternative_tests"):
+        value = (test.get(key) or "").strip()
+        if value:
+            return value
+    return "المعلومة غير موجودة بشكل واضح في قاعدة المعرفة لهذه الأعراض."
+
+
+def _format_symptoms_rag_reply(results: list[dict]) -> str:
+    lines = ["هذه أقرب 3 خيارات حسب الأعراض المذكورة:"]
+    for i, row in enumerate((results or [])[:3], 1):
+        test = row.get("test") or {}
+        title = (test.get("analysis_name_ar") or test.get("analysis_name_en") or "خيار غير محدد").strip()
+        tests_list = _extract_tests_list_from_rag_test(test)
+        lines.append(f"{i}) {title} — {tests_list}")
+    lines.append("تنبيه: هذا محتوى تثقيفي من قاعدة المعرفة، وللتشخيص النهائي راجع الطبيب.")
+    return "\n".join(lines)
+
+
+def _symptoms_rag_bypass_reply(question: str) -> str | None:
+    if not _is_symptoms_query(question):
+        return None
+    if not is_rag_ready():
+        return None
+    try:
+        threshold = getattr(settings, "RAG_SIMILARITY_THRESHOLD", 0.58)
+        rag_results, _has_hit = retrieve(question, max_results=3, similarity_threshold=threshold)
+    except Exception as exc:
+        logger.warning("symptoms rag bypass failed: %s", exc)
+        return None
+    if not rag_results:
+        return None
+    return _format_symptoms_rag_reply(rag_results[:3])
 
 
 def _example_matches_intent(example: str, intent_label: str) -> bool:
@@ -195,11 +356,11 @@ def _branch_location_prompt(city_or_area: str = "") -> str:
     if city_or_area and city_or_area != "area":
         return (
             f"لتحديد أقرب فرع في {city_or_area} بدقة، شاركنا اسم الحي/المنطقة. "
-            f"وللدعم المباشر تقدر تتواصل على {settings.CUSTOMER_SERVICE_PHONE}."
+            f"وللدعم المباشر تقدر تتواصل على {WAREED_CUSTOMER_SERVICE_PHONE}."
         )
     return (
         "عشان نحدد أقرب فرع لك بدقة، اكتب المدينة أو الحي. "
-        f"وللدعم المباشر تقدر تتواصل على {settings.CUSTOMER_SERVICE_PHONE}."
+        f"وللدعم المباشر تقدر تتواصل على {WAREED_CUSTOMER_SERVICE_PHONE}."
     )
 
 
@@ -215,7 +376,7 @@ def _sanitize_branch_location_response(text: str, has_city_or_area: bool, allow_
             return _branch_location_prompt()
         return (
             "لتحديد أقرب فرع بدقة داخل مدينتك، اكتب اسم الحي/المنطقة "
-            f"أو تواصل مع خدمة العملاء على {settings.CUSTOMER_SERVICE_PHONE}."
+            f"أو تواصل مع خدمة العملاء على {WAREED_CUSTOMER_SERVICE_PHONE}."
         )
     return text
 
@@ -288,11 +449,500 @@ def _load_branch_selection(conversation_id: UUID) -> dict | None:
     return None
 
 
+def _package_state_key(conversation_id: UUID) -> str:
+    return f"package_selection:{conversation_id}"
+
+
+def _empty_package_state() -> dict:
+    return {
+        "active_flow": None,
+        "step": None,
+        "last_query": "",
+        "options": [],
+        "updated_at": None,
+        "expires_at": None,
+    }
+
+
+def _set_package_state(conversation_id: UUID, payload: dict) -> dict:
+    out = _empty_package_state()
+    out.update(payload or {})
+    now = _utc_now()
+    out["updated_at"] = now.isoformat()
+    out["expires_at"] = (now + timedelta(minutes=15)).isoformat()
+    get_context_cache().set(_package_state_key(conversation_id), json.dumps(out, ensure_ascii=False))
+    return out
+
+
+def _get_package_state(conversation_id: UUID) -> dict:
+    raw = get_context_cache().get(_package_state_key(conversation_id))
+    if not raw:
+        return _empty_package_state()
+    try:
+        state = json.loads(raw)
+    except Exception:
+        return _empty_package_state()
+    if not isinstance(state, dict):
+        return _empty_package_state()
+    merged = _empty_package_state()
+    merged.update(state)
+    if _is_state_expired(merged):
+        _reset_package_state(conversation_id)
+        return _empty_package_state()
+    return merged
+
+
+def _reset_package_state(conversation_id: UUID) -> None:
+    _set_package_state(conversation_id, _empty_package_state())
+
+
+def _is_package_number_selection(text: str, options_len: int) -> int | None:
+    return _is_number_selection(text, options_len)
+
+
+_PACKAGE_QUERY_KEYWORDS = {
+    "باقة",
+    "باقه",
+    "تحاليل",
+    "تحالیل",
+    "تحليل",
+    "فحص",
+    "بكم",
+    "سعر",
+}
+
+
+def _is_package_query_candidate(query: str) -> bool:
+    n = _normalize_light(query)
+    if not n:
+        return False
+    return any(k in n for k in _PACKAGE_QUERY_KEYWORDS)
+
+
+def _dedupe_package_records_for_options(records: list[dict]) -> list[dict]:
+    deduped: list[dict] = []
+    seen: set[str] = set()
+    for rec in records or []:
+        key = _normalize_light(rec.get("name_norm") or rec.get("name_raw") or "")
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        deduped.append(rec)
+    return deduped
+
+
+def _compact_package_options(records: list[dict]) -> list[dict]:
+    return [
+        {
+            "id": rec.get("id"),
+            "name_raw": rec.get("name_raw"),
+            "row": rec.get("row"),
+            "section": rec.get("section"),
+        }
+        for rec in records
+    ]
+
+
+def _format_package_list_strict(records: list[dict]) -> str:
+    # Keep contract strict and names-only; packages_service already formats this correctly.
+    return format_package_list(records)
+
+
+def _extract_short_description_bullets(record: dict, min_items: int = 3, max_items: int = 5) -> list[str]:
+    desc = str(record.get("description_raw") or "")
+    turn = str(record.get("turnaround_text") or "").strip()
+    sample = str(record.get("sample_type_text") or "").strip()
+
+    banned = ("فرع", "خدمة العملاء", "maps", "رابط الموقع", "customer service")
+    preferred = ("تشمل", "يُستخدم", "يستخدم", "يساعد", "يفيد", "مناسب", "مدة النتائج", "نوع العينة")
+
+    lines: list[str] = []
+    for ln in desc.splitlines():
+        clean = re.sub(r"\s+", " ", ln).strip(" -\t•")
+        if clean:
+            lines.append(clean)
+
+    bullets: list[str] = []
+    seen: set[str] = set()
+
+    def add(text: str) -> None:
+        value = re.sub(r"\s+", " ", (text or "")).strip()
+        if not value:
+            return
+        low = value.lower()
+        if any(b in low for b in banned):
+            return
+        norm = _normalize_light(value)
+        if not norm or norm in seen:
+            return
+        seen.add(norm)
+        bullets.append(value)
+
+    # Priority fields first.
+    if turn:
+        add(turn)
+    if sample:
+        add(sample)
+
+    for ln in lines:
+        if len(bullets) >= max_items:
+            break
+        if any(k in ln for k in preferred):
+            add(ln)
+
+    # Fallback to first short lines/sentences.
+    if len(bullets) < min_items:
+        chunks = []
+        for ln in lines:
+            chunks.extend(re.split(r"[.!؟]+", ln))
+        for ch in chunks:
+            if len(bullets) >= min_items:
+                break
+            add(ch)
+
+    return bullets[:max_items]
+
+
+def _format_package_details_strict(record: dict) -> str:
+    # Build details-only contract deterministically and avoid branch/escalation mentions.
+    name = (record.get("name_raw") or "").strip()
+    price_raw = (record.get("price_raw") or "").strip()
+
+    lines = [name]
+    if price_raw:
+        lines.append(f"السعر: {price_raw}")
+    else:
+        lines.append("السعر: غير متوفر حالياً")
+
+    # Prefer service formatter output structure, but enforce 3-5 bullets strictly.
+    _ = format_package_details(record)
+    bullets = _extract_short_description_bullets(record, min_items=3, max_items=5)
+    for b in bullets:
+        lines.append(f"- {b}")
+
+    return "\n".join(lines)
+
+
+def _find_package_record_by_id(record_id: str) -> dict | None:
+    if not record_id:
+        return None
+    for rec in load_packages_index():
+        if rec.get("id") == record_id:
+            return rec
+    return None
+
+
+def _resolve_package_option_record(option: dict) -> dict | None:
+    rec = _find_package_record_by_id(option.get("id"))
+    if rec:
+        return rec
+    name = (option.get("name_raw") or "").strip()
+    row = option.get("row")
+    for item in load_packages_index():
+        if (item.get("name_raw") or "").strip() == name and item.get("row") == row:
+            return item
+    if name:
+        fallback = search_packages(name, top_k=1)
+        if fallback:
+            return fallback[0]
+    return None
+
+
+def _save_package_selection_state(conversation_id: UUID, query: str, records: list[dict]) -> None:
+    records = _dedupe_package_records_for_options(records)
+    options = _compact_package_options(records)
+    _set_package_state(
+        conversation_id,
+        {
+            "active_flow": "package_flow",
+            "step": "awaiting_choice",
+            "last_query": query,
+            "options": options,
+        },
+    )
+    _save_state(
+        conversation_id,
+        {
+            "active_flow": "package_flow",
+            "step": "awaiting_choice",
+            "slots": {"last_query": query},
+            "last_options": options,
+            "last_prompt": "اختر رقم الخيار المناسب لأرسل لك التفاصيل والسعر.",
+        },
+    )
+
+
+def _format_package_options_from_state(options: list[dict]) -> str:
+    lines = ["هذه الخيارات المتاحة:"]
+    for i, option in enumerate(options or [], 1):
+        lines.append(f"{i}) {(option.get('name_raw') or '').strip()}")
+    lines.append("اختر رقم الخيار المناسب لأرسل لك التفاصيل والسعر.")
+    return "\n".join(lines)
+
+
+def _handle_package_flow_active(conversation_id: UUID, message: str) -> str | None:
+    p_state = _get_package_state(conversation_id)
+    options = p_state.get("options") or []
+    if not options:
+        _reset_package_state(conversation_id)
+        _save_state(conversation_id, _complete_flow(_default_flow_state()))
+        return None
+
+    selected = _is_package_number_selection(message, len(options))
+    if selected is not None:
+        rec = _resolve_package_option_record(options[selected - 1])
+        _reset_package_state(conversation_id)
+        _save_state(conversation_id, _complete_flow(_default_flow_state()))
+        if rec:
+            return _format_package_details_strict(rec)
+        return "ما قدرت أحدد الباقة/التحليل من القائمة الحالية. اكتب الاسم بشكل أقرب أو اذكر الهدف (مثال: فيتامين د / حساسية / هرمونات)."
+
+    numeric = _extract_number_choice(message)
+    if numeric is not None:
+        return "اختار رقم صحيح من القائمة:\n" + _format_package_options_from_state(options)
+
+    # In active package flow, allow refining with a new package/test query.
+    if _is_package_query_candidate(message):
+        single = match_single_package(message)
+        if single:
+            _reset_package_state(conversation_id)
+            _save_state(conversation_id, _complete_flow(_default_flow_state()))
+            return _format_package_details_strict(single)
+
+        new_options = _dedupe_package_records_for_options(search_packages(message, top_k=6))
+        if new_options:
+            _save_package_selection_state(conversation_id, message, new_options)
+            return _format_package_list_strict(new_options)
+
+        return "ما قدرت أحدد الباقة/التحليل من القائمة الحالية. اكتب الاسم بشكل أقرب أو اذكر الهدف (مثال: فيتامين د / حساسية / هرمونات)."
+
+    return "اختار رقم صحيح من القائمة:\n" + _format_package_options_from_state(options)
+
+
+def _package_lookup_bypass_reply(question: str, conversation_id: UUID) -> str | None:
+    query = (question or "").strip()
+    if not query:
+        return None
+
+    # Direct deterministic hit first.
+    single = match_single_package(query)
+    if single:
+        _reset_package_state(conversation_id)
+        _save_state(conversation_id, _complete_flow(_default_flow_state()))
+        return _format_package_details_strict(single)
+
+    candidates = _dedupe_package_records_for_options(search_packages(query, top_k=6))
+    trigger = _is_package_query_candidate(query) or bool(candidates)
+    if candidates:
+        _save_package_selection_state(conversation_id, query, candidates)
+        return _format_package_list_strict(candidates)
+
+    # Semantic fallback over packages_kb.json only (after deterministic path fails).
+    rag_threshold = 0.75
+    trigger = _is_package_query_candidate(query)
+    if trigger:
+        rag_hits = semantic_search_packages(query, top_k=3)
+        if rag_hits:
+            top = rag_hits[0]
+            if float(top.get("score") or 0.0) >= rag_threshold:
+                rec = _find_package_record_by_id(str(top.get("id") or ""))
+                if not rec:
+                    rec = {
+                        "name_raw": (top.get("name") or "").strip(),
+                        "price_raw": None,
+                        "description_raw": (top.get("content") or "").strip(),
+                        "turnaround_text": None,
+                        "sample_type_text": None,
+                    }
+                details = _format_package_details_strict(rec)
+                return "حسب الوصف الأقرب في النظام:\n" + details
+
+    if trigger:
+        return "ما قدرت أحدد الباقة/التحليل من القائمة الحالية. اكتب الاسم بشكل أقرب أو اذكر الهدف (مثال: فيتامين د / حساسية / هرمونات)."
+    return None
+
+
+# Manual test plan (Phase 5):
+# 1) "Well DNA Silver" -> details (no branch mention)
+# 2) "باقات الحساسية" -> names-only list -> choose 1 -> details -> state cleared
+# 3) "كم سعر تحاليل الكبد؟" -> list or details deterministically
+# 4) Send "99" after list -> invalid -> correction + same list
+# 5) While package_flow active: user says "وين اقرب فرع" -> package reset -> branch logic handles
+# 6) User sends "2" without any list active -> should NOT select package
+
+
 def _branch_phone() -> str:
-    configured = (getattr(settings, "CUSTOMER_SERVICE_PHONE", "") or "").strip()
-    if configured:
-        return configured
-    return "920003694"
+    return WAREED_CUSTOMER_SERVICE_PHONE
+
+
+def _last_assistant_message_within(
+    db: Session,
+    conversation_id: UUID,
+    minutes: int = 15,
+) -> str:
+    cutoff = _utc_now() - timedelta(minutes=minutes)
+    stmt = (
+        select(Message)
+        .where(
+            Message.conversation_id == conversation_id,
+            Message.role == MessageRole.ASSISTANT,
+            Message.deleted_at.is_(None),
+        )
+        .order_by(Message.created_at.desc())
+        .limit(1)
+    )
+    msg = db.execute(stmt).scalars().first()
+    if not msg:
+        return ""
+    created_at = msg.created_at
+    if created_at is None:
+        return ""
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    if created_at < cutoff:
+        return ""
+    return (msg.content or "").strip()
+
+
+def _is_phone_followup_query(text: str, previous_assistant_text: str = "") -> bool:
+    n = _normalize_light(text)
+    if not n:
+        return False
+
+    explicit = {
+        "كم رقم الهاتف",
+        "رقم الهاتف",
+        "رقمكم",
+        "ابي الرقم",
+        "أبي الرقم",
+    }
+    if any(k in n for k in explicit):
+        return True
+
+    if n in {"الرقم", "رقم"}:
+        return True
+
+    # Ambiguous "الرقم" should be treated as a follow-up only if prior assistant context supports it.
+    if "الرقم" in n or n == "رقم":
+        pn = _normalize_light(previous_assistant_text)
+        context_keywords = {
+            "حجز",
+            "موعد",
+            "زياره منزليه",
+            "زيارة منزلية",
+            "سحب منزلي",
+            "خدمات",
+            "سعر",
+            "اسعار",
+            "تكلفه",
+            "تكلفة",
+            "فرع",
+            "فروع",
+            "موقع",
+            "لوكيشن",
+            "خدمة العملاء",
+        }
+        return bool(pn and any(k in pn for k in context_keywords))
+
+    return False
+
+
+def _resolve_customer_phone_followup(
+    db: Session,
+    conversation_id: UUID,
+    user_message: str,
+) -> str | None:
+    previous_assistant_text = _last_assistant_message_within(db, conversation_id, minutes=15)
+    if _is_phone_followup_query(user_message, previous_assistant_text):
+        return f"رقم خدمة العملاء: {WAREED_CUSTOMER_SERVICE_PHONE}"
+    return None
+
+
+def _is_home_visit_button_request(text: str) -> bool:
+    n = _normalize_light(text)
+    if not n:
+        return False
+    if "وريد كير" in n and "سحب منزلي" in n:
+        return True
+    if "ابغى خدمة سحب منزلي" in n or "أبغى خدمة سحب منزلي" in n:
+        return True
+    return False
+
+
+def _is_booking_howto_query(text: str) -> bool:
+    n = _normalize_light(text)
+    if not n:
+        return False
+    return any(
+        k in n
+        for k in {
+            "كيف احجز موعد",
+            "كيف أحجز موعد",
+            "كيف احجز",
+            "كيف أحجز",
+            "حجز موعد",
+        }
+    )
+
+
+def _resolve_home_visit_booking_reply(
+    db: Session,
+    conversation_id: UUID,
+    user_message: str,
+) -> str | None:
+    # Deterministic button/intent response.
+    if _is_home_visit_button_request(user_message):
+        return (
+            "متوفر لدينا خدمة سحب العينات من المنزل أو مقر العمل مع الالتزام بمعايير التعقيم، "
+            f"وضمان سرعة ظهور النتائج. للحجز: {WAREED_CUSTOMER_SERVICE_PHONE}"
+        )
+
+    # Deterministic short follow-up after the dedicated home-visit reply.
+    if _is_booking_howto_query(user_message):
+        previous_assistant_text = _last_assistant_message_within(db, conversation_id, minutes=15)
+        if previous_assistant_text.startswith("متوفر لدينا خدمة سحب العينات من المنزل أو مقر العمل"):
+            return f"للحجز: {WAREED_CUSTOMER_SERVICE_PHONE}"
+    return None
+
+
+def _is_preparation_button_trigger(text: str) -> bool:
+    n = _normalize_light(text)
+    if not n:
+        return False
+    return n == _normalize_light("التحضير قبل التحليل")
+
+
+def _resolve_preparation_button_reply(user_message: str) -> str | None:
+    if _is_preparation_button_trigger(user_message):
+        return "أكيد. اكتب اسم التحليل اللي تبي تعرف التحضير له (مثال: فيتامين د / CBC / ألدوستيرون)."
+    return None
+
+
+def _is_services_branches_home_visit_start_trigger(text: str) -> bool:
+    n = _normalize_light(text)
+    if not n:
+        return False
+    triggers = {
+        "الخدمات والفروع والسحب المنزلي",
+        "ابدأ الطلب",
+        "ابدا الطلب",
+    }
+    return n in {_normalize_light(t) for t in triggers}
+
+
+def _resolve_services_branches_home_visit_start_reply(
+    conversation_id: UUID,
+    user_message: str,
+) -> str | None:
+    if not _is_services_branches_home_visit_start_trigger(user_message):
+        return None
+    # Prime existing branch flow so the next city message is handled by current branch matcher.
+    _save_state(conversation_id, _start_flow("branch_flow"))
+    return (
+        "يقدم مختبر وريد خدمات التحاليل المخبرية، وباقات الفحوصات، وخدمة السحب المنزلي.\n"
+        "للاستفسار أو الحجز: 920003694\n"
+        "وإذا حاب تعرف الفرع الأقرب لك، اكتب اسم المدينة (مثال: الرياض / جدة) أو المدينة + الحي."
+    )
 
 
 def _flow_state_key(conversation_id: UUID) -> str:
@@ -388,7 +1038,35 @@ def _is_number_selection(text: str, n: int) -> int | None:
 _FLOW_KEYWORDS_ORDER: list[tuple[str, set[str]]] = [
     (
         "branch_flow",
-        {"اقرب فرع", "وين الفرع", "موقع الفرع", "الفرع القريب", "فروع", "branch", "location"},
+        {
+            "اقرب فرع",
+            "وين الفرع",
+            "موقع الفرع",
+            "الفرع القريب",
+            "فروع",
+            "branch",
+            "location",
+            "مكان الفرع",
+            "مكانكم",
+            "وين مكان",
+            "موقعكم",
+            "عنوانكم",
+            "وين موقع",
+            "لوكيشن",
+            "الموقع",
+            "مكانك",
+        },
+    ),
+    (
+        "package_flow",
+        {
+            "باقة",
+            "باقه",
+            "تحاليل",
+            "تحالیل",
+            "تحليل",
+            "فحص",
+        },
     ),
     (
         "pricing_flow",
@@ -404,6 +1082,8 @@ _FLOW_KEYWORDS_ORDER: list[tuple[str, set[str]]] = [
     ),
 ]
 
+_RESULT_FLOW_PROMPT = "زوّدني برقم الطلب أو رقم الجوال و تاريخ الزيارة، أو ارفق صورة/ملف للنتائج عشان أشرحها لك."
+
 
 def _detect_bypass_flow(text: str) -> str | None:
     n = _normalize_light(text)
@@ -417,6 +1097,31 @@ def _detect_bypass_flow(text: str) -> str | None:
 
 def _detect_topic_switch(text: str) -> str | None:
     return _detect_bypass_flow(text)
+
+
+def _is_result_flow_related_message(text: str) -> bool:
+    n = _normalize_light(text)
+    if not n:
+        return False
+    if _extract_identifier(text):
+        return True
+    result_markers = {
+        "نتيجة",
+        "نتيجه",
+        "نتايج",
+        "شرح النتائج",
+        "شرح نتايج",
+        "تفسير النتائج",
+        "نتائج التحليل",
+        "رقم الطلب",
+        "تاريخ الزيارة",
+        "ارفق",
+        "أرفق",
+        "صورة",
+        "ملف",
+        "report",
+    }
+    return any(m in n for m in result_markers)
 
 
 def _extract_test_name_for_pricing(text: str) -> str:
@@ -462,6 +1167,66 @@ def _extract_city_from_query(query: str) -> str:
         if city_n and city_n in n:
             return city
     return ""
+
+
+_BRANCH_LIKE_KEYWORDS = {
+    "فرع",
+    "الفرع",
+    "فروع",
+    "موقع",
+    "الموقع",
+    "عنوان",
+    "لوكيشن",
+    "مكان",
+    "مكانكم",
+    "مكانك",
+    "موقعكم",
+    "عنوانكم",
+    "branch",
+    "location",
+}
+
+
+def _has_branch_like_word(query: str) -> bool:
+    n = _normalize_light(query)
+    if not n:
+        return False
+    return any(k in n for k in _BRANCH_LIKE_KEYWORDS)
+
+
+def _match_branch_by_name_in_query(query: str) -> dict | None:
+    normalized_query = _normalize_light(query)
+    if not normalized_query:
+        return None
+
+    best_match = None
+    best_score = -1
+    for row in load_branches_index():
+        branch_name = (row.get("branch_name") or "").strip()
+        if not branch_name:
+            continue
+        branch_name_n = _normalize_light(branch_name)
+        if not branch_name_n:
+            continue
+
+        variants = {branch_name_n}
+        if branch_name_n.startswith("فرع "):
+            short_name = branch_name_n[4:].strip()
+            if short_name:
+                variants.add(short_name)
+        if branch_name_n.startswith("الفرع "):
+            short_name = branch_name_n[6:].strip()
+            if short_name:
+                variants.add(short_name)
+
+        for variant in variants:
+            if variant and variant in normalized_query:
+                score = len(variant)
+                if score > best_score:
+                    best_match = row
+                    best_score = score
+                break
+    return best_match
 
 
 _BRANCH_FILLER_WORDS = {
@@ -647,6 +1412,15 @@ def _branch_lookup_bypass_reply(question: str, conversation_id: UUID, light_inte
     if light_intent != "branch_location":
         return None
 
+    direct_branch_match = _match_branch_by_name_in_query(question)
+    if direct_branch_match:
+        return _format_selected_branch(1, direct_branch_match)
+
+    if _has_branch_like_word(question):
+        city_probe, _ = _extract_city_and_district(question)
+        if not city_probe:
+            return "عشان أتحقق لك من الموقع بالضبط، خبرني عن المدينة اللي أنت فيها وبعرض لك الفروع المتوفرة وتختار الأقرب لك."
+
     # Case A: no city
     city_raw, district = _extract_city_and_district(question)
     if not city_raw:
@@ -693,9 +1467,12 @@ def _start_flow(flow_name: str) -> dict:
     elif flow_name == "pricing_flow":
         state["step"] = "awaiting_test_name"
         state["last_prompt"] = "وش اسم التحليل اللي تبغى سعره؟"
+    elif flow_name == "package_flow":
+        state["step"] = "awaiting_choice"
+        state["last_prompt"] = "اكتب اسم الباقة/التحليل أو اختر رقم من الخيارات إذا ظهرت لك قائمة."
     elif flow_name == "result_flow":
         state["step"] = "awaiting_identifier"
-        state["last_prompt"] = "زوّدني برقم الطلب أو رقم الجوال أو تاريخ الزيارة عشان نساعدك."
+        state["last_prompt"] = _RESULT_FLOW_PROMPT
     elif flow_name == "complaint_flow":
         state["step"] = "awaiting_identifier"
         state["last_prompt"] = "لفتح شكوى بشكل صحيح، زوّدني برقم الطلب أو تاريخ الزيارة."
@@ -725,6 +1502,10 @@ def _run_branch_flow(message: str, state: dict) -> tuple[str, dict, bool]:
         if selected is not None:
             return _format_selected_branch(selected, options[selected - 1]), _complete_flow(state), True
 
+    direct_branch_match = _match_branch_by_name_in_query(message)
+    if direct_branch_match:
+        return _format_selected_branch(1, direct_branch_match), _complete_flow(state), True
+
     city_raw, district = _extract_city_and_district(message)
     if not city_raw:
         # allow using already captured city in ongoing branch flow
@@ -732,6 +1513,10 @@ def _run_branch_flow(message: str, state: dict) -> tuple[str, dict, bool]:
         district = district or ""
 
     if not city_raw:
+        if _has_branch_like_word(message):
+            state["step"] = "awaiting_city"
+            state["last_prompt"] = "عشان أتحقق لك من الموقع بالضبط، خبرني عن المدينة اللي أنت فيها وبعرض لك الفروع المتوفرة وتختار الأقرب لك."
+            return state["last_prompt"], state, False
         state["step"] = "awaiting_city"
         state["last_prompt"] = "عشان أحدد أقرب فرع، اكتب اسم المدينة (مثال: الرياض / جدة) أو المدينة + الحي."
         return state["last_prompt"], state, False
@@ -816,7 +1601,7 @@ def _run_result_flow(message: str, state: dict) -> tuple[str, dict, bool]:
     ident = _extract_identifier(message)
     if not ident:
         state["step"] = "awaiting_identifier"
-        state["last_prompt"] = "زوّدني برقم الطلب أو رقم الجوال أو تاريخ الزيارة عشان نساعدك."
+        state["last_prompt"] = _RESULT_FLOW_PROMPT
         return state["last_prompt"], state, False
     reply = f"لخدمة النتائج بشكل مباشر، تقدر تتواصل مع خدمة العملاء على {_branch_phone()}."
     return reply, _complete_flow(state), True
@@ -869,13 +1654,26 @@ def _run_flow_by_name(flow_name: str, message: str, state: dict) -> tuple[str, d
 def _handle_stateful_conversation(conversation_id: UUID, message: str) -> str | None:
     if _is_cancel_message(message):
         _reset_state(conversation_id)
+        _reset_package_state(conversation_id)
         return "تم إلغاء العملية. نقدر نبدأ من جديد، كيف أقدر أخدمك؟"
 
     state = _get_state(conversation_id)
     active_flow = state.get("active_flow") or None
     topic_switch = _detect_bypass_flow(message)
 
+    if active_flow == "package_flow":
+        if topic_switch and topic_switch != "package_flow":
+            _reset_package_state(conversation_id)
+            state = _start_flow(topic_switch)
+            active_flow = topic_switch
+        else:
+            package_reply = _handle_package_flow_active(conversation_id, message)
+            if package_reply:
+                return package_reply
+
     if active_flow and topic_switch and topic_switch != active_flow:
+        if active_flow == "package_flow":
+            _reset_package_state(conversation_id)
         state = _start_flow(topic_switch)
         active_flow = topic_switch
     elif active_flow:
@@ -888,10 +1686,21 @@ def _handle_stateful_conversation(conversation_id: UUID, message: str) -> str | 
     if not active_flow or active_flow == "default_chat_flow":
         return None
 
+    if active_flow == "result_flow" and not _is_result_flow_related_message(message):
+        _reset_state(conversation_id)
+        return None
+
     if active_flow == "branch_location":
         # Backward compatibility for older cached states.
         active_flow = "branch_flow"
         state["active_flow"] = "branch_flow"
+
+    if active_flow == "package_flow":
+        # Deterministic package flow is handled via dedicated state key.
+        package_reply = _handle_package_flow_active(conversation_id, message)
+        if package_reply:
+            return package_reply
+        return None
 
     result = _run_flow_by_name(active_flow, message, state)
     if result is None:
@@ -1150,6 +1959,95 @@ def send_message_with_attachment(
 
     history = get_conversation_history_for_ai(db, conv, max_messages=20)
 
+    services_start_reply = _resolve_services_branches_home_visit_start_reply(conversation_id, question_for_ai)
+    if services_start_reply:
+        assistant_msg = add_message(
+            db,
+            conversation_id,
+            MessageRole.ASSISTANT,
+            services_start_reply,
+            token_count=0,
+        )
+        db.commit()
+        db.refresh(assistant_msg)
+        return user_msg, assistant_msg
+
+    prep_button_reply = _resolve_preparation_button_reply(question_for_ai)
+    if prep_button_reply:
+        assistant_msg = add_message(
+            db,
+            conversation_id,
+            MessageRole.ASSISTANT,
+            prep_button_reply,
+            token_count=0,
+        )
+        db.commit()
+        db.refresh(assistant_msg)
+        return user_msg, assistant_msg
+
+    home_visit_booking_reply = _resolve_home_visit_booking_reply(db, conversation_id, question_for_ai)
+    if home_visit_booking_reply:
+        assistant_msg = add_message(
+            db,
+            conversation_id,
+            MessageRole.ASSISTANT,
+            home_visit_booking_reply,
+            token_count=0,
+        )
+        db.commit()
+        db.refresh(assistant_msg)
+        return user_msg, assistant_msg
+
+    phone_followup_reply = _resolve_customer_phone_followup(db, conversation_id, question_for_ai)
+    if phone_followup_reply:
+        assistant_msg = add_message(
+            db,
+            conversation_id,
+            MessageRole.ASSISTANT,
+            phone_followup_reply,
+            token_count=0,
+        )
+        db.commit()
+        db.refresh(assistant_msg)
+        return user_msg, assistant_msg
+
+    if _is_working_hours_query(question_for_ai):
+        assistant_msg = add_message(
+            db,
+            conversation_id,
+            MessageRole.ASSISTANT,
+            _working_hours_deterministic_reply(),
+            token_count=0,
+        )
+        db.commit()
+        db.refresh(assistant_msg)
+        return user_msg, assistant_msg
+
+    if _is_general_price_query(question_for_ai):
+        specific_pkg = match_single_package(question_for_ai)
+        if specific_pkg and (specific_pkg.get("price_raw") is not None):
+            assistant_msg = add_message(
+                db,
+                conversation_id,
+                MessageRole.ASSISTANT,
+                _format_package_details_strict(specific_pkg),
+                token_count=0,
+            )
+            db.commit()
+            db.refresh(assistant_msg)
+            return user_msg, assistant_msg
+
+        assistant_msg = add_message(
+            db,
+            conversation_id,
+            MessageRole.ASSISTANT,
+            "للاستفسار عن الأسعار: 920003694",
+            token_count=0,
+        )
+        db.commit()
+        db.refresh(assistant_msg)
+        return user_msg, assistant_msg
+
     stateful_reply = _handle_stateful_conversation(conversation_id, question_for_ai)
     if stateful_reply:
         assistant_msg = add_message(
@@ -1179,6 +2077,32 @@ def send_message_with_attachment(
             conversation_id,
             MessageRole.ASSISTANT,
             branch_bypass_reply,
+            token_count=0,
+        )
+        db.commit()
+        db.refresh(assistant_msg)
+        return user_msg, assistant_msg
+
+    symptoms_bypass_reply = _symptoms_rag_bypass_reply(question_for_ai)
+    if symptoms_bypass_reply:
+        assistant_msg = add_message(
+            db,
+            conversation_id,
+            MessageRole.ASSISTANT,
+            sanitize_for_ui(symptoms_bypass_reply),
+            token_count=0,
+        )
+        db.commit()
+        db.refresh(assistant_msg)
+        return user_msg, assistant_msg
+
+    package_bypass_reply = _package_lookup_bypass_reply(question_for_ai, conversation_id)
+    if package_bypass_reply:
+        assistant_msg = add_message(
+            db,
+            conversation_id,
+            MessageRole.ASSISTANT,
+            sanitize_for_ui(package_bypass_reply),
             token_count=0,
         )
         db.commit()
