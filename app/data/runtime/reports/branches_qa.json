@@ -1,0 +1,89 @@
+{
+  "input_file": "app/data/sources/excel/branches.xlsx",
+  "clean_output": "app/data/runtime/rag/branches_clean.jsonl",
+  "chunks_output": "app/data/runtime/rag/branches_chunks.jsonl",
+  "total_rows_scanned": 120,
+  "valid_branches_written": 61,
+  "unique_sections_count": 14,
+  "unique_sections_sample": [
+    "فروع منطقة الرياض",
+    "فروع جدة",
+    "مكة المكرمة",
+    "فرع الطائف- 💜",
+    "مـواقـع فـروع الـشـرقـيـة",
+    "مواقع فروع حائل",
+    "مواقع فروع القصيم",
+    "فروع وادي الدواسر والسليل",
+    "مواقع فروع شقراء - الزلفي - المجمعة",
+    "موقع فرع حفر الباطن"
+  ],
+  "missing_section_count": 0,
+  "missing_hours_count": 46,
+  "sample_clean_records": [
+    {
+      "source": "branches",
+      "section": "فروع منطقة الرياض",
+      "branch_name": "الفرع الرئيسي - النرجس",
+      "hours": "٢٤ ساعة",
+      "raw_text": "الفرع الرئيسي - النرجس ٢٤ ساعة",
+      "map_url": "https://maps.app.goo.gl/7RKTqwjUksjCMvsN6",
+      "contact_phone": "920003694"
+    },
+    {
+      "source": "branches",
+      "section": "فروع منطقة الرياض",
+      "branch_name": "فرع قرطبة",
+      "hours": "٢٤ ساعة",
+      "raw_text": "فرع قرطبة ٢٤ ساعة",
+      "map_url": "https://maps.app.goo.gl/48SuTJcnHjN27LMcA",
+      "contact_phone": "920003694"
+    },
+    {
+      "source": "branches",
+      "section": "فروع منطقة الرياض",
+      "branch_name": "فرع الروضة",
+      "hours": "٢٤ ساعة",
+      "raw_text": "فرع الروضة ٢٤ ساعة",
+      "map_url": "https://maps.app.goo.gl/FXyn23sBjoCC3boi8",
+      "contact_phone": "920003694"
+    }
+  ],
+  "sample_chunks": [
+    {
+      "id": "branches::1",
+      "text": "الفرع: الفرع الرئيسي - النرجس. القسم: فروع منطقة الرياض. ساعات العمل: ٢٤ ساعة. رابط الموقع: https://maps.app.goo.gl/7RKTqwjUksjCMvsN6.",
+      "metadata": {
+        "source": "branches",
+        "section": "فروع منطقة الرياض",
+        "branch_name": "الفرع الرئيسي - النرجس",
+        "hours": "٢٤ ساعة",
+        "map_url": "https://maps.app.goo.gl/7RKTqwjUksjCMvsN6",
+        "contact_phone": "920003694"
+      }
+    },
+    {
+      "id": "branches::2",
+      "text": "الفرع: فرع قرطبة. القسم: فروع منطقة الرياض. ساعات العمل: ٢٤ ساعة. رابط الموقع: https://maps.app.goo.gl/48SuTJcnHjN27LMcA.",
+      "metadata": {
+        "source": "branches",
+        "section": "فروع منطقة الرياض",
+        "branch_name": "فرع قرطبة",
+        "hours": "٢٤ ساعة",
+        "map_url": "https://maps.app.goo.gl/48SuTJcnHjN27LMcA",
+        "contact_phone": "920003694"
+      }
+    },
+    {
+      "id": "branches::3",
+      "text": "الفرع: فرع الروضة. القسم: فروع منطقة الرياض. ساعات العمل: ٢٤ ساعة. رابط الموقع: https://maps.app.goo.gl/FXyn23sBjoCC3boi8.",
+      "metadata": {
+        "source": "branches",
+        "section": "فروع منطقة الرياض",
+        "branch_name": "فرع الروضة",
+        "hours": "٢٤ ساعة",
+        "map_url": "https://maps.app.goo.gl/FXyn23sBjoCC3boi8",
+        "contact_phone": "920003694"
+      }
+    }
+  ]
+}

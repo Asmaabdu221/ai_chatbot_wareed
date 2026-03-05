@@ -14,10 +14,11 @@ from pathlib import Path
 from typing import List, Optional
 
 import openpyxl
+from app.core.paths import EXCEL_BRANCHES_PATH
 
 logger = logging.getLogger(__name__)
 
-SOURCE_XLSX = Path(__file__).resolve().parent / "branches.xlsx"
+SOURCE_XLSX = EXCEL_BRANCHES_PATH
 OUTPUT_JSON = Path(__file__).resolve().parent / "branches_index.json"
 CITY_CANONICAL = [
     "الرياض",

@@ -1,0 +1,60 @@
+{
+  "input_file": "app/data/sources/excel/praacise.xlsx",
+  "lookup_output": "app/data/runtime/lookup/tests_price_index.json",
+  "total_rows_scanned": 574,
+  "records_written": 527,
+  "deduped_count": 47,
+  "missing_price_count": 0,
+  "sample_records": [
+    {
+      "id": "price::0001",
+      "name_ar": "عامل النمو الشبيه بالأنسولين-1",
+      "name_en": "(IGF-1) Somatomedin C",
+      "price": 100.0,
+      "keys": [
+        "عامل النمو الشبيه بالانسولين 1",
+        "igf 1 somatomedin c"
+      ]
+    },
+    {
+      "id": "price::0002",
+      "name_ar": "السعة غير المشبعة لربط الحديد",
+      "name_en": "(unsaturated iron-binding capacity) UIBC",
+      "price": 39.0,
+      "keys": [
+        "السعه غير المشبعه لربط الحديد",
+        "unsaturated iron binding capacity uibc"
+      ]
+    },
+    {
+      "id": "price::0003",
+      "name_ar": "11-ديوكسي كورتيزول",
+      "name_en": "11Desoxycortisol (Compound S)",
+      "price": 1500.0,
+      "keys": [
+        "11 ديوكسي كورتيزول",
+        "11desoxycortisol compound s"
+      ]
+    },
+    {
+      "id": "price::0004",
+      "name_ar": "17-هيدروكسي بروجستيرون",
+      "name_en": "17-Hydroxy-Progesterone",
+      "price": 150.0,
+      "keys": [
+        "17 هيدروكسي بروجستيرون",
+        "17 hydroxy progesterone"
+      ]
+    },
+    {
+      "id": "price::0005",
+      "name_ar": "تحليل بروتين البول لمدة 24 ساعة",
+      "name_en": "24 hour urine Protein",
+      "price": 75.0,
+      "keys": [
+        "تحليل بروتين البول لمده 24 ساعه",
+        "24 hour urine protein"
+      ]
+    }
+  ]
+}

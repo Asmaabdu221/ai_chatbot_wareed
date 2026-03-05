@@ -16,6 +16,7 @@ import pandas as pd
 import json
 import os
 from datetime import datetime
+from app.core.paths import DATA_DIR, EXCEL_FAQ_PATH
 
 print("="*70)
 print("📚 FAQ Integration - Adding FAQs to Knowledge Base")
@@ -28,7 +29,7 @@ print()
 print("📂 Step 1: Loading FAQ file...")
 print("-"*70)
 
-faq_file = "faq.xlsx"
+faq_file = str(EXCEL_FAQ_PATH)
 if not os.path.exists(faq_file):
     print(f"❌ ERROR: File '{faq_file}' not found!")
     exit(1)
@@ -73,7 +74,7 @@ print()
 print("📂 Step 3: Loading existing knowledge base...")
 print("-"*70)
 
-kb_file = "knowledge_base.json"
+kb_file = str(DATA_DIR / "knowledge_base.json")
 if not os.path.exists(kb_file):
     print(f"❌ ERROR: Knowledge base '{kb_file}' not found!")
     print("   Please run create_knowledge_base.py first!")
@@ -121,14 +122,14 @@ print("💾 Step 5: Saving unified knowledge base...")
 print("-"*70)
 
 # Save full version with metadata
-output_full = "knowledge_base_with_faq.json"
+output_full = str(DATA_DIR / "knowledge_base_with_faq.json")
 with open(output_full, 'w', encoding='utf-8') as f:
     json.dump(unified_kb, f, ensure_ascii=False, indent=2)
 print(f"✅ Saved full version: {output_full}")
 print(f"   📦 Size: {os.path.getsize(output_full) / 1024:.2f} KB")
 
 # Save FAQs only
-output_faq = "faq.json"
+output_faq = str(DATA_DIR / "faq.json")
 with open(output_faq, 'w', encoding='utf-8') as f:
     json.dump(faqs, f, ensure_ascii=False, indent=2)
 print(f"✅ Saved FAQs only: {output_faq}")
@@ -146,7 +147,7 @@ for test in tests_kb:
 # Add FAQs
 all_items.extend(faqs)
 
-output_simple = "knowledge_base_unified.json"
+output_simple = str(DATA_DIR / "knowledge_base_unified.json")
 with open(output_simple, 'w', encoding='utf-8') as f:
     json.dump(all_items, f, ensure_ascii=False, indent=2)
 print(f"✅ Saved unified array: {output_simple}")
@@ -220,7 +221,7 @@ Next Steps:
 {'='*70}
 """
 
-summary_file = "faq_integration_summary.txt"
+summary_file = str(DATA_DIR / "faq_integration_summary.txt")
 with open(summary_file, 'w', encoding='utf-8') as f:
     f.write(summary)
 

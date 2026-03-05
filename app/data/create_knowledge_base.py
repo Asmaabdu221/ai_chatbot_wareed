@@ -17,6 +17,7 @@ import pandas as pd
 import json
 import os
 from datetime import datetime
+from app.core.paths import DATA_DIR, EXCEL_ANALYSES_PATH
 
 print("="*70)
 print("🧠 Knowledge Base Generator - Wareed Medical Tests")
@@ -29,7 +30,7 @@ print()
 print("📂 Step 1: Loading analyses data...")
 print("-"*70)
 
-input_file = "analyses_with_prices.xlsx"
+input_file = str(EXCEL_ANALYSES_PATH)
 if not os.path.exists(input_file):
     print(f"❌ ERROR: File '{input_file}' not found!")
     exit(1)
@@ -135,21 +136,21 @@ print("💾 Step 5: Saving JSON files...")
 print("-"*70)
 
 # Save full knowledge base with metadata
-output_file_full = "knowledge_base_full.json"
+output_file_full = str(DATA_DIR / "knowledge_base_full.json")
 with open(output_file_full, 'w', encoding='utf-8') as f:
     json.dump(output_data, f, ensure_ascii=False, indent=2)
 print(f"✅ Saved full knowledge base: {output_file_full}")
 print(f"   📦 Size: {os.path.getsize(output_file_full) / 1024:.2f} KB")
 
 # Save simplified version (tests only, no metadata)
-output_file_simple = "knowledge_base.json"
+output_file_simple = str(DATA_DIR / "knowledge_base.json")
 with open(output_file_simple, 'w', encoding='utf-8') as f:
     json.dump(knowledge_base, f, ensure_ascii=False, indent=2)
 print(f"✅ Saved simplified knowledge base: {output_file_simple}")
 print(f"   📦 Size: {os.path.getsize(output_file_simple) / 1024:.2f} KB")
 
 # Save compact version (no indentation)
-output_file_compact = "knowledge_base_compact.json"
+output_file_compact = str(DATA_DIR / "knowledge_base_compact.json")
 with open(output_file_compact, 'w', encoding='utf-8') as f:
     json.dump(knowledge_base, f, ensure_ascii=False)
 print(f"✅ Saved compact knowledge base: {output_file_compact}")
@@ -225,7 +226,7 @@ Next Steps:
 {'='*70}
 """
 
-summary_file = "knowledge_base_generation_summary.txt"
+summary_file = str(DATA_DIR / "knowledge_base_generation_summary.txt")
 with open(summary_file, 'w', encoding='utf-8') as f:
     f.write(summary)
 

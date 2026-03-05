@@ -14,8 +14,9 @@ from pathlib import Path
 from typing import Any
 
 import openpyxl
+from app.core.paths import EXCEL_PACKAGES_PATH
 
-SOURCE_XLSX = Path(__file__).resolve().parent / "PAKAGE1.xlsx"
+SOURCE_XLSX = EXCEL_PACKAGES_PATH
 OUTPUT_JSON = Path(__file__).resolve().parent / "packages_index.json"
 SHEET_NAME = "Sheet1"
 

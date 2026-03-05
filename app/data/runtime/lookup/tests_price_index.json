@@ -1,0 +1,5277 @@
+{
+  "version": 1,
+  "source_file": "app/data/sources/excel/praacise.xlsx",
+  "generated_at": "2026-03-05T20:47:52.985472+00:00",
+  "records": [
+    {
+      "id": "price::0001",
+      "name_ar": "عامل النمو الشبيه بالأنسولين-1",
+      "name_en": "(IGF-1) Somatomedin C",
+      "price": 100.0,
+      "keys": [
+        "عامل النمو الشبيه بالانسولين 1",
+        "igf 1 somatomedin c"
+      ]
+    },
+    {
+      "id": "price::0002",
+      "name_ar": "السعة غير المشبعة لربط الحديد",
+      "name_en": "(unsaturated iron-binding capacity) UIBC",
+      "price": 39.0,
+      "keys": [
+        "السعه غير المشبعه لربط الحديد",
+        "unsaturated iron binding capacity uibc"
+      ]
+    },
+    {
+      "id": "price::0003",
+      "name_ar": "11-ديوكسي كورتيزول",
+      "name_en": "11Desoxycortisol (Compound S)",
+      "price": 1500.0,
+      "keys": [
+        "11 ديوكسي كورتيزول",
+        "11desoxycortisol compound s"
+      ]
+    },
+    {
+      "id": "price::0004",
+      "name_ar": "17-هيدروكسي بروجستيرون",
+      "name_en": "17-Hydroxy-Progesterone",
+      "price": 150.0,
+      "keys": [
+        "17 هيدروكسي بروجستيرون",
+        "17 hydroxy progesterone"
+      ]
+    },
+    {
+      "id": "price::0005",
+      "name_ar": "تحليل بروتين البول لمدة 24 ساعة",
+      "name_en": "24 hour urine Protein",
+      "price": 75.0,
+      "keys": [
+        "تحليل بروتين البول لمده 24 ساعه",
+        "24 hour urine protein"
+      ]
+    },
+    {
+      "id": "price::0006",
+      "name_ar": "حمض 5-هيدروكسي إندول أسيتيك",
+      "name_en": "5HydroxyIndoleacetic Acid (5HIAA) -{Q}",
+      "price": 400.0,
+      "keys": [
+        "حمض 5 هيدروكسي اندول اسيتيك",
+        "5hydroxyindoleacetic acid 5hiaa q"
+      ]
+    },
+    {
+      "id": "price::0007",
+      "name_ar": "نسبة الألبومين إلى الجلوبيولين",
+      "name_en": "A/G Ratio",
+      "price": 50.0,
+      "keys": [
+        "نسبه الالبومين الي الجلوبيولين",
+        "a g ratio"
+      ]
+    },
+    {
+      "id": "price::0008",
+      "name_ar": "الأجسام المضادة لمستقبلات الأسيتيل كولين",
+      "name_en": "Acetylcholine Receptor Abs {Q}",
+      "price": 500.0,
+      "keys": [
+        "الاجسام المضاده لمستقبلات الاسيتيل كولين",
+        "acetylcholine receptor abs q"
+      ]
+    },
+    {
+      "id": "price::0009",
+      "name_ar": "إنزيم أسيتيل كولين إستراز",
+      "name_en": "Acetylcholinesterase {BS}",
+      "price": 400.0,
+      "keys": [
+        "انزيم اسيتيل كولين استراز",
+        "acetylcholinesterase bs"
+      ]
+    },
+    {
+      "id": "price::0010",
+      "name_ar": "إنزيم الفوسفاتيز الحمضي",
+      "name_en": "acid phosphatase",
+      "price": 500.0,
+      "keys": [
+        "انزيم الفوسفاتيز الحمضي",
+        "acid phosphatase"
+      ]
+    },
+    {
+      "id": "price::0011",
+      "name_ar": "مقاومة البروتين C المنشط",
+      "name_en": "Activated Protien C Resistance(APCR)",
+      "price": 600.0,
+      "keys": [
+        "مقاومه البروتين c المنشط",
+        "activated protien c resistance apcr"
+      ]
+    },
+    {
+      "id": "price::0012",
+      "name_ar": "الأجسام المضادة لفيروس الأدينو",
+      "name_en": "Adeno Virus Abs",
+      "price": 900.0,
+      "keys": [
+        "الاجسام المضاده لفيروس الادينو",
+        "adeno virus abs"
+      ]
+    },
+    {
+      "id": "price::0013",
+      "name_ar": "إنزيم أدينوزين ديأميناز",
+      "name_en": "Adenosine Deaminase -{Q}",
+      "price": 480.0,
+      "keys": [
+        "انزيم ادينوزين دياميناز",
+        "adenosine deaminase q"
+      ]
+    },
+    {
+      "id": "price::0014",
+      "name_ar": "الهرمون الموجه لقشرة الكظر",
+      "name_en": "Adrenocorticotrophic Hormone(ACTH-am)",
+      "price": 100.0,
+      "keys": [
+        "الهرمون الموجه لقشره الكظر",
+        "adrenocorticotrophic hormone acth am"
+      ]
+    },
+    {
+      "id": "price::0015",
+      "name_ar": "إنزيم ناقلة أمين الألانين",
+      "name_en": "Alanine Aminotransferase (ALT)",
+      "price": 39.0,
+      "keys": [
+        "انزيم ناقله امين الالانين",
+        "alanine aminotransferase alt"
+      ]
+    },
+    {
+      "id": "price::0016",
+      "name_ar": "الألبومين في الدم",
+      "name_en": "Albumin in Serum",
+      "price": 39.0,
+      "keys": [
+        "الالبومين في الدم",
+        "albumin in serum"
+      ]
+    },
+    {
+      "id": "price::0017",
+      "name_ar": "الألبومين في البول (عينة عشوائية)",
+      "name_en": "Albumin in Urine ( Random Sample )",
+      "price": 50.0,
+      "keys": [
+        "الالبومين في البول عينه عشوائيه",
+        "albumin in urine random sample"
+      ]
+    },
+    {
+      "id": "price::0018",
+      "name_ar": "إنزيم الألدولاز",
+      "name_en": "Aldolase -{Q}",
+      "price": 50.0,
+      "keys": [
+        "انزيم الالدولاز",
+        "aldolase q"
+      ]
+    },
+    {
+      "id": "price::0019",
+      "name_ar": "الألدوستيرون",
+      "name_en": "Aldosterone",
+      "price": 100.0,
+      "keys": [
+        "الالدوستيرون",
+        "aldosterone"
+      ]
+    },
+    {
+      "id": "price::0020",
+      "name_ar": "نسبة الألدوستيرون إلى الرينين",
+      "name_en": "Aldosterone / Direct Renin Ratio",
+      "price": 500.0,
+      "keys": [
+        "نسبه الالدوستيرون الي الرينين",
+        "aldosterone direct renin ratio"
+      ]
+    },
+    {
+      "id": "price::0021",
+      "name_ar": "الألدوستيرون في البول",
+      "name_en": "Aldosterone in Urine -{Q}",
+      "price": 800.0,
+      "keys": [
+        "الالدوستيرون في البول",
+        "aldosterone in urine q"
+      ]
+    },
+    {
+      "id": "price::0022",
+      "name_ar": "إنزيم الفوسفاتيز القلوي",
+      "name_en": "Alkaline Phosphatase",
+      "price": 39.0,
+      "keys": [
+        "انزيم الفوسفاتيز القلوي",
+        "alkaline phosphatase"
+      ]
+    },
+    {
+      "id": "price::0023",
+      "name_ar": "أنواع إنزيم الفوسفاتيز القلوي",
+      "name_en": "Alkaline Phosphatase Isoenzymes",
+      "price": 1400.0,
+      "keys": [
+        "انواع انزيم الفوسفاتيز القلوي",
+        "alkaline phosphatase isoenzymes"
+      ]
+    },
+    {
+      "id": "price::0024",
+      "name_ar": "فحص الحساسية للأطعمة",
+      "name_en": "Allergens specific IgE Screening (Food panel)",
+      "price": 200.0,
+      "keys": [
+        "فحص الحساسيه للاطعمه",
+        "allergens specific ige screening food panel"
+      ]
+    },
+    {
+      "id": "price::0025",
+      "name_ar": "فحص الحساسية للمواد المستنشقة",
+      "name_en": "Allergens specific IgE Screening (Inhalant panel)",
+      "price": 200.0,
+      "keys": [
+        "فحص الحساسيه للمواد المستنشقه",
+        "allergens specific ige screening inhalant panel"
+      ]
+    },
+    {
+      "id": "price::0026",
+      "name_ar": "بروتين ألفا فيتو",
+      "name_en": "Alpha Feto Protein (AFP)",
+      "price": 39.0,
+      "keys": [
+        "بروتين الفا فيتو",
+        "alpha feto protein afp"
+      ]
+    },
+    {
+      "id": "price::0027",
+      "name_ar": "إنزيم ألفا هيدروكسي بيوتيريك ديهيدروجيناز",
+      "name_en": "Alpha Hydroxybutryric Dehydrogenase {BS}",
+      "price": 400.0,
+      "keys": [
+        "انزيم الفا هيدروكسي بيوتيريك ديهيدروجيناز",
+        "alpha hydroxybutryric dehydrogenase bs"
+      ]
+    },
+    {
+      "id": "price::0028",
+      "name_ar": "الألومنيوم في الدم",
+      "name_en": "Aluminum serum or plasma",
+      "price": 600.0,
+      "keys": [
+        "الالومنيوم في الدم",
+        "aluminum serum or plasma"
+      ]
+    },
+    {
+      "id": "price::0029",
+      "name_ar": "مستوى الأميكاسين في الدم",
+      "name_en": "Amikacin -{Q}",
+      "price": 1400.0,
+      "keys": [
+        "مستوي الاميكاسين في الدم",
+        "amikacin q"
+      ]
+    },
+    {
+      "id": "price::0030",
+      "name_ar": "الأحماض الأمينية في البلازما (كمي)",
+      "name_en": "Amino Acids in Plasma (quantitative) -{Q}",
+      "price": 950.0,
+      "keys": [
+        "الاحماض الامينيه في البلازما كمي",
+        "amino acids in plasma quantitative q"
+      ]
+    },
+    {
+      "id": "price::0031",
+      "name_ar": "الأحماض الأمينية في البول (كمي)",
+      "name_en": "Amino Acids in Urine (quantitative) -{Q}",
+      "price": 950.0,
+      "keys": [
+        "الاحماض الامينيه في البول كمي",
+        "amino acids in urine quantitative q"
+      ]
+    },
+    {
+      "id": "price::0032",
+      "name_ar": "الأمونيا في الدم",
+      "name_en": "Ammonia",
+      "price": 100.0,
+      "keys": [
+        "الامونيا في الدم",
+        "ammonia"
+      ]
+    },
+    {
+      "id": "price::0033",
+      "name_ar": "إنزيم الأميليز في الدم",
+      "name_en": "Amylase in Serum",
+      "price": 39.0,
+      "keys": [
+        "انزيم الاميليز في الدم",
+        "amylase in serum"
+      ]
+    },
+    {
+      "id": "price::0034",
+      "name_ar": "بروتين أميلويد A",
+      "name_en": "Amyloid A Protein {BS}",
+      "price": 1000.0,
+      "keys": [
+        "بروتين اميلويد a",
+        "amyloid a protein bs"
+      ]
+    },
+    {
+      "id": "price::0035",
+      "name_ar": "الأندروستينديون",
+      "name_en": "Androstenedione -{Q}",
+      "price": 350.0,
+      "keys": [
+        "الاندروستينديون",
+        "androstenedione q"
+      ]
+    },
+    {
+      "id": "price::0036",
+      "name_ar": "إنزيم محول الأنجيوتنسين",
+      "name_en": "Angiotensin Converting Enzyme (ACE)",
+      "price": 300.0,
+      "keys": [
+        "انزيم محول الانجيوتنسين",
+        "angiotensin converting enzyme ace"
+      ]
+    },
+    {
+      "id": "price::0037",
+      "name_ar": "الأجسام المضادة لبيتا-2 جليكوبروتين نوع IgA",
+      "name_en": "Anti Beta 2 Glycoprotein Abs (IgA)",
+      "price": 150.0,
+      "keys": [
+        "الاجسام المضاده لبيتا 2 جليكوبروتين نوع iga",
+        "anti beta 2 glycoprotein abs iga"
+      ]
+    },
+    {
+      "id": "price::0038",
+      "name_ar": "الأجسام المضادة ضد بيتا 2 جليكوبروتين (IgG)",
+      "name_en": "Anti Beta 2 Glycoprotein Abs (IgG)",
+      "price": 150.0,
+      "keys": [
+        "الاجسام المضاده ضد بيتا 2 جليكوبروتين igg",
+        "anti beta 2 glycoprotein abs igg"
+      ]
+    },
+    {
+      "id": "price::0039",
+      "name_ar": "الأجسام المضادة لبيتا-2 جليكوبروتين نوع IgM",
+      "name_en": "Anti Beta 2 Glycoprotein Abs (IgM)",
+      "price": 150.0,
+      "keys": [
+        "الاجسام المضاده لبيتا 2 جليكوبروتين نوع igm",
+        "anti beta 2 glycoprotein abs igm"
+      ]
+    },
+    {
+      "id": "price::0040",
+      "name_ar": "الأجسام المضادة للكارديوليبين نوع IgA",
+      "name_en": "Anti Cardiolipin IgA",
+      "price": 150.0,
+      "keys": [
+        "الاجسام المضاده للكارديوليبين نوع iga",
+        "anti cardiolipin iga"
+      ]
+    },
+    {
+      "id": "price::0041",
+      "name_ar": "الأجسام المضادة للكارديوليبين نوع IgG",
+      "name_en": "Anti Cardiolipin IgG",
+      "price": 150.0,
+      "keys": [
+        "الاجسام المضاده للكارديوليبين نوع igg",
+        "anti cardiolipin igg"
+      ]
+    },
+    {
+      "id": "price::0042",
+      "name_ar": "الأجسام المضادة للكارديوليبين نوع IgM",
+      "name_en": "Anti Cardiolipin IgM",
+      "price": 150.0,
+      "keys": [
+        "الاجسام المضاده للكارديوليبين نوع igm",
+        "anti cardiolipin igm"
+      ]
+    },
+    {
+      "id": "price::0043",
+      "name_ar": "الأجسام المضادة للببتيد الحلقي السيترولي",
+      "name_en": "Anti CCP Abs",
+      "price": 150.0,
+      "keys": [
+        "الاجسام المضاده للببتيد الحلقي السيترولي",
+        "anti ccp abs"
+      ]
+    },
+    {
+      "id": "price::0044",
+      "name_ar": "الأجسام المضادة للسنترومير",
+      "name_en": "Anti Centromere Abs",
+      "price": 150.0,
+      "keys": [
+        "الاجسام المضاده للسنترومير",
+        "anti centromere abs"
+      ]
+    },
+    {
+      "id": "price::0045",
+      "name_ar": "الأجسام المضادة للحمض النووي",
+      "name_en": "Anti DNA Abs",
+      "price": 150.0,
+      "keys": [
+        "الاجسام المضاده للحمض النووي",
+        "anti dna abs"
+      ]
+    },
+    {
+      "id": "price::0046",
+      "name_ar": "الأجسام المضادة للحمض النووي بالمناعة الفلورية",
+      "name_en": "Anti DNA antibodies IFA",
+      "price": 400.0,
+      "keys": [
+        "الاجسام المضاده للحمض النووي بالمناعه الفلوريه",
+        "anti dna antibodies ifa"
+      ]
+    },
+    {
+      "id": "price::0047",
+      "name_ar": "تحديد نوع الأجسام المضادة للمستضدات النووية القابلة للاستخلاص",
+      "name_en": "Anti ENA antibodies typing -{BS}",
+      "price": 800.0,
+      "keys": [
+        "تحديد نوع الاجسام المضاده للمستضدات النوويه القابله للاستخلاص",
+        "anti ena antibodies typing bs"
+      ]
+    },
+    {
+      "id": "price::0048",
+      "name_ar": "الأجسام المضادة للغشاء الداخلي للعضلات نوع IgA",
+      "name_en": "Anti Endomysium antibodies IgA IFA {Q}",
+      "price": 600.0,
+      "keys": [
+        "الاجسام المضاده للغشاء الداخلي للعضلات نوع iga",
+        "anti endomysium antibodies iga ifa q"
+      ]
+    },
+    {
+      "id": "price::0049",
+      "name_ar": "الأجسام المضادة للغشاء الداخلي للعضلات نوع IgG",
+      "name_en": "Anti Endomysium antibodies IgG IFA {Q}",
+      "price": 600.0,
+      "keys": [
+        "الاجسام المضاده للغشاء الداخلي للعضلات نوع igg",
+        "anti endomysium antibodies igg ifa q"
+      ]
+    },
+    {
+      "id": "price::0050",
+      "name_ar": "نشاط مضاد العامل Xa",
+      "name_en": "Anti Factor Xa Activity",
+      "price": 2400.0,
+      "keys": [
+        "نشاط مضاد العامل xa",
+        "anti factor xa activity"
+      ]
+    },
+    {
+      "id": "price::0051",
+      "name_ar": "الأجسام المضادة ضد الفاشيولا",
+      "name_en": "Anti Fasciola Abs {BS}",
+      "price": 800.0,
+      "keys": [
+        "الاجسام المضاده ضد الفاشيولا",
+        "anti fasciola abs bs"
+      ]
+    },
+    {
+      "id": "price::0052",
+      "name_ar": "الأجسام المضادة للغلادين المعدل (DGP) من نوع IgA",
+      "name_en": "Anti Gliadin (DGP) IgA",
+      "price": 150.0,
+      "keys": [
+        "الاجسام المضاده للغلادين المعدل dgp من نوع iga",
+        "anti gliadin dgp iga"
+      ]
+    },
+    {
+      "id": "price::0053",
+      "name_ar": "الأجسام المضادة للغلادين المعدل (DGP) من نوع IgG",
+      "name_en": "Anti Gliadin (DGP) IgG",
+      "price": 150.0,
+      "keys": [
+        "الاجسام المضاده للغلادين المعدل dgp من نوع igg",
+        "anti gliadin dgp igg"
+      ]
+    },
+    {
+      "id": "price::0054",
+      "name_ar": "الأجسام المضادة لإنزيم الجلوتامات ديكاربوكسيلاز (Anti GAD)",
+      "name_en": "Anti Glutamate Decarboxylase (Anti GAD) Abs",
+      "price": 150.0,
+      "keys": [
+        "الاجسام المضاده لانزيم الجلوتامات ديكاربوكسيلاز anti gad",
+        "anti glutamate decarboxylase anti gad abs"
+      ]
+    },
+    {
+      "id": "price::0055",
+      "name_ar": "الأجسام المضادة للهستون",
+      "name_en": "Anti Histone Abs -{Q}",
+      "price": 480.0,
+      "keys": [
+        "الاجسام المضاده للهستون",
+        "anti histone abs q"
+      ]
+    },
+    {
+      "id": "price::0056",
+      "name_ar": "الأجسام المضادة لعامل جوهري",
+      "name_en": "Anti Intrinsic Factor Abs",
+      "price": 1600.0,
+      "keys": [
+        "الاجسام المضاده لعامل جوهري",
+        "anti intrinsic factor abs"
+      ]
+    },
+    {
+      "id": "price::0057",
+      "name_ar": "الأجسام المضادة لخلايا جزر لانجرهانز - كمية",
+      "name_en": "Anti Islet Cells Abs -{Q}",
+      "price": 880.0,
+      "keys": [
+        "الاجسام المضاده لخلايا جزر لانجرهانز كميه",
+        "anti islet cells abs q"
+      ]
+    },
+    {
+      "id": "price::0058",
+      "name_ar": "الأجسام المضادة ضد JO1",
+      "name_en": "Anti JO1 Abs",
+      "price": 800.0,
+      "keys": [
+        "الاجسام المضاده ضد jo1",
+        "anti jo1 abs"
+      ]
+    },
+    {
+      "id": "price::0059",
+      "name_ar": "الأجسام المضادة لـ La (SS-B)",
+      "name_en": "Anti La (SS-B) Abs",
+      "price": 150.0,
+      "keys": [
+        "الاجسام المضاده ل la ss b",
+        "anti la ss b abs"
+      ]
+    },
+    {
+      "id": "price::0060",
+      "name_ar": "الأجسام المضادة لمجهر الكبد والكلى (LKM) بواسطة تقنية التألق المناعي غير المباشر",
+      "name_en": "Anti Liver Kidney Microsomal (LKM) Abs IFA",
+      "price": 800.0,
+      "keys": [
+        "الاجسام المضاده لمجهر الكبد والكلي lkm بواسطه تقنيه التالق المناعي غير المباشر",
+        "anti liver kidney microsomal lkm abs ifa"
+      ]
+    },
+    {
+      "id": "price::0061",
+      "name_ar": "تحليل طبي متخصص",
+      "name_en": "Anti Mitochondrial Abs (AMA) IFA",
+      "price": 320.0,
+      "keys": [
+        "تحليل طبي متخصص",
+        "anti mitochondrial abs ama ifa"
+      ]
+    },
+    {
+      "id": "price::0062",
+      "name_ar": "الهرمون المضاد لمولر",
+      "name_en": "Anti Mullerian Hormone",
+      "price": 100.0,
+      "keys": [
+        "الهرمون المضاد لمولر",
+        "anti mullerian hormone"
+      ]
+    },
+    {
+      "id": "price::0063",
+      "name_ar": "الأجسام المضادة لميلوبيروكسيداز (MPO)",
+      "name_en": "Anti myeloperoxidase Abs (MPO) -{Q}",
+      "price": 1400.0,
+      "keys": [
+        "الاجسام المضاده لميلوبيروكسيداز mpo",
+        "anti myeloperoxidase abs mpo q"
+      ]
+    },
+    {
+      "id": "price::0064",
+      "name_ar": "الأجسام المضادة لسيتوبلازم العدلات من النوع C (ANCA-C)",
+      "name_en": "Anti Neutrophil Cytoplasmic Abs C (ANCA-C)",
+      "price": 300.0,
+      "keys": [
+        "الاجسام المضاده لسيتوبلازم العدلات من النوع c anca c",
+        "anti neutrophil cytoplasmic abs c anca c"
+      ]
+    },
+    {
+      "id": "price::0065",
+      "name_ar": "الأجسام المضادة لمحتوى العدلات من النوع P (ANCA-P)",
+      "name_en": "Anti Neutrophil Cytoplasmic Abs P (ANCA-P)",
+      "price": 300.0,
+      "keys": [
+        "الاجسام المضاده لمحتوي العدلات من النوع p anca p",
+        "anti neutrophil cytoplasmic abs p anca p"
+      ]
+    },
+    {
+      "id": "price::0066",
+      "name_ar": "الأجسام المضادة للنواة",
+      "name_en": "Anti Nuclear Abs (ANA)",
+      "price": 150.0,
+      "keys": [
+        "الاجسام المضاده للنواه",
+        "anti nuclear abs ana"
+      ]
+    },
+    {
+      "id": "price::0067",
+      "name_ar": "الأجسام المضادة لخلايا جدارية المعدة (APCA) بطريقة التألق المناعي",
+      "name_en": "Anti Parietal Cell Abs (APCA) IFA",
+      "price": 600.0,
+      "keys": [
+        "الاجسام المضاده لخلايا جداريه المعده apca بطريقه التالق المناعي",
+        "anti parietal cell abs apca ifa"
+      ]
+    },
+    {
+      "id": "price::0068",
+      "name_ar": "الأجسام المضادة للفوسفوليبيد من نوع IgG",
+      "name_en": "Anti Phospholipid IgG",
+      "price": 150.0,
+      "keys": [
+        "الاجسام المضاده للفوسفوليبيد من نوع igg",
+        "anti phospholipid igg"
+      ]
+    },
+    {
+      "id": "price::0069",
+      "name_ar": "الأجسام المضادة للفوسفوليبيد من نوع IgM",
+      "name_en": "Anti Phospholipid IgM",
+      "price": 150.0,
+      "keys": [
+        "الاجسام المضاده للفوسفوليبيد من نوع igm",
+        "anti phospholipid igm"
+      ]
+    },
+    {
+      "id": "price::0070",
+      "name_ar": "تقدير الأجسام المضادة لمستضد Rh",
+      "name_en": "Anti Rh Ab Titer",
+      "price": 300.0,
+      "keys": [
+        "تقدير الاجسام المضاده لمستضد rh",
+        "anti rh ab titer"
+      ]
+    },
+    {
+      "id": "price::0071",
+      "name_ar": "الأجسام المضادة لمركب RNP",
+      "name_en": "Anti RNP Abs",
+      "price": 800.0,
+      "keys": [
+        "الاجسام المضاده لمركب rnp",
+        "anti rnp abs"
+      ]
+    },
+    {
+      "id": "price::0072",
+      "name_ar": "الأجسام المضادة ضد Ro (SS - A)",
+      "name_en": "Anti Ro (SS - A) Abs",
+      "price": 150.0,
+      "keys": [
+        "الاجسام المضاده ضد ro ss a",
+        "anti ro ss a abs"
+      ]
+    },
+    {
+      "id": "price::0073",
+      "name_ar": "الأجسام المضادة ضد ساكاروميسيس سيريفيسيا (IgG, IgA)",
+      "name_en": "Anti Saccharomyces Cerevisiae Abs (IgG,IgA)",
+      "price": 600.0,
+      "keys": [
+        "الاجسام المضاده ضد ساكاروميسيس سيريفيسيا igg iga",
+        "anti saccharomyces cerevisiae abs igg iga"
+      ]
+    },
+    {
+      "id": "price::0074",
+      "name_ar": "الأجسام المضادة ضد البلهارسيا",
+      "name_en": "Anti Schistosoma Antibody",
+      "price": 160.0,
+      "keys": [
+        "الاجسام المضاده ضد البلهارسيا",
+        "anti schistosoma antibody"
+      ]
+    },
+    {
+      "id": "price::0075",
+      "name_ar": "الأجسام المضادة لمضاد سميث",
+      "name_en": "Anti Smith Abs",
+      "price": 480.0,
+      "keys": [
+        "الاجسام المضاده لمضاد سميث",
+        "anti smith abs"
+      ]
+    },
+    {
+      "id": "price::0076",
+      "name_ar": "الأجسام المضادة للعضلات الملساء (ASMA) بواسطة تقنية IFA",
+      "name_en": "Anti Smooth Muscle Abs (ASMA) IFA",
+      "price": 480.0,
+      "keys": [
+        "الاجسام المضاده للعضلات الملساء asma بواسطه تقنيه ifa",
+        "anti smooth muscle abs asma ifa"
+      ]
+    },
+    {
+      "id": "price::0077",
+      "name_ar": "الأجسام المضادة للحيوانات المنوية في المصل",
+      "name_en": "Anti Sperm Abs in Serum",
+      "price": 400.0,
+      "keys": [
+        "الاجسام المضاده للحيوانات المنويه في المصل",
+        "anti sperm abs in serum"
+      ]
+    },
+    {
+      "id": "price::0078",
+      "name_ar": "مضاد الهيالورونيداز العقدي",
+      "name_en": "Anti Streptococcal Hyaluronidase {BS}",
+      "price": 680.0,
+      "keys": [
+        "مضاد الهيالورونيداز العقدي",
+        "anti streptococcal hyaluronidase bs"
+      ]
+    },
+    {
+      "id": "price::0079",
+      "name_ar": "الأجسام المضادة لعضلات مخططة بطريقة التألق المناعي - كمية",
+      "name_en": "Anti Striated Muscle Abs IFA -{Q}",
+      "price": 800.0,
+      "keys": [
+        "الاجسام المضاده لعضلات مخططه بطريقه التالق المناعي كميه",
+        "anti striated muscle abs ifa q"
+      ]
+    },
+    {
+      "id": "price::0080",
+      "name_ar": "الأجسام المضادة للثيروغلوبولين",
+      "name_en": "Anti Thyroglobulin Abs",
+      "price": 100.0,
+      "keys": [
+        "الاجسام المضاده للثيروغلوبولين",
+        "anti thyroglobulin abs"
+      ]
+    },
+    {
+      "id": "price::0081",
+      "name_ar": "الأجسام المضادة للغدة الدرقية",
+      "name_en": "Anti Thyroid Abs",
+      "price": 250.0,
+      "keys": [
+        "الاجسام المضاده للغده الدرقيه",
+        "anti thyroid abs"
+      ]
+    },
+    {
+      "id": "price::0082",
+      "name_ar": "الأجسام المضادة لإنزيم بيروكسيداز الغدة الدرقية",
+      "name_en": "Anti Thyroid Peroxidase Abs (TPO)",
+      "price": 100.0,
+      "keys": [
+        "الاجسام المضاده لانزيم بيروكسيداز الغده الدرقيه",
+        "anti thyroid peroxidase abs tpo"
+      ]
+    },
+    {
+      "id": "price::0083",
+      "name_ar": "الأجسام المضادة لإنزيم ترانسغلوتاميناز الأنسجة من نوع IgA",
+      "name_en": "Anti tissue Transglutaminase Abs IgA",
+      "price": 150.0,
+      "keys": [
+        "الاجسام المضاده لانزيم ترانسغلوتاميناز الانسجه من نوع iga",
+        "anti tissue transglutaminase abs iga"
+      ]
+    },
+    {
+      "id": "price::0084",
+      "name_ar": "الأجسام المضادة لأنزيم ترانسجلوتاميناز النسيجي من نوع IgG",
+      "name_en": "Anti tissue Transglutaminase Abs IgG",
+      "price": 150.0,
+      "keys": [
+        "الاجسام المضاده لانزيم ترانسجلوتاميناز النسيجي من نوع igg",
+        "anti tissue transglutaminase abs igg"
+      ]
+    },
+    {
+      "id": "price::0085",
+      "name_ar": "الأجسام المضادة ضد فيروس الحمى الصفراء",
+      "name_en": "Anti Yellow Fever Virus Antibodies {BS}",
+      "price": 800.0,
+      "keys": [
+        "الاجسام المضاده ضد فيروس الحمي الصفراء",
+        "anti yellow fever virus antibodies bs"
+      ]
+    },
+    {
+      "id": "price::0086",
+      "name_ar": "الأجسام المضادة لـ SARS-CoV (IgG)",
+      "name_en": "Anti-SARS-CoV (IgG)",
+      "price": 200.0,
+      "keys": [
+        "الاجسام المضاده ل sars cov igg",
+        "anti sars cov igg"
+      ]
+    },
+    {
+      "id": "price::0087",
+      "name_ar": "الأجسام المضادة ضد فيروس كورونا المستجد (إجمالي)",
+      "name_en": "Anti-SARS-CoV (Total)",
+      "price": 200.0,
+      "keys": [
+        "الاجسام المضاده ضد فيروس كورونا المستجد اجمالي",
+        "anti sars cov total"
+      ]
+    },
+    {
+      "id": "price::0088",
+      "name_ar": "اختبار فحص الأجسام المضادة (اختبار كومبس غير المباشر)",
+      "name_en": "Antibody Screening (Indirect Coombs' Test)",
+      "price": 100.0,
+      "keys": [
+        "اختبار فحص الاجسام المضاده اختبار كومبس غير المباشر",
+        "antibody screening indirect coombs test"
+      ]
+    },
+    {
+      "id": "price::0089",
+      "name_ar": "هرمون مضاد لإدرار البول",
+      "name_en": "Antidiuretic Hormone",
+      "price": 500.0,
+      "keys": [
+        "هرمون مضاد لادرار البول",
+        "antidiuretic hormone"
+      ]
+    },
+    {
+      "id": "price::0090",
+      "name_ar": "تيتر الأجسام المضادة للأنتيستربتوليزين أو (ASOT)",
+      "name_en": "Antistreptolysin O Titre (ASOT)",
+      "price": 39.0,
+      "keys": [
+        "تيتر الاجسام المضاده للانتيستربتوليزين او asot",
+        "antistreptolysin o titre asot"
+      ]
+    },
+    {
+      "id": "price::0091",
+      "name_ar": "مضاد التخثر الثالث (AT III)",
+      "name_en": "Antithrombin III (AT III)",
+      "price": 450.0,
+      "keys": [
+        "مضاد التخثر الثالث at iii",
+        "antithrombin iii at iii"
+      ]
+    },
+    {
+      "id": "price::0092",
+      "name_ar": "أبوليبوبروتين أ1",
+      "name_en": "Apolipoprotein A1",
+      "price": 500.0,
+      "keys": [
+        "ابوليبوبروتين ا1",
+        "apolipoprotein a1"
+      ]
+    },
+    {
+      "id": "price::0093",
+      "name_ar": "أبوليبوبروتين ب",
+      "name_en": "Apolipoprotin B",
+      "price": 600.0,
+      "keys": [
+        "ابوليبوبروتين ب",
+        "apolipoprotin b"
+      ]
+    },
+    {
+      "id": "price::0094",
+      "name_ar": "الزرنيخ في الدم",
+      "name_en": "Arsenic in Blood",
+      "price": 600.0,
+      "keys": [
+        "الزرنيخ في الدم",
+        "arsenic in blood"
+      ]
+    },
+    {
+      "id": "price::0095",
+      "name_ar": "إنزيم ناقلة أمين الأسبارتات",
+      "name_en": "Aspartate Aminotransferase (AST)",
+      "price": 39.0,
+      "keys": [
+        "انزيم ناقله امين الاسبارتات",
+        "aspartate aminotransferase ast"
+      ]
+    },
+    {
+      "id": "price::0096",
+      "name_ar": "نسبة AST إلى ALT",
+      "name_en": "AST/ALT Ratio",
+      "price": 39.0,
+      "keys": [
+        "نسبه ast الي alt",
+        "ast alt ratio"
+      ]
+    },
+    {
+      "id": "price::0097",
+      "name_ar": "التحليل الآلي للحيوانات المنوية",
+      "name_en": "Automated Sperm Analysis",
+      "price": 150.0,
+      "keys": [
+        "التحليل الالي للحيوانات المنويه",
+        "automated sperm analysis"
+      ]
+    },
+    {
+      "id": "price::0098",
+      "name_ar": "زرع البكتيريا واختبار الحساسية",
+      "name_en": "Bacterial Culture and Sensitivity",
+      "price": 150.0,
+      "keys": [
+        "زرع البكتيريا واختبار الحساسيه",
+        "bacterial culture and sensitivity"
+      ]
+    },
+    {
+      "id": "price::0099",
+      "name_ar": "الأجسام المضادة لـ Bartonella نوع IgG و IgM",
+      "name_en": "Bartonella species IgG & IgM {Q}",
+      "price": 800.0,
+      "keys": [
+        "الاجسام المضاده ل bartonella نوع igg و igm",
+        "bartonella species igg igm q"
+      ]
+    },
+    {
+      "id": "price::0100",
+      "name_ar": "بروتين بينس جونز في البول",
+      "name_en": "Bence Jones Protein In Urine",
+      "price": 480.0,
+      "keys": [
+        "بروتين بينس جونز في البول",
+        "bence jones protein in urine"
+      ]
+    },
+    {
+      "id": "price::0101",
+      "name_ar": "البنزوديازيبينات في البول",
+      "name_en": "Benzodiazepines In Urine",
+      "price": 480.0,
+      "keys": [
+        "البنزوديازيبينات في البول",
+        "benzodiazepines in urine"
+      ]
+    },
+    {
+      "id": "price::0102",
+      "name_ar": "بيتا 2 ميكروغلوبولين في البول",
+      "name_en": "Beta 2 Microglobulin in Urine",
+      "price": 600.0,
+      "keys": [
+        "بيتا 2 ميكروغلوبولين في البول",
+        "beta 2 microglobulin in urine"
+      ]
+    },
+    {
+      "id": "price::0103",
+      "name_ar": "بيتا 2 ترانسفيرين",
+      "name_en": "Beta 2 Transferrin",
+      "price": 720.0,
+      "keys": [
+        "بيتا 2 ترانسفيرين",
+        "beta 2 transferrin"
+      ]
+    },
+    {
+      "id": "price::0104",
+      "name_ar": "بيتا كروسلابس",
+      "name_en": "Beta Crosslaps",
+      "price": 200.0,
+      "keys": [
+        "بيتا كروسلابس",
+        "beta crosslaps"
+      ]
+    },
+    {
+      "id": "price::0105",
+      "name_ar": "بيتا موجهة الغدد التناسلية المشيمائية البشرية (HCG)",
+      "name_en": "Beta Human Chorionic Gonadotrophin-HCG",
+      "price": 39.0,
+      "keys": [
+        "بيتا موجهه الغدد التناسليه المشيمائيه البشريه hcg",
+        "beta human chorionic gonadotrophin hcg"
+      ]
+    },
+    {
+      "id": "price::0106",
+      "name_ar": "الأحماض الصفراوية الكلية في المصل",
+      "name_en": "Bile Acids Total in Serum",
+      "price": 960.0,
+      "keys": [
+        "الاحماض الصفراويه الكليه في المصل",
+        "bile acids total in serum"
+      ]
+    },
+    {
+      "id": "price::0107",
+      "name_ar": "البيليروبين المباشر",
+      "name_en": "Bilirubin (Direct)",
+      "price": 39.0,
+      "keys": [
+        "البيليروبين المباشر",
+        "bilirubin direct"
+      ]
+    },
+    {
+      "id": "price::0108",
+      "name_ar": "البيليروبين غير المباشر",
+      "name_en": "Bilirubin (Indirect)",
+      "price": 39.0,
+      "keys": [
+        "البيليروبين غير المباشر",
+        "bilirubin indirect"
+      ]
+    },
+    {
+      "id": "price::0109",
+      "name_ar": "البيليروبين الكلي",
+      "name_en": "Bilirubin (Total)",
+      "price": 39.0,
+      "keys": [
+        "البيليروبين الكلي",
+        "bilirubin total"
+      ]
+    },
+    {
+      "id": "price::0110",
+      "name_ar": "زمن النزف",
+      "name_en": "Bleeding Time",
+      "price": 50.0,
+      "keys": [
+        "زمن النزف",
+        "bleeding time"
+      ]
+    },
+    {
+      "id": "price::0111",
+      "name_ar": "زرع الدم",
+      "name_en": "Blood Culture",
+      "price": 150.0,
+      "keys": [
+        "زرع الدم",
+        "blood culture"
+      ]
+    },
+    {
+      "id": "price::0112",
+      "name_ar": "فصيلة الدم (ABO)",
+      "name_en": "Blood Group (ABO)",
+      "price": 39.0,
+      "keys": [
+        "فصيله الدم abo",
+        "blood group abo"
+      ]
+    },
+    {
+      "id": "price::0113",
+      "name_ar": "نيتروجين اليوريا في الدم",
+      "name_en": "Blood Urea Nitrogen (BUN)",
+      "price": 50.0,
+      "keys": [
+        "نيتروجين اليوريا في الدم",
+        "blood urea nitrogen bun"
+      ]
+    },
+    {
+      "id": "price::0114",
+      "name_ar": "فحص شفط نخاع العظم",
+      "name_en": "Bone Marrow Aspiration Examination",
+      "price": 600.0,
+      "keys": [
+        "فحص شفط نخاع العظم",
+        "bone marrow aspiration examination"
+      ]
+    },
+    {
+      "id": "price::0115",
+      "name_ar": "الأجسام المضادة لسم السعال الديكي (IgG و IgA)",
+      "name_en": "Bordetella Pertussis Toxin Abs ( IgG IgA) -{Q}",
+      "price": 720.0,
+      "keys": [
+        "الاجسام المضاده لسم السعال الديكي igg و iga",
+        "bordetella pertussis toxin abs igg iga q"
+      ]
+    },
+    {
+      "id": "price::0116",
+      "name_ar": "تحليل جينات BRCA (جينين)",
+      "name_en": "BRCA (2 genes)",
+      "price": 1500.0,
+      "keys": [
+        "تحليل جينات brca جينين",
+        "brca 2 genes"
+      ]
+    },
+    {
+      "id": "price::0117",
+      "name_ar": "تسلسل جينات BRCA1 و BRCA2 لسرطان الثدي باستخدام تقنية NGS",
+      "name_en": "Breast Cancer BRCA1 and BRCA2 gene sequencing by NGS",
+      "price": 1500.0,
+      "keys": [
+        "تسلسل جينات brca1 و brca2 لسرطان الثدي باستخدام تقنيه ngs",
+        "breast cancer brca1 and brca2 gene sequencing by ngs"
+      ]
+    },
+    {
+      "id": "price::0118",
+      "name_ar": "بكتيريا البروسيلا",
+      "name_en": "Brucella Species.",
+      "price": 39.0,
+      "keys": [
+        "بكتيريا البروسيلا",
+        "brucella species"
+      ]
+    },
+    {
+      "id": "price::0119",
+      "name_ar": "نسبة اليوريا إلى الكرياتينين",
+      "name_en": "BUN/Creatinine Ratio",
+      "price": 50.0,
+      "keys": [
+        "نسبه اليوريا الي الكرياتينين",
+        "bun creatinine ratio"
+      ]
+    },
+    {
+      "id": "price::0120",
+      "name_ar": "مستوى ببتيد C",
+      "name_en": "C-Peptide Level",
+      "price": 100.0,
+      "keys": [
+        "مستوي ببتيد c",
+        "c peptide level"
+      ]
+    },
+    {
+      "id": "price::0121",
+      "name_ar": "البروتين التفاعلي C الكمي",
+      "name_en": "C-Reactive Protein (CRP) quantitative",
+      "price": 39.0,
+      "keys": [
+        "البروتين التفاعلي c الكمي",
+        "c reactive protein crp quantitative"
+      ]
+    },
+    {
+      "id": "price::0122",
+      "name_ar": "نشاط مثبط C1 استيراز",
+      "name_en": "C1 Esterase inhibitor Activity {BS}",
+      "price": 720.0,
+      "keys": [
+        "نشاط مثبط c1 استيراز",
+        "c1 esterase inhibitor activity bs"
+      ]
+    },
+    {
+      "id": "price::0123",
+      "name_ar": "بروتين مثبط استيراز C1",
+      "name_en": "C1 Esterase inhibitor Protien",
+      "price": 720.0,
+      "keys": [
+        "بروتين مثبط استيراز c1",
+        "c1 esterase inhibitor protien"
+      ]
+    },
+    {
+      "id": "price::0124",
+      "name_ar": "مكمل C1Q",
+      "name_en": "C1Q Complement",
+      "price": 800.0,
+      "keys": [
+        "مكمل c1q",
+        "c1q complement"
+      ]
+    },
+    {
+      "id": "price::0125",
+      "name_ar": "متمم C2",
+      "name_en": "C2 Complement",
+      "price": 1200.0,
+      "keys": [
+        "متمم c2",
+        "c2 complement"
+      ]
+    },
+    {
+      "id": "price::0126",
+      "name_ar": "المكمل C3",
+      "name_en": "C3 Complement",
+      "price": 100.0,
+      "keys": [
+        "المكمل c3",
+        "c3 complement"
+      ]
+    },
+    {
+      "id": "price::0127",
+      "name_ar": "المكمل C4",
+      "name_en": "C4 Complement",
+      "price": 100.0,
+      "keys": [
+        "المكمل c4",
+        "c4 complement"
+      ]
+    },
+    {
+      "id": "price::0128",
+      "name_ar": "مستضد السرطان 125",
+      "name_en": "CA 125",
+      "price": 39.0,
+      "keys": [
+        "مستضد السرطان 125",
+        "ca 125"
+      ]
+    },
+    {
+      "id": "price::0129",
+      "name_ar": "مستضد السرطان 15-3",
+      "name_en": "CA 15-3",
+      "price": 39.0,
+      "keys": [
+        "مستضد السرطان 15 3",
+        "ca 15 3"
+      ]
+    },
+    {
+      "id": "price::0130",
+      "name_ar": "مستضد السرطان 19.9",
+      "name_en": "CA 19.9",
+      "price": 39.0,
+      "keys": [
+        "مستضد السرطان 19 9",
+        "ca 19 9"
+      ]
+    },
+    {
+      "id": "price::0131",
+      "name_ar": "مستضد السرطان 50",
+      "name_en": "CA 50 - {BS}",
+      "price": 600.0,
+      "keys": [
+        "مستضد السرطان 50",
+        "ca 50 bs"
+      ]
+    },
+    {
+      "id": "price::0132",
+      "name_ar": "مستضد CA 72-4",
+      "name_en": "CA 72-4 Antigen {BS}",
+      "price": 960.0,
+      "keys": [
+        "مستضد ca 72 4",
+        "ca 72 4 antigen bs"
+      ]
+    },
+    {
+      "id": "price::0133",
+      "name_ar": "الكادميوم في البول",
+      "name_en": "Cadmium in urine -{Q}",
+      "price": 920.0,
+      "keys": [
+        "الكادميوم في البول",
+        "cadmium in urine q"
+      ]
+    },
+    {
+      "id": "price::0134",
+      "name_ar": "الكالسيتونين",
+      "name_en": "Calcitonin",
+      "price": 800.0,
+      "keys": [
+        "الكالسيتونين",
+        "calcitonin"
+      ]
+    },
+    {
+      "id": "price::0135",
+      "name_ar": "الكالسيوم المتأين في الدم",
+      "name_en": "Calcium in Serum (Ionized)",
+      "price": 50.0,
+      "keys": [
+        "الكالسيوم المتاين في الدم",
+        "calcium in serum ionized"
+      ]
+    },
+    {
+      "id": "price::0136",
+      "name_ar": "الكالسيوم الكلي في الدم",
+      "name_en": "Calcium in Serum (Total)",
+      "price": 39.0,
+      "keys": [
+        "الكالسيوم الكلي في الدم",
+        "calcium in serum total"
+      ]
+    },
+    {
+      "id": "price::0137",
+      "name_ar": "الكالسيوم في البول",
+      "name_en": "Calcium In Urine",
+      "price": 39.0,
+      "keys": [
+        "الكالسيوم في البول",
+        "calcium in urine"
+      ]
+    },
+    {
+      "id": "price::0138",
+      "name_ar": "نسبة الكالسيوم إلى الكرياتينين",
+      "name_en": "Calcium/Creatinine Ratio",
+      "price": 75.0,
+      "keys": [
+        "نسبه الكالسيوم الي الكرياتينين",
+        "calcium creatinine ratio"
+      ]
+    },
+    {
+      "id": "price::0139",
+      "name_ar": "كالبرتكتيين",
+      "name_en": "Calprotectin",
+      "price": 150.0,
+      "keys": [
+        "كالبرتكتيين",
+        "calprotectin"
+      ]
+    },
+    {
+      "id": "price::0140",
+      "name_ar": "مستضد المبيضات",
+      "name_en": "Candida Antigen -{Q}",
+      "price": 600.0,
+      "keys": [
+        "مستضد المبيضات",
+        "candida antigen q"
+      ]
+    },
+    {
+      "id": "price::0141",
+      "name_ar": "كاربامازيبين (تيجريتول)",
+      "name_en": "Carbamazepin (Tegretol)",
+      "price": 170.0,
+      "keys": [
+        "كاربامازيبين تيجريتول",
+        "carbamazepin tegretol"
+      ]
+    },
+    {
+      "id": "price::0142",
+      "name_ar": "مستضد سرطاني جنيني",
+      "name_en": "Carcinoembryonic Antigen (CEA)",
+      "price": 39.0,
+      "keys": [
+        "مستضد سرطاني جنيني",
+        "carcinoembryonic antigen cea"
+      ]
+    },
+    {
+      "id": "price::0143",
+      "name_ar": "الكارنيتين (الكلي والحُر)",
+      "name_en": "Carnitine (Total& Free)",
+      "price": 800.0,
+      "keys": [
+        "الكارنيتين الكلي والحر",
+        "carnitine total free"
+      ]
+    },
+    {
+      "id": "price::0144",
+      "name_ar": "الكاروتين",
+      "name_en": "Carotene",
+      "price": 1400.0,
+      "keys": [
+        "الكاروتين",
+        "carotene"
+      ]
+    },
+    {
+      "id": "price::0145",
+      "name_ar": "فحص الحامل بالتسلسل الجيني (فردي)",
+      "name_en": "Carrier screening Sequencing (solo)",
+      "price": 2550.0,
+      "keys": [
+        "فحص الحامل بالتسلسل الجيني فردي",
+        "carrier screening sequencing solo"
+      ]
+    },
+    {
+      "id": "price::0146",
+      "name_ar": "فحص الحامل بالتسلسل الجيني",
+      "name_en": "Carrier screening Sequencing (Due )",
+      "price": 5000.0,
+      "keys": [
+        "فحص الحامل بالتسلسل الجيني",
+        "carrier screening sequencing due"
+      ]
+    },
+    {
+      "id": "price::0147",
+      "name_ar": "الكاتيكولامينات في البلازما",
+      "name_en": "Catecholamines in Plasma",
+      "price": 2400.0,
+      "keys": [
+        "الكاتيكولامينات في البلازما",
+        "catecholamines in plasma"
+      ]
+    },
+    {
+      "id": "price::0148",
+      "name_ar": "الكاتيكولامينات في البول",
+      "name_en": "Catecholamines in Urine{Q}",
+      "price": 1600.0,
+      "keys": [
+        "الكاتيكولامينات في البول",
+        "catecholamines in urine q"
+      ]
+    },
+    {
+      "id": "price::0149",
+      "name_ar": "سيرولوبلازمين",
+      "name_en": "Ceruloplasmin",
+      "price": 500.0,
+      "keys": [
+        "سيرولوبلازمين",
+        "ceruloplasmin"
+      ]
+    },
+    {
+      "id": "price::0150",
+      "name_ar": "الكلاميديا (IgG)",
+      "name_en": "Chlamydia (IgG)",
+      "price": 150.0,
+      "keys": [
+        "الكلاميديا igg",
+        "chlamydia igg"
+      ]
+    },
+    {
+      "id": "price::0151",
+      "name_ar": "الكلاميديا (IgM)",
+      "name_en": "Chlamydia (IgM)",
+      "price": 150.0,
+      "keys": [
+        "الكلاميديا igm",
+        "chlamydia igm"
+      ]
+    },
+    {
+      "id": "price::0152",
+      "name_ar": "مستضد الكلاميديا",
+      "name_en": "Chlamydia Ag",
+      "price": 150.0,
+      "keys": [
+        "مستضد الكلاميديا",
+        "chlamydia ag"
+      ]
+    },
+    {
+      "id": "price::0153",
+      "name_ar": "تحليل الحمض النووي للبكتيريا المتدثرة الحثرية (PCR)",
+      "name_en": "Chlamydia trachomatis ( CT ) PCR",
+      "price": 500.0,
+      "keys": [
+        "تحليل الحمض النووي للبكتيريا المتدثره الحثريه pcr",
+        "chlamydia trachomatis ct pcr"
+      ]
+    },
+    {
+      "id": "price::0154",
+      "name_ar": "الكلوريد في الدم",
+      "name_en": "Chloride in Serum",
+      "price": 39.0,
+      "keys": [
+        "الكلوريد في الدم",
+        "chloride in serum"
+      ]
+    },
+    {
+      "id": "price::0155",
+      "name_ar": "الكوليسترول الكلي",
+      "name_en": "Cholesterol",
+      "price": 39.0,
+      "keys": [
+        "الكوليسترول الكلي",
+        "cholesterol"
+      ]
+    },
+    {
+      "id": "price::0156",
+      "name_ar": "إنزيم الكولينستراز في البلازما، المصل، وكريات الدم الحمراء",
+      "name_en": "Cholinesterase ,Plasma ,Serum, RBCs -{Q}",
+      "price": 200.0,
+      "keys": [
+        "انزيم الكولينستراز في البلازما المصل وكريات الدم الحمراء",
+        "cholinesterase plasma serum rbcs q"
+      ]
+    },
+    {
+      "id": "price::0157",
+      "name_ar": "الكروم في الدم",
+      "name_en": "Chromium in Blood",
+      "price": 1000.0,
+      "keys": [
+        "الكروم في الدم",
+        "chromium in blood"
+      ]
+    },
+    {
+      "id": "price::0158",
+      "name_ar": "الكروم في البول",
+      "name_en": "Chromium in Urine -{Q}",
+      "price": 1000.0,
+      "keys": [
+        "الكروم في البول",
+        "chromium in urine q"
+      ]
+    },
+    {
+      "id": "price::0159",
+      "name_ar": "سيترات في البول - كمية",
+      "name_en": "Citrate in Urine -{Q}",
+      "price": 440.0,
+      "keys": [
+        "سيترات في البول كميه",
+        "citrate in urine q"
+      ]
+    },
+    {
+      "id": "price::0160",
+      "name_ar": "تسلسل الإكسوم الكامل السريري مع تقرير (CNV)",
+      "name_en": "Clinical Whole Exome Sequencing with report (CNV)",
+      "price": 2550.0,
+      "keys": [
+        "تسلسل الاكسوم الكامل السريري مع تقرير cnv",
+        "clinical whole exome sequencing with report cnv"
+      ]
+    },
+    {
+      "id": "price::0161",
+      "name_ar": "التسلسل الكامل للإكسوم السريري مع تقرير التغيرات العددية في النسخ (CNV) ثنائي",
+      "name_en": "Clinical Whole Exome Sequencing with report (CNV) Duo",
+      "price": 8000.0,
+      "keys": [
+        "التسلسل الكامل للاكسوم السريري مع تقرير التغيرات العدديه في النسخ cnv ثنائي",
+        "clinical whole exome sequencing with report cnv duo"
+      ]
+    },
+    {
+      "id": "price::0162",
+      "name_ar": "التسلسل الكامل للإكسوم السريري مع تقرير التغيرات العددية في النسخ (CNV) ثلاثي",
+      "name_en": "Clinical Whole Exome Sequencing with report (CNV) Trio",
+      "price": 6400.0,
+      "keys": [
+        "التسلسل الكامل للاكسوم السريري مع تقرير التغيرات العدديه في النسخ cnv ثلاثي",
+        "clinical whole exome sequencing with report cnv trio"
+      ]
+    },
+    {
+      "id": "price::0163",
+      "name_ar": "سموم الكلوستريديوم ديفيسيل",
+      "name_en": "Clostridium Difficile Toxin",
+      "price": 150.0,
+      "keys": [
+        "سموم الكلوستريديوم ديفيسيل",
+        "clostridium difficile toxin"
+      ]
+    },
+    {
+      "id": "price::0164",
+      "name_ar": "زمن التجلط",
+      "name_en": "Clotting Time",
+      "price": 50.0,
+      "keys": [
+        "زمن التجلط",
+        "clotting time"
+      ]
+    },
+    {
+      "id": "price::0165",
+      "name_ar": "فيروس المضخم للخلايا (IgG)",
+      "name_en": "CMV ( IgG )",
+      "price": 50.0,
+      "keys": [
+        "فيروس المضخم للخلايا igg",
+        "cmv igg"
+      ]
+    },
+    {
+      "id": "price::0166",
+      "name_ar": "فيروس المضخم للخلايا (IgM)",
+      "name_en": "CMV ( IgM)",
+      "price": 50.0,
+      "keys": [
+        "فيروس المضخم للخلايا igm",
+        "cmv igm"
+      ]
+    },
+    {
+      "id": "price::0167",
+      "name_ar": "ثاني أكسيد الكربون",
+      "name_en": "Co2",
+      "price": 39.0,
+      "keys": [
+        "ثاني اكسيد الكربون",
+        "co2"
+      ]
+    },
+    {
+      "id": "price::0168",
+      "name_ar": "اختبار كولو تيكت للكشف غير الجراحي عن سرطان القولون والمستقيم",
+      "name_en": "ColoTect Non-invasive Colorectal Cancer Screening",
+      "price": 1000.0,
+      "keys": [
+        "اختبار كولو تيكت للكشف غير الجراحي عن سرطان القولون والمستقيم",
+        "colotect non invasive colorectal cancer screening"
+      ]
+    },
+    {
+      "id": "price::0169",
+      "name_ar": "العد الدموي الكامل",
+      "name_en": "Complete Blood Count - (CBC)",
+      "price": 39.0,
+      "keys": [
+        "العد الدموي الكامل",
+        "complete blood count cbc"
+      ]
+    },
+    {
+      "id": "price::0170",
+      "name_ar": "التحليل المحوسب للسائل المنوي",
+      "name_en": "Computerized Semen Analysis",
+      "price": 200.0,
+      "keys": [
+        "التحليل المحوسب للسائل المنوي",
+        "computerized semen analysis"
+      ]
+    },
+    {
+      "id": "price::0171",
+      "name_ar": "مسحة الملتحمة للفحص وزرع وحساسية (الجهة اليسرى)",
+      "name_en": "Conjunctival Swab Examination & C/S (Left)",
+      "price": 150.0,
+      "keys": [
+        "مسحه الملتحمه للفحص وزرع وحساسيه الجهه اليسري",
+        "conjunctival swab examination c s left"
+      ]
+    },
+    {
+      "id": "price::0172",
+      "name_ar": "مسحة الملتحمة للفحص وزراعة البكتيريا",
+      "name_en": "Conjunctival Swab Examination&C/S",
+      "price": 150.0,
+      "keys": [
+        "مسحه الملتحمه للفحص وزراعه البكتيريا",
+        "conjunctival swab examination c s"
+      ]
+    },
+    {
+      "id": "price::0173",
+      "name_ar": "النحاس في الدم",
+      "name_en": "Copper",
+      "price": 39.0,
+      "keys": [
+        "النحاس في الدم",
+        "copper"
+      ]
+    },
+    {
+      "id": "price::0174",
+      "name_ar": "النحاس في البول",
+      "name_en": "Copper in urine",
+      "price": 450.0,
+      "keys": [
+        "النحاس في البول",
+        "copper in urine"
+      ]
+    },
+    {
+      "id": "price::0175",
+      "name_ar": "الكالسيوم المصحح",
+      "name_en": "Corrected Calcium",
+      "price": 50.0,
+      "keys": [
+        "الكالسيوم المصحح",
+        "corrected calcium"
+      ]
+    },
+    {
+      "id": "price::0176",
+      "name_ar": "كورتيكوستيرون",
+      "name_en": "Corticosterone -{Q}",
+      "price": 1800.0,
+      "keys": [
+        "كورتيكوستيرون",
+        "corticosterone q"
+      ]
+    },
+    {
+      "id": "price::0177",
+      "name_ar": "الكورتيزول في المصل (صباحًا)",
+      "name_en": "Cortisol in Serum ( AM )",
+      "price": 100.0,
+      "keys": [
+        "الكورتيزول في المصل صباحا",
+        "cortisol in serum am"
+      ]
+    },
+    {
+      "id": "price::0178",
+      "name_ar": "الكورتيزول في المصل (مساءً)",
+      "name_en": "Cortisol in Serum (PM)",
+      "price": 100.0,
+      "keys": [
+        "الكورتيزول في المصل مساء",
+        "cortisol in serum pm"
+      ]
+    },
+    {
+      "id": "price::0179",
+      "name_ar": "الكورتيزول في البول (الحُر)",
+      "name_en": "Cortisol in Urine (Free)",
+      "price": 720.0,
+      "keys": [
+        "الكورتيزول في البول الحر",
+        "cortisol in urine free"
+      ]
+    },
+    {
+      "id": "price::0180",
+      "name_ar": "إنزيم الكرياتين كيناز الكلي",
+      "name_en": "Creatine Kinase (CK) Total",
+      "price": 39.0,
+      "keys": [
+        "انزيم الكرياتين كيناز الكلي",
+        "creatine kinase ck total"
+      ]
+    },
+    {
+      "id": "price::0181",
+      "name_ar": "إنزيم الكرياتين كيناز-MB",
+      "name_en": "Creatine Kinase MB (CK-MB)",
+      "price": 39.0,
+      "keys": [
+        "انزيم الكرياتين كيناز mb",
+        "creatine kinase mb ck mb"
+      ]
+    },
+    {
+      "id": "price::0182",
+      "name_ar": "تصفية الكرياتينين",
+      "name_en": "Creatinine Clearance",
+      "price": 50.0,
+      "keys": [
+        "تصفيه الكرياتينين",
+        "creatinine clearance"
+      ]
+    },
+    {
+      "id": "price::0183",
+      "name_ar": "الكرياتينين في الدم",
+      "name_en": "Creatinine in Serum",
+      "price": 39.0,
+      "keys": [
+        "الكرياتينين في الدم",
+        "creatinine in serum"
+      ]
+    },
+    {
+      "id": "price::0184",
+      "name_ar": "الكرياتينين في البول",
+      "name_en": "Creatinine in Urine",
+      "price": 39.0,
+      "keys": [
+        "الكرياتينين في البول",
+        "creatinine in urine"
+      ]
+    },
+    {
+      "id": "price::0185",
+      "name_ar": "بروتين سي التفاعلي عالي الحساسية",
+      "name_en": "CRP H.S",
+      "price": 150.0,
+      "keys": [
+        "بروتين سي التفاعلي عالي الحساسيه",
+        "crp h s"
+      ]
+    },
+    {
+      "id": "price::0186",
+      "name_ar": "الكريوغلوبولين النوعي",
+      "name_en": "Cryoglobulin ( Qualitative)",
+      "price": 200.0,
+      "keys": [
+        "الكريوغلوبولين النوعي",
+        "cryoglobulin qualitative"
+      ]
+    },
+    {
+      "id": "price::0187",
+      "name_ar": "فحص السائل الدماغي الشوكي",
+      "name_en": "CSF Examination",
+      "price": 400.0,
+      "keys": [
+        "فحص السائل الدماغي الشوكي",
+        "csf examination"
+      ]
+    },
+    {
+      "id": "price::0188",
+      "name_ar": "السيكلوسبورين",
+      "name_en": "Cyclosporine",
+      "price": 240.0,
+      "keys": [
+        "السيكلوسبورين",
+        "cyclosporine"
+      ]
+    },
+    {
+      "id": "price::0189",
+      "name_ar": "سيستاتين سي",
+      "name_en": "Cystatin C",
+      "price": 480.0,
+      "keys": [
+        "سيستاتين سي",
+        "cystatin c"
+      ]
+    },
+    {
+      "id": "price::0190",
+      "name_ar": "التليف الكيسي، جين CFTR، تسلسل كامل للجين {Q}",
+      "name_en": "Cystic fibrosis, CFTR Gene, Full gene Sequencing {Q}",
+      "price": 8000.0,
+      "keys": [
+        "التليف الكيسي جين cftr تسلسل كامل للجين q",
+        "cystic fibrosis cftr gene full gene sequencing q"
+      ]
+    },
+    {
+      "id": "price::0191",
+      "name_ar": "دي-دايمر (كمّي)",
+      "name_en": "D-Dimer (Quantitative)",
+      "price": 100.0,
+      "keys": [
+        "دي دايمر كمي",
+        "d dimer quantitative"
+      ]
+    },
+    {
+      "id": "price::0192",
+      "name_ar": "الأجسام المضادة لفيروس الضنك IgG و IgM",
+      "name_en": "Dengue Virus Abs IgG& IgM",
+      "price": 880.0,
+      "keys": [
+        "الاجسام المضاده لفيروس الضنك igg و igm",
+        "dengue virus abs igg igm"
+      ]
+    },
+    {
+      "id": "price::0193",
+      "name_ar": "ديوكسيكورتيكوستيرون",
+      "name_en": "Deoxycorticosterone",
+      "price": 1400.0,
+      "keys": [
+        "ديوكسيكورتيكوستيرون",
+        "deoxycorticosterone"
+      ]
+    },
+    {
+      "id": "price::0194",
+      "name_ar": "حمض الفالبرويك (ديباكين)",
+      "name_en": "Depakine (Valproic acid)",
+      "price": 200.0,
+      "keys": [
+        "حمض الفالبرويك ديباكين",
+        "depakine valproic acid"
+      ]
+    },
+    {
+      "id": "price::0195",
+      "name_ar": "ديكساميثازون - كمية",
+      "name_en": "Dexamethasone -{Q}",
+      "price": 1000.0,
+      "keys": [
+        "ديكساميثازون كميه",
+        "dexamethasone q"
+      ]
+    },
+    {
+      "id": "price::0196",
+      "name_ar": "ديهيدرو إيبي أندروستيرون (DHEA)",
+      "name_en": "DHEA Dehydroepiandrosterone -{Q}",
+      "price": 720.0,
+      "keys": [
+        "ديهيدرو ايبي اندروستيرون dhea",
+        "dhea dehydroepiandrosterone q"
+      ]
+    },
+    {
+      "id": "price::0197",
+      "name_ar": "ديهيدرو إيبي أندروستيرون سلفات (ديهيدرو إيبي أندروستيرون سولفات)",
+      "name_en": "DHEA-S",
+      "price": 39.0,
+      "keys": [
+        "ديهيدرو ايبي اندروستيرون سلفات ديهيدرو ايبي اندروستيرون سولفات",
+        "dhea s"
+      ]
+    },
+    {
+      "id": "price::0198",
+      "name_ar": "ديجوكسين (لانكسين)",
+      "name_en": "Digoxin (Lanoxin)",
+      "price": 400.0,
+      "keys": [
+        "ديجوكسين لانكسين",
+        "digoxin lanoxin"
+      ]
+    },
+    {
+      "id": "price::0199",
+      "name_ar": "ديهيدروتستوستيرون (دي إتش تي)",
+      "name_en": "Dihydrotestosterone (DHT)",
+      "price": 800.0,
+      "keys": [
+        "ديهيدروتستوستيرون دي اتش تي",
+        "dihydrotestosterone dht"
+      ]
+    },
+    {
+      "id": "price::0200",
+      "name_ar": "اختبار كومبس المباشر (اختبار التماسك المباشر)",
+      "name_en": "Direct Coombs' Test (DAT)",
+      "price": 120.0,
+      "keys": [
+        "اختبار كومبس المباشر اختبار التماسك المباشر",
+        "direct coombs test dat"
+      ]
+    },
+    {
+      "id": "price::0201",
+      "name_ar": "تحليل داء الضمور العضلي الدوشيني بواسطة تقنية MLPA",
+      "name_en": "DMD (Duchenne Muscular Dystrophy) by MLPA",
+      "price": 2000.0,
+      "keys": [
+        "تحليل داء الضمور العضلي الدوشيني بواسطه تقنيه mlpa",
+        "dmd duchenne muscular dystrophy by mlpa"
+      ]
+    },
+    {
+      "id": "price::0202",
+      "name_ar": "تحليل المخدرات",
+      "name_en": "Drugs of Abuse",
+      "price": 800.0,
+      "keys": [
+        "تحليل المخدرات",
+        "drugs of abuse"
+      ]
+    },
+    {
+      "id": "price::0203",
+      "name_ar": "فحص إفرازات الأذن مع الزرع والحساسية",
+      "name_en": "Ear Discharge Examination, C/S",
+      "price": 150.0,
+      "keys": [
+        "فحص افرازات الاذن مع الزرع والحساسيه",
+        "ear discharge examination c s"
+      ]
+    },
+    {
+      "id": "price::0204",
+      "name_ar": "فحص إفرازات الأذن، زراعة وحساسية (الأذن اليسرى)",
+      "name_en": "Ear Discharge Examination, C/S (Left)",
+      "price": 150.0,
+      "keys": [
+        "فحص افرازات الاذن زراعه وحساسيه الاذن اليسري",
+        "ear discharge examination c s left"
+      ]
+    },
+    {
+      "id": "price::0205",
+      "name_ar": "تناول الطعام الصحي",
+      "name_en": "Eat well",
+      "price": 1499.0,
+      "keys": [
+        "تناول الطعام الصحي",
+        "eat well"
+      ]
+    },
+    {
+      "id": "price::0206",
+      "name_ar": "تحليل الحمض النووي لفيروس إبشتاين-بار النوعي بواسطة تفاعل البوليميراز المتسلسل",
+      "name_en": "EBV DNA Qualitative By PCR {Q}",
+      "price": 2400.0,
+      "keys": [
+        "تحليل الحمض النووي لفيروس ابشتاين بار النوعي بواسطه تفاعل البوليميراز المتسلسل",
+        "ebv dna qualitative by pcr q"
+      ]
+    },
+    {
+      "id": "price::0207",
+      "name_ar": "الأجسام المضادة IgG لداء الكيسات المذنبة، اختبار الامتصاص المناعي المرتبط بالإنزيم مع اختبار تأكيدي بالويسترن بلوت",
+      "name_en": "Echincoccos Abs IgG, EIA With Reflex to W.B",
+      "price": 800.0,
+      "keys": [
+        "الاجسام المضاده igg لداء الكيسات المذنبه اختبار الامتصاص المناعي المرتبط بالانزيم مع اختبار تاكيدي بالويسترن بلوت",
+        "echincoccos abs igg eia with reflex to w b"
+      ]
+    },
+    {
+      "id": "price::0208",
+      "name_ar": "الأجسام المضادة لـ إنتامويبا هيستوليتيكا IgG",
+      "name_en": "Entamoeba Histolytica IgG",
+      "price": 380.0,
+      "keys": [
+        "الاجسام المضاده ل انتامويبا هيستوليتيكا igg",
+        "entamoeba histolytica igg"
+      ]
+    },
+    {
+      "id": "price::0209",
+      "name_ar": "الأجسام المضادة لفيروسات الأمعاء - كمية",
+      "name_en": "Enterovirus Abs -{Q}",
+      "price": 1400.0,
+      "keys": [
+        "الاجسام المضاده لفيروسات الامعاء كميه",
+        "enterovirus abs q"
+      ]
+    },
+    {
+      "id": "price::0210",
+      "name_ar": "فيروس إبشتاين-بار (EBV) VCA IgG",
+      "name_en": "Epstein Barr Virus(EBV) VCA IgG",
+      "price": 800.0,
+      "keys": [
+        "فيروس ابشتاين بار ebv vca igg",
+        "epstein barr virus ebv vca igg"
+      ]
+    },
+    {
+      "id": "price::0211",
+      "name_ar": "فيروس إبشتاين-بار (EBV) VCA IgM",
+      "name_en": "Epstein Barr Virus(EBV) VCA IgM",
+      "price": 800.0,
+      "keys": [
+        "فيروس ابشتاين بار ebv vca igm",
+        "epstein barr virus ebv vca igm"
+      ]
+    },
+    {
+      "id": "price::0212",
+      "name_ar": "معدل ترسيب كريات الدم الحمراء",
+      "name_en": "Erythrocyte Sedimentation Rate(ESR)",
+      "price": 39.0,
+      "keys": [
+        "معدل ترسيب كريات الدم الحمراء",
+        "erythrocyte sedimentation rate esr"
+      ]
+    },
+    {
+      "id": "price::0213",
+      "name_ar": "إريثروبويتين",
+      "name_en": "Erythropoietin (EPO)",
+      "price": 600.0,
+      "keys": [
+        "اريثروبويتين",
+        "erythropoietin epo"
+      ]
+    },
+    {
+      "id": "price::0214",
+      "name_ar": "معدل الترشيح الكبيبي المقدر",
+      "name_en": "Estimated Glomerular Filtration Rate(eGFR)",
+      "price": 50.0,
+      "keys": [
+        "معدل الترشيح الكبيبي المقدر",
+        "estimated glomerular filtration rate egfr"
+      ]
+    },
+    {
+      "id": "price::0215",
+      "name_ar": "إستراديول (E2)",
+      "name_en": "Estradiol (E2)",
+      "price": 39.0,
+      "keys": [
+        "استراديول e2",
+        "estradiol e2"
+      ]
+    },
+    {
+      "id": "price::0216",
+      "name_ar": "الإسترول (E3) - كمية",
+      "name_en": "Estriol (E3) -{Q}",
+      "price": 600.0,
+      "keys": [
+        "الاسترول e3 كميه",
+        "estriol e3 q"
+      ]
+    },
+    {
+      "id": "price::0217",
+      "name_ar": "الإسترون - كمية",
+      "name_en": "Estrone -{Q}",
+      "price": 700.0,
+      "keys": [
+        "الاسترون كميه",
+        "estrone q"
+      ]
+    },
+    {
+      "id": "price::0218",
+      "name_ar": "إيفروليموس - مستوى في الدم",
+      "name_en": "Everolimus {BS}",
+      "price": 1880.0,
+      "keys": [
+        "ايفروليموس مستوي في الدم",
+        "everolimus bs"
+      ]
+    },
+    {
+      "id": "price::0219",
+      "name_ar": "التسلسل الكامل للإكسوم السريري مع تقرير (CNV) ثلاثي",
+      "name_en": "Express Clinical Whole Exome Sequencing with report (CNV) Trio",
+      "price": 12000.0,
+      "keys": [
+        "التسلسل الكامل للاكسوم السريري مع تقرير cnv ثلاثي",
+        "express clinical whole exome sequencing with report cnv trio"
+      ]
+    },
+    {
+      "id": "price::0220",
+      "name_ar": "اختبار طفرة العامل الثاني (بروثرومبين) بواسطة تفاعل البوليميراز المتسلسل",
+      "name_en": "Factor II (Prothrombin) mutation by PCR",
+      "price": 1200.0,
+      "keys": [
+        "اختبار طفره العامل الثاني بروثرومبين بواسطه تفاعل البوليميراز المتسلسل",
+        "factor ii prothrombin mutation by pcr"
+      ]
+    },
+    {
+      "id": "price::0221",
+      "name_ar": "نشاط العامل الثاني (بروثرومبين) في التجلط",
+      "name_en": "Factor II Activity Clotting {Q}",
+      "price": 600.0,
+      "keys": [
+        "نشاط العامل الثاني بروثرومبين في التجلط",
+        "factor ii activity clotting q"
+      ]
+    },
+    {
+      "id": "price::0222",
+      "name_ar": "نشاط العامل التاسع",
+      "name_en": "Factor IX Activity",
+      "price": 450.0,
+      "keys": [
+        "نشاط العامل التاسع",
+        "factor ix activity"
+      ]
+    },
+    {
+      "id": "price::0223",
+      "name_ar": "نشاط العامل السابع في التجلط",
+      "name_en": "Factor VII Activity Clotting",
+      "price": 700.0,
+      "keys": [
+        "نشاط العامل السابع في التجلط",
+        "factor vii activity clotting"
+      ]
+    },
+    {
+      "id": "price::0224",
+      "name_ar": "نشاط العامل الثامن",
+      "name_en": "Factor VIII Activity",
+      "price": 550.0,
+      "keys": [
+        "نشاط العامل الثامن",
+        "factor viii activity"
+      ]
+    },
+    {
+      "id": "price::0225",
+      "name_ar": "تحليل طفرة العامل الثالث عشر V34L بواسطة تفاعل البوليميراز المتسلسل",
+      "name_en": "Factor XIII V34L Mutation Analysis by PCR",
+      "price": 950.0,
+      "keys": [
+        "تحليل طفره العامل الثالث عشر v34l بواسطه تفاعل البوليميراز المتسلسل",
+        "factor xiii v34l mutation analysis by pcr"
+      ]
+    },
+    {
+      "id": "price::0226",
+      "name_ar": "الفيريتين في المصل",
+      "name_en": "Ferritin In Serum",
+      "price": 39.0,
+      "keys": [
+        "الفيريتين في المصل",
+        "ferritin in serum"
+      ]
+    },
+    {
+      "id": "price::0227",
+      "name_ar": "الفيبرينوجين",
+      "name_en": "Fibrinogen",
+      "price": 200.0,
+      "keys": [
+        "الفيبرينوجين",
+        "fibrinogen"
+      ]
+    },
+    {
+      "id": "price::0228",
+      "name_ar": "الأجسام المضادة لفيلاريا IgG",
+      "name_en": "Filaria Abs IgG",
+      "price": 800.0,
+      "keys": [
+        "الاجسام المضاده لفيلاريا igg",
+        "filaria abs igg"
+      ]
+    },
+    {
+      "id": "price::0229",
+      "name_ar": "فيلم دم الفيلاريا",
+      "name_en": "Filaria blood film",
+      "price": 120.0,
+      "keys": [
+        "فيلم دم الفيلاريا",
+        "filaria blood film"
+      ]
+    },
+    {
+      "id": "price::0230",
+      "name_ar": "حمض الفوليك في كريات الدم الحمراء - كمية",
+      "name_en": "Folic Acid in Erythrocytes - {Q}",
+      "price": 400.0,
+      "keys": [
+        "حمض الفوليك في كريات الدم الحمراء كميه",
+        "folic acid in erythrocytes q"
+      ]
+    },
+    {
+      "id": "price::0231",
+      "name_ar": "حمض الفوليك في المصل",
+      "name_en": "Folic Acid in Serum",
+      "price": 39.0,
+      "keys": [
+        "حمض الفوليك في المصل",
+        "folic acid in serum"
+      ]
+    },
+    {
+      "id": "price::0232",
+      "name_ar": "الهرمون المنشط للجريب (FSH)",
+      "name_en": "Follicular Stimulating Hormone (FSH)",
+      "price": 39.0,
+      "keys": [
+        "الهرمون المنشط للجريب fsh",
+        "follicular stimulating hormone fsh"
+      ]
+    },
+    {
+      "id": "price::0233",
+      "name_ar": "اختبار عدم تحمل الطعام بواسطة ImuPro100",
+      "name_en": "Food Intolerance Test by ImuPro100",
+      "price": 999.0,
+      "keys": [
+        "اختبار عدم تحمل الطعام بواسطه imupro100",
+        "food intolerance test by imupro100"
+      ]
+    },
+    {
+      "id": "price::0234",
+      "name_ar": "اختبار متلازمة X الهشة",
+      "name_en": "Fragile X Syndrome Test",
+      "price": 1500.0,
+      "keys": [
+        "اختبار متلازمه x الهشه",
+        "fragile x syndrome test"
+      ]
+    },
+    {
+      "id": "price::0235",
+      "name_ar": "مؤشر الأندروجين الحر",
+      "name_en": "Free Androgen Index",
+      "price": 600.0,
+      "keys": [
+        "مؤشر الاندروجين الحر",
+        "free androgen index"
+      ]
+    },
+    {
+      "id": "price::0236",
+      "name_ar": "هرمون ثلاثي يود الثيرونين الحر",
+      "name_en": "Free T3",
+      "price": 39.0,
+      "keys": [
+        "هرمون ثلاثي يود الثيرونين الحر",
+        "free t3"
+      ]
+    },
+    {
+      "id": "price::0237",
+      "name_ar": "فركتوزامين",
+      "name_en": "Fructosamine",
+      "price": 280.0,
+      "keys": [
+        "فركتوزامين",
+        "fructosamine"
+      ]
+    },
+    {
+      "id": "price::0238",
+      "name_ar": "زرع فطري (الأظافر)",
+      "name_en": "Fungal Culture ( nail )",
+      "price": 150.0,
+      "keys": [
+        "زرع فطري الاظافر",
+        "fungal culture nail"
+      ]
+    },
+    {
+      "id": "price::0239",
+      "name_ar": "الفحص والزرع الفطري (الجلد)",
+      "name_en": "Fungal Examination & Culture (Skin)",
+      "price": 150.0,
+      "keys": [
+        "الفحص والزرع الفطري الجلد",
+        "fungal examination culture skin"
+      ]
+    },
+    {
+      "id": "price::0240",
+      "name_ar": "نشاط إنزيم G6PD (كمّي)",
+      "name_en": "G6PD Activity (quantitative)",
+      "price": 160.0,
+      "keys": [
+        "نشاط انزيم g6pd كمي",
+        "g6pd activity quantitative"
+      ]
+    },
+    {
+      "id": "price::0241",
+      "name_ar": "إنزيم ناقلة الببتيد غاما غلوتاميل",
+      "name_en": "Gamma Glutamyl Transferase (GGT)",
+      "price": 39.0,
+      "keys": [
+        "انزيم ناقله الببتيد غاما غلوتاميل",
+        "gamma glutamyl transferase ggt"
+      ]
+    },
+    {
+      "id": "price::0242",
+      "name_ar": "جينتاميسين (القاع)",
+      "name_en": "Gentamycin (trough)",
+      "price": 800.0,
+      "keys": [
+        "جينتاميسين القاع",
+        "gentamycin trough"
+      ]
+    },
+    {
+      "id": "price::0243",
+      "name_ar": "الجلوبيولين في الدم",
+      "name_en": "Globulin in Serum",
+      "price": 39.0,
+      "keys": [
+        "الجلوبيولين في الدم",
+        "globulin in serum"
+      ]
+    },
+    {
+      "id": "price::0244",
+      "name_ar": "أجسام مضادة للغشاء القاعدي للكبيبات (IgG) - كمية",
+      "name_en": "Glomerular Basement Membrane Ab(IgG) -{Q}",
+      "price": 800.0,
+      "keys": [
+        "اجسام مضاده للغشاء القاعدي للكبيبات igg كميه",
+        "glomerular basement membrane ab igg q"
+      ]
+    },
+    {
+      "id": "price::0245",
+      "name_ar": "سكر الدم بعد الأكل بساعتين",
+      "name_en": "Glucose in Plasma (2hrs Postprandial)",
+      "price": 50.0,
+      "keys": [
+        "سكر الدم بعد الاكل بساعتين",
+        "glucose in plasma 2hrs postprandial"
+      ]
+    },
+    {
+      "id": "price::0246",
+      "name_ar": "سكر الدم الصائم",
+      "name_en": "Glucose in Plasma (Fasting)",
+      "price": 39.0,
+      "keys": [
+        "سكر الدم الصائم",
+        "glucose in plasma fasting"
+      ]
+    },
+    {
+      "id": "price::0247",
+      "name_ar": "سكر الدم العشوائي",
+      "name_en": "Glucose in Plasma (Random)",
+      "price": 50.0,
+      "keys": [
+        "سكر الدم العشوائي",
+        "glucose in plasma random"
+      ]
+    },
+    {
+      "id": "price::0248",
+      "name_ar": "اختبار تحمل الجلوكوز عن طريق الفم (100 جرام)",
+      "name_en": "Glucose Tolerance Test-OGTT (100g)",
+      "price": 100.0,
+      "keys": [
+        "اختبار تحمل الجلوكوز عن طريق الفم 100 جرام",
+        "glucose tolerance test ogtt 100g"
+      ]
+    },
+    {
+      "id": "price::0249",
+      "name_ar": "اختبار تحمل الجلوكوز الفموي (75 جرام)",
+      "name_en": "Glucose Tolerance Test-OGTT (75g)",
+      "price": 100.0,
+      "keys": [
+        "اختبار تحمل الجلوكوز الفموي 75 جرام",
+        "glucose tolerance test ogtt 75g"
+      ]
+    },
+    {
+      "id": "price::0250",
+      "name_ar": "الهيموغلوبين السكري (HbA1c)",
+      "name_en": "Glycated Haemoglobin (HbA1c)",
+      "price": 39.0,
+      "keys": [
+        "الهيموغلوبين السكري hba1c",
+        "glycated haemoglobin hba1c"
+      ]
+    },
+    {
+      "id": "price::0251",
+      "name_ar": "صبغة جرام (مسحة مباشرة)",
+      "name_en": "Gram Stain (Direct Smear)",
+      "price": 150.0,
+      "keys": [
+        "صبغه جرام مسحه مباشره",
+        "gram stain direct smear"
+      ]
+    },
+    {
+      "id": "price::0252",
+      "name_ar": "هرمون النمو",
+      "name_en": "Growth Hormone",
+      "price": 100.0,
+      "keys": [
+        "هرمون النمو",
+        "growth hormone"
+      ]
+    },
+    {
+      "id": "price::0253",
+      "name_ar": "فحص الشعر للفطريات",
+      "name_en": "Hair Examination For Fungi",
+      "price": 150.0,
+      "keys": [
+        "فحص الشعر للفطريات",
+        "hair examination for fungi"
+      ]
+    },
+    {
+      "id": "price::0254",
+      "name_ar": "الهابتوغلوبين",
+      "name_en": "Haptoglobin",
+      "price": 600.0,
+      "keys": [
+        "الهابتوغلوبين",
+        "haptoglobin"
+      ]
+    },
+    {
+      "id": "price::0255",
+      "name_ar": "اختبار التنفس لهيليكوباكتر بيلوري",
+      "name_en": "Helicobacter Pylori Breath Test (UBT)",
+      "price": 150.0,
+      "keys": [
+        "اختبار التنفس لهيليكوباكتر بيلوري",
+        "helicobacter pylori breath test ubt"
+      ]
+    },
+    {
+      "id": "price::0256",
+      "name_ar": "الأجسام المضادة IgA لهيليكوباكتر بيلوري",
+      "name_en": "Helicobacter Pylori IgA",
+      "price": 100.0,
+      "keys": [
+        "الاجسام المضاده iga لهيليكوباكتر بيلوري",
+        "helicobacter pylori iga"
+      ]
+    },
+    {
+      "id": "price::0257",
+      "name_ar": "الأجسام المضادة من نوع IgG للبكتيريا الحلزونية",
+      "name_en": "Helicobacter Pylori IgG",
+      "price": 100.0,
+      "keys": [
+        "الاجسام المضاده من نوع igg للبكتيريا الحلزونيه",
+        "helicobacter pylori igg"
+      ]
+    },
+    {
+      "id": "price::0258",
+      "name_ar": "الأجسام المضادة من نوع IgG للبكتيريا الحلزونية بواسطة اختبار ELISA",
+      "name_en": "Helicobacter Pylori IgG by ELISA",
+      "price": 100.0,
+      "keys": [
+        "الاجسام المضاده من نوع igg للبكتيريا الحلزونيه بواسطه اختبار elisa",
+        "helicobacter pylori igg by elisa"
+      ]
+    },
+    {
+      "id": "price::0259",
+      "name_ar": "الأجسام المضادة من نوع IgM للبكتيريا الحلزونية",
+      "name_en": "Helicobacter Pylori IgM",
+      "price": 100.0,
+      "keys": [
+        "الاجسام المضاده من نوع igm للبكتيريا الحلزونيه",
+        "helicobacter pylori igm"
+      ]
+    },
+    {
+      "id": "price::0260",
+      "name_ar": "مستضد البكتيريا الحلزونية في البراز",
+      "name_en": "Helicobacter Pylori Stool Antigen (HpSA)",
+      "price": 150.0,
+      "keys": [
+        "مستضد البكتيريا الحلزونيه في البراز",
+        "helicobacter pylori stool antigen hpsa"
+      ]
+    },
+    {
+      "id": "price::0261",
+      "name_ar": "مستوى الهيموغلوبين",
+      "name_en": "Hemoglobin Level",
+      "price": 39.0,
+      "keys": [
+        "مستوي الهيموغلوبين",
+        "hemoglobin level"
+      ]
+    },
+    {
+      "id": "price::0262",
+      "name_ar": "الأجسام المضادة IgM لفيروس التهاب الكبد A",
+      "name_en": "Hepatitis A Virus (HAV) IgM",
+      "price": 100.0,
+      "keys": [
+        "الاجسام المضاده igm لفيروس التهاب الكبد a",
+        "hepatitis a virus hav igm"
+      ]
+    },
+    {
+      "id": "price::0263",
+      "name_ar": "الأجسام المضادة الكلية لفيروس التهاب الكبد A",
+      "name_en": "Hepatitis A Virus (HAV) Total",
+      "price": 100.0,
+      "keys": [
+        "الاجسام المضاده الكليه لفيروس التهاب الكبد a",
+        "hepatitis a virus hav total"
+      ]
+    },
+    {
+      "id": "price::0264",
+      "name_ar": "الأجسام المضادة IgM لنواة فيروس التهاب الكبد B",
+      "name_en": "Hepatitis B core (HBc) IgM",
+      "price": 100.0,
+      "keys": [
+        "الاجسام المضاده igm لنواه فيروس التهاب الكبد b",
+        "hepatitis b core hbc igm"
+      ]
+    },
+    {
+      "id": "price::0265",
+      "name_ar": "الأجسام المضادة الكلية لنواة فيروس التهاب الكبد B",
+      "name_en": "Hepatitis B core (HBc) Total",
+      "price": 100.0,
+      "keys": [
+        "الاجسام المضاده الكليه لنواه فيروس التهاب الكبد b",
+        "hepatitis b core hbc total"
+      ]
+    },
+    {
+      "id": "price::0266",
+      "name_ar": "الأجسام المضادة لمغلف التهاب الكبد ب (HBe)",
+      "name_en": "Hepatitis B envelope (HBe) Abs",
+      "price": 200.0,
+      "keys": [
+        "الاجسام المضاده لمغلف التهاب الكبد ب hbe",
+        "hepatitis b envelope hbe abs"
+      ]
+    },
+    {
+      "id": "price::0267",
+      "name_ar": "مستضد مغلف التهاب الكبد ب (HBe)",
+      "name_en": "Hepatitis B envelope (HBe) Ag",
+      "price": 200.0,
+      "keys": [
+        "مستضد مغلف التهاب الكبد ب hbe",
+        "hepatitis b envelope hbe ag"
+      ]
+    },
+    {
+      "id": "price::0268",
+      "name_ar": "الأجسام المضادة لمستضد سطح التهاب الكبد ب (HBs)",
+      "name_en": "Hepatitis B surface (HBs) Abs",
+      "price": 200.0,
+      "keys": [
+        "الاجسام المضاده لمستضد سطح التهاب الكبد ب hbs",
+        "hepatitis b surface hbs abs"
+      ]
+    },
+    {
+      "id": "price::0269",
+      "name_ar": "مستضد سطح التهاب الكبد ب (HBs)",
+      "name_en": "Hepatitis B surface (HBs) Ag",
+      "price": 160.0,
+      "keys": [
+        "مستضد سطح التهاب الكبد ب hbs",
+        "hepatitis b surface hbs ag"
+      ]
+    },
+    {
+      "id": "price::0270",
+      "name_ar": "تصنيف جيني لفيروس التهاب الكبد ب (HBV)",
+      "name_en": "Hepatitis B Virus (HBV) Genotyping -{BS}",
+      "price": 2500.0,
+      "keys": [
+        "تصنيف جيني لفيروس التهاب الكبد ب hbv",
+        "hepatitis b virus hbv genotyping bs"
+      ]
+    },
+    {
+      "id": "price::0271",
+      "name_ar": "فيروس التهاب الكبد ب بواسطة تفاعل البوليميراز المتسلسل (نوعي)",
+      "name_en": "Hepatitis B Virus by PCR (qualitative)",
+      "price": 500.0,
+      "keys": [
+        "فيروس التهاب الكبد ب بواسطه تفاعل البوليميراز المتسلسل نوعي",
+        "hepatitis b virus by pcr qualitative"
+      ]
+    },
+    {
+      "id": "price::0272",
+      "name_ar": "فيروس التهاب الكبد ب بواسطة تفاعل البوليميراز المتسلسل (كمّي)",
+      "name_en": "Hepatitis B Virus by PCR (quantitative)",
+      "price": 500.0,
+      "keys": [
+        "فيروس التهاب الكبد ب بواسطه تفاعل البوليميراز المتسلسل كمي",
+        "hepatitis b virus by pcr quantitative"
+      ]
+    },
+    {
+      "id": "price::0273",
+      "name_ar": "الأجسام المضادة لفيروس التهاب الكبد ج",
+      "name_en": "Hepatitis C Virus (HCV) Abs",
+      "price": 100.0,
+      "keys": [
+        "الاجسام المضاده لفيروس التهاب الكبد ج",
+        "hepatitis c virus hcv abs"
+      ]
+    },
+    {
+      "id": "price::0274",
+      "name_ar": "تصنيف نوع فيروس التهاب الكبد ج",
+      "name_en": "Hepatitis C Virus (HCV) Genotyping",
+      "price": 1750.0,
+      "keys": [
+        "تصنيف نوع فيروس التهاب الكبد ج",
+        "hepatitis c virus hcv genotyping"
+      ]
+    },
+    {
+      "id": "price::0275",
+      "name_ar": "فيروس التهاب الكبد ج بواسطة تفاعل البوليميراز المتسلسل (نوعي)",
+      "name_en": "Hepatitis C Virus by PCR (qualitative)",
+      "price": 500.0,
+      "keys": [
+        "فيروس التهاب الكبد ج بواسطه تفاعل البوليميراز المتسلسل نوعي",
+        "hepatitis c virus by pcr qualitative"
+      ]
+    },
+    {
+      "id": "price::0276",
+      "name_ar": "فيروس التهاب الكبد الوبائي سي بواسطة تفاعل البوليميراز المتسلسل (كمّي)",
+      "name_en": "Hepatitis C Virus by PCR (quantitative)",
+      "price": 500.0,
+      "keys": [
+        "فيروس التهاب الكبد الوبائي سي بواسطه تفاعل البوليميراز المتسلسل كمي",
+        "hepatitis c virus by pcr quantitative"
+      ]
+    },
+    {
+      "id": "price::0277",
+      "name_ar": "فيروس التهاب الكبد دلتا الكلي (كمّي)",
+      "name_en": "Hepatitis Delta Virus (HDV ) Total -{Q}",
+      "price": 1200.0,
+      "keys": [
+        "فيروس التهاب الكبد دلتا الكلي كمي",
+        "hepatitis delta virus hdv total q"
+      ]
+    },
+    {
+      "id": "price::0278",
+      "name_ar": "أجسام مضادة لفيروس التهاب الكبد إي",
+      "name_en": "Hepatitis E Virus (HEV )Abs",
+      "price": 1300.0,
+      "keys": [
+        "اجسام مضاده لفيروس التهاب الكبد اي",
+        "hepatitis e virus hev abs"
+      ]
+    },
+    {
+      "id": "price::0279",
+      "name_ar": "سرطان الثدي والمبيض الوراثي (26 جين)",
+      "name_en": "Hereditary Breast and Ovarian Cancer (HBOC) (26 genes)",
+      "price": 3500.0,
+      "keys": [
+        "سرطان الثدي والمبيض الوراثي 26 جين",
+        "hereditary breast and ovarian cancer hboc 26 genes"
+      ]
+    },
+    {
+      "id": "price::0280",
+      "name_ar": "لوحة السرطان الوراثي (إناث) (85 جينًا)",
+      "name_en": "Hereditary Cancer Panel (Female)(85 genes)",
+      "price": 4000.0,
+      "keys": [
+        "لوحه السرطان الوراثي اناث 85 جينا",
+        "hereditary cancer panel female 85 genes"
+      ]
+    },
+    {
+      "id": "price::0281",
+      "name_ar": "لوحة السرطان الوراثي (ذكور) (90 جينًا)",
+      "name_en": "Hereditary Cancer Panel (Male)(90 genes)",
+      "price": 4000.0,
+      "keys": [
+        "لوحه السرطان الوراثي ذكور 90 جينا",
+        "hereditary cancer panel male 90 genes"
+      ]
+    },
+    {
+      "id": "price::0282",
+      "name_ar": "السرطان القولوني المستقيمي الوراثي",
+      "name_en": "Hereditary Colorectal Cancer",
+      "price": 3000.0,
+      "keys": [
+        "السرطان القولوني المستقيمي الوراثي",
+        "hereditary colorectal cancer"
+      ]
+    },
+    {
+      "id": "price::0283",
+      "name_ar": "سرطان البنكرياس الوراثي",
+      "name_en": "Hereditary Pancreatic Cancer",
+      "price": 3000.0,
+      "keys": [
+        "سرطان البنكرياس الوراثي",
+        "hereditary pancreatic cancer"
+      ]
+    },
+    {
+      "id": "price::0284",
+      "name_ar": "سرطان البروستاتا الوراثي",
+      "name_en": "Hereditary Prostate Cancer",
+      "price": 3000.0,
+      "keys": [
+        "سرطان البروستاتا الوراثي",
+        "hereditary prostate cancer"
+      ]
+    },
+    {
+      "id": "price::0285",
+      "name_ar": "فيروس الهربس 1 IgG",
+      "name_en": "Herpes Virus (HSV) 1IgG",
+      "price": 100.0,
+      "keys": [
+        "فيروس الهربس 1 igg",
+        "herpes virus hsv 1igg"
+      ]
+    },
+    {
+      "id": "price::0286",
+      "name_ar": "فيروس الهربس 1 IgM",
+      "name_en": "Herpes Virus (HSV) 1IgM",
+      "price": 100.0,
+      "keys": [
+        "فيروس الهربس 1 igm",
+        "herpes virus hsv 1igm"
+      ]
+    },
+    {
+      "id": "price::0287",
+      "name_ar": "فيروس الهربس 2 IgG",
+      "name_en": "Herpes Virus (HSV) 2 IgG",
+      "price": 100.0,
+      "keys": [
+        "فيروس الهربس 2 igg",
+        "herpes virus hsv 2 igg"
+      ]
+    },
+    {
+      "id": "price::0288",
+      "name_ar": "فيروس الهربس 2 IgM",
+      "name_en": "Herpes Virus (HSV) 2 IgM",
+      "price": 100.0,
+      "keys": [
+        "فيروس الهربس 2 igm",
+        "herpes virus hsv 2 igm"
+      ]
+    },
+    {
+      "id": "price::0289",
+      "name_ar": "البروتين الدهني عالي الكثافة (الكوليسترول الجيد)",
+      "name_en": "High Density Lipoprotein (HDL)",
+      "price": 39.0,
+      "keys": [
+        "البروتين الدهني عالي الكثافه الكوليسترول الجيد",
+        "high density lipoprotein hdl"
+      ]
+    },
+    {
+      "id": "price::0290",
+      "name_ar": "فيروس الورم الحليمي البشري عالي الخطورة بواسطة PCR",
+      "name_en": "High Risk -Human Papilloma Virus (HPV) by PCR",
+      "price": 500.0,
+      "keys": [
+        "فيروس الورم الحليمي البشري عالي الخطوره بواسطه pcr",
+        "high risk human papilloma virus hpv by pcr"
+      ]
+    },
+    {
+      "id": "price::0291",
+      "name_ar": "اختبار مستضد P24 وأجسام مضادة لفيروس HIV (اختبار كومبو)",
+      "name_en": "HIV P24 Ag & Abs (HIV Combo)",
+      "price": 100.0,
+      "keys": [
+        "اختبار مستضد p24 واجسام مضاده لفيروس hiv اختبار كومبو",
+        "hiv p24 ag abs hiv combo"
+      ]
+    },
+    {
+      "id": "price::0292",
+      "name_ar": "اختبار PCR الكمي لفيروس HIV1 RNA",
+      "name_en": "HIV1 RNA Quantitative PCR",
+      "price": 500.0,
+      "keys": [
+        "اختبار pcr الكمي لفيروس hiv1 rna",
+        "hiv1 rna quantitative pcr"
+      ]
+    },
+    {
+      "id": "price::0293",
+      "name_ar": "تصنيف HLA-B57:01 بواسطة PCR في الوقت الحقيقي",
+      "name_en": "HLA-B57:01 Typing by real time PCR",
+      "price": 2800.0,
+      "keys": [
+        "تصنيف hla b57 01 بواسطه pcr في الوقت الحقيقي",
+        "hla b57 01 typing by real time pcr"
+      ]
+    },
+    {
+      "id": "price::0294",
+      "name_ar": "مؤشر مقاومة الأنسولين (HOMA-IR)",
+      "name_en": "HOMA-IR",
+      "price": 150.0,
+      "keys": [
+        "مؤشر مقاومه الانسولين homa ir",
+        "homa ir"
+      ]
+    },
+    {
+      "id": "price::0295",
+      "name_ar": "الهوموسيستين",
+      "name_en": "Homocysteine",
+      "price": 180.0,
+      "keys": [
+        "الهوموسيستين",
+        "homocysteine"
+      ]
+    },
+    {
+      "id": "price::0296",
+      "name_ar": "حمض الهوموفانيلليك (HVA) - كمية",
+      "name_en": "Homovanillic Acid (HVA) -{Q}",
+      "price": 2400.0,
+      "keys": [
+        "حمض الهوموفانيلليك hva كميه",
+        "homovanillic acid hva q"
+      ]
+    },
+    {
+      "id": "price::0297",
+      "name_ar": "التحليل الكهربائي المناعي (التثبيت المناعي)",
+      "name_en": "Immunoelectrophoresis (Immunofixation)",
+      "price": 500.0,
+      "keys": [
+        "التحليل الكهربائي المناعي التثبيت المناعي",
+        "immunoelectrophoresis immunofixation"
+      ]
+    },
+    {
+      "id": "price::0298",
+      "name_ar": "الجلوبيولين المناعي أ (IgA)",
+      "name_en": "Immunoglobulin A (IgA)",
+      "price": 75.0,
+      "keys": [
+        "الجلوبيولين المناعي ا iga",
+        "immunoglobulin a iga"
+      ]
+    },
+    {
+      "id": "price::0299",
+      "name_ar": "الجلوبيولين المناعي د (IgD)",
+      "name_en": "Immunoglobulin D (IgD)",
+      "price": 400.0,
+      "keys": [
+        "الجلوبيولين المناعي د igd",
+        "immunoglobulin d igd"
+      ]
+    },
+    {
+      "id": "price::0300",
+      "name_ar": "الجلوبيولين المناعي هـ الكلي (IgE)",
+      "name_en": "Immunoglobulin E (IgE) Total",
+      "price": 39.0,
+      "keys": [
+        "الجلوبيولين المناعي ه الكلي ige",
+        "immunoglobulin e ige total"
+      ]
+    },
+    {
+      "id": "price::0301",
+      "name_ar": "الجلوبيولين المناعي ج (IgG)",
+      "name_en": "Immunoglobulin G (IgG)",
+      "price": 75.0,
+      "keys": [
+        "الجلوبيولين المناعي ج igg",
+        "immunoglobulin g igg"
+      ]
+    },
+    {
+      "id": "price::0302",
+      "name_ar": "الجلوبيولين المناعي ج - الفئة الفرعية 3 (IgG3)",
+      "name_en": "Immunoglobulin G IgG 3 Subclasses",
+      "price": 450.0,
+      "keys": [
+        "الجلوبيولين المناعي ج الفئه الفرعيه 3 igg3",
+        "immunoglobulin g igg 3 subclasses"
+      ]
+    },
+    {
+      "id": "price::0303",
+      "name_ar": "الجلوبيولين المناعي ج (IgG) الفئات الفرعية الأربعة",
+      "name_en": "Immunoglobulin G IgG 4 Subclasses -{Q}",
+      "price": 450.0,
+      "keys": [
+        "الجلوبيولين المناعي ج igg الفئات الفرعيه الاربعه",
+        "immunoglobulin g igg 4 subclasses q"
+      ]
+    },
+    {
+      "id": "price::0304",
+      "name_ar": "الجلوبيولين المناعي م (IgM)",
+      "name_en": "Immunoglobulin M (IgM )",
+      "price": 75.0,
+      "keys": [
+        "الجلوبيولين المناعي م igm",
+        "immunoglobulin m igm"
+      ]
+    },
+    {
+      "id": "price::0305",
+      "name_ar": "إنهيبين أ",
+      "name_en": "Inhibin A {Q}",
+      "price": 1000.0,
+      "keys": [
+        "انهيبين ا",
+        "inhibin a q"
+      ]
+    },
+    {
+      "id": "price::0306",
+      "name_ar": "إنهيبين ب",
+      "name_en": "Inhibin B -{Q}",
+      "price": 1200.0,
+      "keys": [
+        "انهيبين ب",
+        "inhibin b q"
+      ]
+    },
+    {
+      "id": "price::0307",
+      "name_ar": "الأنسولين (ساعة بعد الأكل)",
+      "name_en": "Insulin (1hr Post Prandial)",
+      "price": 200.0,
+      "keys": [
+        "الانسولين ساعه بعد الاكل",
+        "insulin 1hr post prandial"
+      ]
+    },
+    {
+      "id": "price::0308",
+      "name_ar": "الأنسولين بعد ساعتين من الأكل",
+      "name_en": "Insulin (2hrs Post Prandial)",
+      "price": 200.0,
+      "keys": [
+        "الانسولين بعد ساعتين من الاكل",
+        "insulin 2hrs post prandial"
+      ]
+    },
+    {
+      "id": "price::0309",
+      "name_ar": "الأجسام المضادة للأنسولين",
+      "name_en": "Insulin autoantibodies",
+      "price": 800.0,
+      "keys": [
+        "الاجسام المضاده للانسولين",
+        "insulin autoantibodies"
+      ]
+    },
+    {
+      "id": "price::0310",
+      "name_ar": "بروتين ربط عامل نمو الأنسولين 3 (كمّي)",
+      "name_en": "Insulin Growth Factor Binding Protein 3 {Q}",
+      "price": 700.0,
+      "keys": [
+        "بروتين ربط عامل نمو الانسولين 3 كمي",
+        "insulin growth factor binding protein 3 q"
+      ]
+    },
+    {
+      "id": "price::0311",
+      "name_ar": "الأجسام المضادة لمستقبلات الأنسولين (IgG) في الدم",
+      "name_en": "Insulin receptor Abs. (IgG) {BS}",
+      "price": 1200.0,
+      "keys": [
+        "الاجسام المضاده لمستقبلات الانسولين igg في الدم",
+        "insulin receptor abs igg bs"
+      ]
+    },
+    {
+      "id": "price::0312",
+      "name_ar": "الإنترلوكين 6 (كمّي)",
+      "name_en": "Interleukin 6 (IL 6) -{Q}",
+      "price": 2000.0,
+      "keys": [
+        "الانترلوكين 6 كمي",
+        "interleukin 6 il 6 q"
+      ]
+    },
+    {
+      "id": "price::0313",
+      "name_ar": "الحديد في الدم",
+      "name_en": "Iron (Fe) in Serum",
+      "price": 39.0,
+      "keys": [
+        "الحديد في الدم",
+        "iron fe in serum"
+      ]
+    },
+    {
+      "id": "price::0314",
+      "name_ar": "كشف طفرة JAK2 (V617F/G1849T) بواسطة تفاعل البوليميراز المتسلسل",
+      "name_en": "JAK2 (V617F/G1849T) Detection by PCR",
+      "price": 1500.0,
+      "keys": [
+        "كشف طفره jak2 v617f g1849t بواسطه تفاعل البوليميراز المتسلسل",
+        "jak2 v617f g1849t detection by pcr"
+      ]
+    },
+    {
+      "id": "price::0315",
+      "name_ar": "السلاسل الخفيفة كابا/لامبدا الكلية في المصل",
+      "name_en": "Kappa/Lambda Light Chains, Total Serum {Q}",
+      "price": 2500.0,
+      "keys": [
+        "السلاسل الخفيفه كابا لامبدا الكليه في المصل",
+        "kappa lambda light chains total serum q"
+      ]
+    },
+    {
+      "id": "price::0316",
+      "name_ar": "إنزيم نازعة هيدروجين اللاكتات",
+      "name_en": "Lactate Dehydrogenase (LDH)",
+      "price": 39.0,
+      "keys": [
+        "انزيم نازعه هيدروجين اللاكتات",
+        "lactate dehydrogenase ldh"
+      ]
+    },
+    {
+      "id": "price::0317",
+      "name_ar": "اللاكتات في البلازما",
+      "name_en": "Lactate in Plasma",
+      "price": 250.0,
+      "keys": [
+        "اللاكتات في البلازما",
+        "lactate in plasma"
+      ]
+    },
+    {
+      "id": "price::0318",
+      "name_ar": "إنزيم اللاكتات ديهيدروجيناز - الأنزيمات الفرعية",
+      "name_en": "LDH - Isoenzymes{BS}",
+      "price": 1600.0,
+      "keys": [
+        "انزيم اللاكتات ديهيدروجيناز الانزيمات الفرعيه",
+        "ldh isoenzymes bs"
+      ]
+    },
+    {
+      "id": "price::0319",
+      "name_ar": "الرصاص في الدم",
+      "name_en": "Lead in blood",
+      "price": 450.0,
+      "keys": [
+        "الرصاص في الدم",
+        "lead in blood"
+      ]
+    },
+    {
+      "id": "price::0320",
+      "name_ar": "الرصاص في البول العشوائي",
+      "name_en": "Lead in Random urine -{Q}",
+      "price": 450.0,
+      "keys": [
+        "الرصاص في البول العشوائي",
+        "lead in random urine q"
+      ]
+    },
+    {
+      "id": "price::0321",
+      "name_ar": "الأجسام المضادة لليجيونيلا",
+      "name_en": "Legionellosis Abs -{Q}",
+      "price": 1800.0,
+      "keys": [
+        "الاجسام المضاده لليجيونيلا",
+        "legionellosis abs q"
+      ]
+    },
+    {
+      "id": "price::0322",
+      "name_ar": "أجسام مضادة لـ الليشمانيا IgG",
+      "name_en": "Leishmania Antibody IgG {BS}",
+      "price": 1300.0,
+      "keys": [
+        "اجسام مضاده ل الليشمانيا igg",
+        "leishmania antibody igg bs"
+      ]
+    },
+    {
+      "id": "price::0323",
+      "name_ar": "فيلم دم لليشمانيا",
+      "name_en": "Leishmania Blood Film",
+      "price": 200.0,
+      "keys": [
+        "فيلم دم لليشمانيا",
+        "leishmania blood film"
+      ]
+    },
+    {
+      "id": "price::0324",
+      "name_ar": "اختبار اللبتين الكمي",
+      "name_en": "Leptin -{Q}",
+      "price": 1000.0,
+      "keys": [
+        "اختبار اللبتين الكمي",
+        "leptin q"
+      ]
+    },
+    {
+      "id": "price::0325",
+      "name_ar": "فحص أجسام مضادة للبكتيريا اللبتوسبيرا مع تحديد العيار",
+      "name_en": "Leptospira Ab Screen W/reflex To Titer -{BS}",
+      "price": 1200.0,
+      "keys": [
+        "فحص اجسام مضاده للبكتيريا اللبتوسبيرا مع تحديد العيار",
+        "leptospira ab screen w reflex to titer bs"
+      ]
+    },
+    {
+      "id": "price::0326",
+      "name_ar": "مستوى ليفيتيراسيتام في الدم",
+      "name_en": "Levetiracetam",
+      "price": 900.0,
+      "keys": [
+        "مستوي ليفيتيراسيتام في الدم",
+        "levetiracetam"
+      ]
+    },
+    {
+      "id": "price::0327",
+      "name_ar": "إنزيم الليباز",
+      "name_en": "Lipase",
+      "price": 39.0,
+      "keys": [
+        "انزيم الليباز",
+        "lipase"
+      ]
+    },
+    {
+      "id": "price::0328",
+      "name_ar": "ليبoprotein (a)",
+      "name_en": "Lipoprotein (a) -{Q}",
+      "price": 480.0,
+      "keys": [
+        "ليبoprotein a",
+        "lipoprotein a q"
+      ]
+    },
+    {
+      "id": "price::0329",
+      "name_ar": "المصلية لليستيريا مونوسيتوجينس",
+      "name_en": "Listeria monocytogenes serology -{Q}",
+      "price": 2400.0,
+      "keys": [
+        "المصليه لليستيريا مونوسيتوجينس",
+        "listeria monocytogenes serology q"
+      ]
+    },
+    {
+      "id": "price::0330",
+      "name_ar": "الليثيوم في الدم",
+      "name_en": "Lithium (Li)",
+      "price": 100.0,
+      "keys": [
+        "الليثيوم في الدم",
+        "lithium li"
+      ]
+    },
+    {
+      "id": "price::0331",
+      "name_ar": "البروتين الدهني منخفض الكثافة (الكوليسترول الضار)",
+      "name_en": "Low Density Lipoprotein (LDL)",
+      "price": 39.0,
+      "keys": [
+        "البروتين الدهني منخفض الكثافه الكوليسترول الضار",
+        "low density lipoprotein ldl"
+      ]
+    },
+    {
+      "id": "price::0332",
+      "name_ar": "الكشف عن فيروس الورم الحليمي البشري منخفض الخطورة والتصنيف الجيني بواسطة PCR",
+      "name_en": "Low Risk - Human Papilloma Virus (HPV) Detection and Genotyping by PCR",
+      "price": 500.0,
+      "keys": [
+        "الكشف عن فيروس الورم الحليمي البشري منخفض الخطوره والتصنيف الجيني بواسطه pcr",
+        "low risk human papilloma virus hpv detection and genotyping by pcr"
+      ]
+    },
+    {
+      "id": "price::0333",
+      "name_ar": "هرمون اللوتين",
+      "name_en": "Lutenizing Hormone (LH)",
+      "price": 39.0,
+      "keys": [
+        "هرمون اللوتين",
+        "lutenizing hormone lh"
+      ]
+    },
+    {
+      "id": "price::0334",
+      "name_ar": "المغنيسيوم في الدم",
+      "name_en": "Magnesium (Mg) in Serum",
+      "price": 39.0,
+      "keys": [
+        "المغنيسيوم في الدم",
+        "magnesium mg in serum"
+      ]
+    },
+    {
+      "id": "price::0335",
+      "name_ar": "المغنيسيوم في البول",
+      "name_en": "Magnesium (Mg) In Urine",
+      "price": 300.0,
+      "keys": [
+        "المغنيسيوم في البول",
+        "magnesium mg in urine"
+      ]
+    },
+    {
+      "id": "price::0336",
+      "name_ar": "اختبار الكشف السريع عن الملاريا (ICT)",
+      "name_en": "Malaria - ICT",
+      "price": 100.0,
+      "keys": [
+        "اختبار الكشف السريع عن الملاريا ict",
+        "malaria ict"
+      ]
+    },
+    {
+      "id": "price::0337",
+      "name_ar": "أجسام مضادة للملاريا - {BM}",
+      "name_en": "Malaria Abs -{BM}",
+      "price": 560.0,
+      "keys": [
+        "اجسام مضاده للملاريا bm",
+        "malaria abs bm"
+      ]
+    },
+    {
+      "id": "price::0338",
+      "name_ar": "فيلم دم الملاريا",
+      "name_en": "Malaria Blood Film",
+      "price": 75.0,
+      "keys": [
+        "فيلم دم الملاريا",
+        "malaria blood film"
+      ]
+    },
+    {
+      "id": "price::0339",
+      "name_ar": "أجسام مضادة للحصبة (IgG)",
+      "name_en": "Measles Antibody (IgG)",
+      "price": 240.0,
+      "keys": [
+        "اجسام مضاده للحصبه igg",
+        "measles antibody igg"
+      ]
+    },
+    {
+      "id": "price::0340",
+      "name_ar": "الميلاتونين - كمية",
+      "name_en": "Melatonin -{Q}",
+      "price": 2000.0,
+      "keys": [
+        "الميلاتونين كميه",
+        "melatonin q"
+      ]
+    },
+    {
+      "id": "price::0341",
+      "name_ar": "الزئبق",
+      "name_en": "Mercury",
+      "price": 1000.0,
+      "keys": [
+        "الزئبق",
+        "mercury"
+      ]
+    },
+    {
+      "id": "price::0342",
+      "name_ar": "الزئبق في بول 24 ساعة",
+      "name_en": "Mercury in 24 hour urine -{BS}",
+      "price": 1000.0,
+      "keys": [
+        "الزئبق في بول 24 ساعه",
+        "mercury in 24 hour urine bs"
+      ]
+    },
+    {
+      "id": "price::0343",
+      "name_ar": "ميتانيفرين ونورميتانيفرين في البلازما",
+      "name_en": "Metanephrine & Normetanephrine in Plasma",
+      "price": 1480.0,
+      "keys": [
+        "ميتانيفرين ونورميتانيفرين في البلازما",
+        "metanephrine normetanephrine in plasma"
+      ]
+    },
+    {
+      "id": "price::0344",
+      "name_ar": "ميتانيفرين ونورميتانيفرين في البول",
+      "name_en": "Metanephrine & Normetanephrine in urine -{Q}",
+      "price": 1800.0,
+      "keys": [
+        "ميتانيفرين ونورميتانيفرين في البول",
+        "metanephrine normetanephrine in urine q"
+      ]
+    },
+    {
+      "id": "price::0345",
+      "name_ar": "الميتهيموغلوبين في الدم",
+      "name_en": "Methemoglobin in Blood {BM}",
+      "price": 300.0,
+      "keys": [
+        "الميتهيموغلوبين في الدم",
+        "methemoglobin in blood bm"
+      ]
+    },
+    {
+      "id": "price::0346",
+      "name_ar": "ميثوتركسيت في الدم",
+      "name_en": "Methotrexate (MTX) -{BS}",
+      "price": 1600.0,
+      "keys": [
+        "ميثوتركسيت في الدم",
+        "methotrexate mtx bs"
+      ]
+    },
+    {
+      "id": "price::0347",
+      "name_ar": "حمض الميثيل مالونيك",
+      "name_en": "Methylmalonic Acid",
+      "price": 1140.0,
+      "keys": [
+        "حمض الميثيل مالونيك",
+        "methylmalonic acid"
+      ]
+    },
+    {
+      "id": "price::0348",
+      "name_ar": "نسبة الألبومين إلى الكرياتينين في البول",
+      "name_en": "Microalbuminuria, Random urine (Alb-Creat Ratio)",
+      "price": 200.0,
+      "keys": [
+        "نسبه الالبومين الي الكرياتينين في البول",
+        "microalbuminuria random urine alb creat ratio"
+      ]
+    },
+    {
+      "id": "price::0349",
+      "name_ar": "الكشف الجزيئي عن حمض DNA لجرثومة الكلاميديا التراخوماتيس بواسطة تقنية PCR الفوري",
+      "name_en": "Molecular Detection of Chlamydia trachomatis DNA by Real-Time PCR",
+      "price": 500.0,
+      "keys": [
+        "الكشف الجزيئي عن حمض dna لجرثومه الكلاميديا التراخوماتيس بواسطه تقنيه pcr الفوري",
+        "molecular detection of chlamydia trachomatis dna by real time pcr"
+      ]
+    },
+    {
+      "id": "price::0350",
+      "name_ar": "الكشف الجزيئي النوعي عن حمض DNA لفيروس السيتوميجالو بواسطة تقنية PCR الفوري",
+      "name_en": "Molecular Detection of Cytomegalovirus (CMV) DNA (Qualitative) by Real-Time PCR",
+      "price": 500.0,
+      "keys": [
+        "الكشف الجزيئي النوعي عن حمض dna لفيروس السيتوميجالو بواسطه تقنيه pcr الفوري",
+        "molecular detection of cytomegalovirus cmv dna qualitative by real time pcr"
+      ]
+    },
+    {
+      "id": "price::0351",
+      "name_ar": "الكشف الجزيئي النوعي عن فيروس إبشتاين-بار (EBV) بواسطة تقنية PCR الفوري",
+      "name_en": "Molecular Detection of Epstein-Barr virus EBV (Qualitative) by Real-Time PCR",
+      "price": 500.0,
+      "keys": [
+        "الكشف الجزيئي النوعي عن فيروس ابشتاين بار ebv بواسطه تقنيه pcr الفوري",
+        "molecular detection of epstein barr virus ebv qualitative by real time pcr"
+      ]
+    },
+    {
+      "id": "price::0352",
+      "name_ar": "الكشف الجزيئي عن DNA فيروس الهربس البسيط النوع 1 و2 بواسطة تفاعل البوليميراز المتسلسل الفوري",
+      "name_en": "Molecular Detection of HSV 1&2 DNA by Real-Time PCR",
+      "price": 500.0,
+      "keys": [
+        "الكشف الجزيئي عن dna فيروس الهربس البسيط النوع 1 و2 بواسطه تفاعل البوليميراز المتسلسل الفوري",
+        "molecular detection of hsv 1 2 dna by real time pcr"
+      ]
+    },
+    {
+      "id": "price::0353",
+      "name_ar": "الكشف الجزيئي عن DNA الميكوبلازما التناسلية بواسطة تفاعل البوليميراز المتسلسل الفوري",
+      "name_en": "Molecular Detection of Mycoplasma genitalium DNA by Real-Time PCR",
+      "price": 500.0,
+      "keys": [
+        "الكشف الجزيئي عن dna الميكوبلازما التناسليه بواسطه تفاعل البوليميراز المتسلسل الفوري",
+        "molecular detection of mycoplasma genitalium dna by real time pcr"
+      ]
+    },
+    {
+      "id": "price::0354",
+      "name_ar": "الكشف الجزيئي عن DNA النيسرية البنية بواسطة تفاعل البوليميراز المتسلسل الفوري",
+      "name_en": "Molecular Detection of Neisseria gonorrhoeae DNA by Real-Time PCR",
+      "price": 500.0,
+      "keys": [
+        "الكشف الجزيئي عن dna النيسريه البنيه بواسطه تفاعل البوليميراز المتسلسل الفوري",
+        "molecular detection of neisseria gonorrhoeae dna by real time pcr"
+      ]
+    },
+    {
+      "id": "price::0355",
+      "name_ar": "الكشف الجزيئي عن DNA المتدثرة المهبلية بواسطة تفاعل البوليميراز المتسلسل الفوري",
+      "name_en": "Molecular Detection of Trichomonas vaginalis DNA by Real-Time PCR",
+      "price": 500.0,
+      "keys": [
+        "الكشف الجزيئي عن dna المتدثره المهبليه بواسطه تفاعل البوليميراز المتسلسل الفوري",
+        "molecular detection of trichomonas vaginalis dna by real time pcr"
+      ]
+    },
+    {
+      "id": "price::0356",
+      "name_ar": "الكشف الجزيئي عن يوريابلازما بارفوم بواسطة تفاعل البوليميراز المتسلسل الفوري",
+      "name_en": "Molecular Detection of Ureaplasma Parvum by Real Time PCR",
+      "price": 500.0,
+      "keys": [
+        "الكشف الجزيئي عن يوريابلازما بارفوم بواسطه تفاعل البوليميراز المتسلسل الفوري",
+        "molecular detection of ureaplasma parvum by real time pcr"
+      ]
+    },
+    {
+      "id": "price::0357",
+      "name_ar": "اختبار مونو سبوت",
+      "name_en": "Monospot Test",
+      "price": 120.0,
+      "keys": [
+        "اختبار مونو سبوت",
+        "monospot test"
+      ]
+    },
+    {
+      "id": "price::0358",
+      "name_ar": "اختبار طفرة جينية في جين MTHFR بواسطة تفاعل البوليميراز المتسلسل",
+      "name_en": "MTHFR Genetic mutation by PCR",
+      "price": 1800.0,
+      "keys": [
+        "اختبار طفره جينيه في جين mthfr بواسطه تفاعل البوليميراز المتسلسل",
+        "mthfr genetic mutation by pcr"
+      ]
+    },
+    {
+      "id": "price::0359",
+      "name_ar": "تحليل الميوكوبوليسكاريدات في البول",
+      "name_en": "Mucopolysaccharides {BS}",
+      "price": 900.0,
+      "keys": [
+        "تحليل الميوكوبوليسكاريدات في البول",
+        "mucopolysaccharides bs"
+      ]
+    },
+    {
+      "id": "price::0360",
+      "name_ar": "فحص التصلب المتعدد 1 (تحديد الأشرطة الأوليغوكلونالية)",
+      "name_en": "Multiple Sclerosis Panal 1 (Oligoclonal Banding) {Q}",
+      "price": 1300.0,
+      "keys": [
+        "فحص التصلب المتعدد 1 تحديد الاشرطه الاوليغوكلوناليه",
+        "multiple sclerosis panal 1 oligoclonal banding q"
+      ]
+    },
+    {
+      "id": "price::0361",
+      "name_ar": "أجسام مضادة لفيروس النكاف (IgG)",
+      "name_en": "Mumps Virus Antibody (IgG)",
+      "price": 280.0,
+      "keys": [
+        "اجسام مضاده لفيروس النكاف igg",
+        "mumps virus antibody igg"
+      ]
+    },
+    {
+      "id": "price::0362",
+      "name_ar": "الأجسام المضادة لفيروس النكاف (IgM)",
+      "name_en": "Mumps Virus Antibody (IgM)",
+      "price": 280.0,
+      "keys": [
+        "الاجسام المضاده لفيروس النكاف igm",
+        "mumps virus antibody igm"
+      ]
+    },
+    {
+      "id": "price::0363",
+      "name_ar": "حمض الميكوفينوليك - كمية",
+      "name_en": "Mycophenolic Acid -{Q}",
+      "price": 1400.0,
+      "keys": [
+        "حمض الميكوفينوليك كميه",
+        "mycophenolic acid q"
+      ]
+    },
+    {
+      "id": "price::0364",
+      "name_ar": "الكشف عن ميكوبلازما الرئة بواسطة تفاعل البوليميراز المتسلسل (PCR)",
+      "name_en": "Mycoplasma Pneumonia by PCR {BM}",
+      "price": 2000.0,
+      "keys": [
+        "الكشف عن ميكوبلازما الرئه بواسطه تفاعل البوليميراز المتسلسل pcr",
+        "mycoplasma pneumonia by pcr bm"
+      ]
+    },
+    {
+      "id": "price::0365",
+      "name_ar": "الأجسام المضادة لميكوبلازما الرئة (IgG, IgM)",
+      "name_en": "Mycoplasma Pneumoniae Abs (IgG, IgM)",
+      "price": 800.0,
+      "keys": [
+        "الاجسام المضاده لميكوبلازما الرئه igg igm",
+        "mycoplasma pneumoniae abs igg igm"
+      ]
+    },
+    {
+      "id": "price::0366",
+      "name_ar": "البروتين الأساسي للغمد العصبي (CSF) - كمية",
+      "name_en": "Myelin Basic Protein (CSF) {Q}",
+      "price": 1600.0,
+      "keys": [
+        "البروتين الاساسي للغمد العصبي csf كميه",
+        "myelin basic protein csf q"
+      ]
+    },
+    {
+      "id": "price::0367",
+      "name_ar": "أجسام مضادة لبروتين المايلين الأساسي في الدم",
+      "name_en": "Myelin Basic Protein Abs {BS}",
+      "price": 1000.0,
+      "keys": [
+        "اجسام مضاده لبروتين المايلين الاساسي في الدم",
+        "myelin basic protein abs bs"
+      ]
+    },
+    {
+      "id": "price::0368",
+      "name_ar": "فحص الأظافر للكشف عن الفطريات",
+      "name_en": "Nail Examination For Fungi",
+      "price": 150.0,
+      "keys": [
+        "فحص الاظافر للكشف عن الفطريات",
+        "nail examination for fungi"
+      ]
+    },
+    {
+      "id": "price::0369",
+      "name_ar": "مسحة من البلعوم الأنفي للزراعة والفحص الميكروبي",
+      "name_en": "Nasopharyngeal Swab C/S",
+      "price": 150.0,
+      "keys": [
+        "مسحه من البلعوم الانفي للزراعه والفحص الميكروبي",
+        "nasopharyngeal swab c s"
+      ]
+    },
+    {
+      "id": "price::0370",
+      "name_ar": "إنزيم إنولاز النوع العصبي المحدد",
+      "name_en": "Neurone Specific Enolase (NSE )",
+      "price": 900.0,
+      "keys": [
+        "انزيم انولاز النوع العصبي المحدد",
+        "neurone specific enolase nse"
+      ]
+    },
+    {
+      "id": "price::0371",
+      "name_ar": "النيكوتين والقطينين في المصل (كمّي)",
+      "name_en": "Nicotine and Cotinine in Serum {Q}",
+      "price": 1333.0,
+      "keys": [
+        "النيكوتين والقطينين في المصل كمي",
+        "nicotine and cotinine in serum q"
+      ]
+    },
+    {
+      "id": "price::0372",
+      "name_ar": "اختبار نيفتي لتحديد جنس الجنين",
+      "name_en": "NIFTY® Gender",
+      "price": 599.0,
+      "keys": [
+        "اختبار نيفتي لتحديد جنس الجنين",
+        "nifty® gender"
+      ]
+    },
+    {
+      "id": "price::0373",
+      "name_ar": "فحص وزراعة إفرازات الحلمة",
+      "name_en": "Nipple Discharge Examination C/S",
+      "price": 150.0,
+      "keys": [
+        "فحص وزراعه افرازات الحلمه",
+        "nipple discharge examination c s"
+      ]
+    },
+    {
+      "id": "price::0374",
+      "name_ar": "فحص وتزرع إفرازات الحلمة (الجهة اليسرى)",
+      "name_en": "Nipple Discharge Examination C/S (Left)",
+      "price": 150.0,
+      "keys": [
+        "فحص وتزرع افرازات الحلمه الجهه اليسري",
+        "nipple discharge examination c s left"
+      ]
+    },
+    {
+      "id": "price::0375",
+      "name_ar": "تصنيف فيروس الورم الحليمي البشري غير الغازي بواسطة تفاعل البوليميراز المتسلسل الكمي",
+      "name_en": "Non-invasive HPV typing by qPCR",
+      "price": 700.0,
+      "keys": [
+        "تصنيف فيروس الورم الحليمي البشري غير الغازي بواسطه تفاعل البوليميراز المتسلسل الكمي",
+        "non invasive hpv typing by qpcr"
+      ]
+    },
+    {
+      "id": "price::0376",
+      "name_ar": "الفحص قبل الولادة غير الغازي",
+      "name_en": "Noninvasive prenatal testing (NIPT)",
+      "price": 825.0,
+      "keys": [
+        "الفحص قبل الولاده غير الغازي",
+        "noninvasive prenatal testing nipt"
+      ]
+    },
+    {
+      "id": "price::0377",
+      "name_ar": "الفحص قبل الولادة غير الغازي بلس",
+      "name_en": "Noninvasive prenatal testing (NIPT) plus",
+      "price": 1199.0,
+      "keys": [
+        "الفحص قبل الولاده غير الغازي بلس",
+        "noninvasive prenatal testing nipt plus"
+      ]
+    },
+    {
+      "id": "price::0378",
+      "name_ar": "فحص مسحة الأنف مع الزرع والحساسية",
+      "name_en": "Nose Swab Examination C/S",
+      "price": 150.0,
+      "keys": [
+        "فحص مسحه الانف مع الزرع والحساسيه",
+        "nose swab examination c s"
+      ]
+    },
+    {
+      "id": "price::0379",
+      "name_ar": "اختبار NT-proBNP",
+      "name_en": "NT - proBNP",
+      "price": 39.0,
+      "keys": [
+        "اختبار nt probnp",
+        "nt probnp"
+      ]
+    },
+    {
+      "id": "price::0380",
+      "name_ar": "اختبار الدم الخفي في البراز",
+      "name_en": "Occult Blood In Stool",
+      "price": 150.0,
+      "keys": [
+        "اختبار الدم الخفي في البراز",
+        "occult blood in stool"
+      ]
+    },
+    {
+      "id": "price::0381",
+      "name_ar": "تحليل أحماض أوميغا-3 وأوميغا-6 الدهنية",
+      "name_en": "Omega-3&-6 Fatty Acids",
+      "price": 500.0,
+      "keys": [
+        "تحليل احماض اوميغا 3 واوميغا 6 الدهنيه",
+        "omega 3 6 fatty acids"
+      ]
+    },
+    {
+      "id": "price::0382",
+      "name_ar": "فحص الأحماض العضوية النوعي في البول",
+      "name_en": "Organic Acid Screening ( Qualitative) in urine -{BS}",
+      "price": 1800.0,
+      "keys": [
+        "فحص الاحماض العضويه النوعي في البول",
+        "organic acid screening qualitative in urine bs"
+      ]
+    },
+    {
+      "id": "price::0383",
+      "name_ar": "تحليل هشاشة الخلايا في المحلول الملحي",
+      "name_en": "Osmotic Fragility (Fresh)",
+      "price": 200.0,
+      "keys": [
+        "تحليل هشاشه الخلايا في المحلول الملحي",
+        "osmotic fragility fresh"
+      ]
+    },
+    {
+      "id": "price::0384",
+      "name_ar": "أوستيوكالسين",
+      "name_en": "Osteocalcin",
+      "price": 320.0,
+      "keys": [
+        "اوستيوكالسين",
+        "osteocalcin"
+      ]
+    },
+    {
+      "id": "price::0385",
+      "name_ar": "أوكسالات في البول",
+      "name_en": "Oxalates In Urine",
+      "price": 700.0,
+      "keys": [
+        "اوكسالات في البول",
+        "oxalates in urine"
+      ]
+    },
+    {
+      "id": "price::0386",
+      "name_ar": "باراسيتامول - كمية",
+      "name_en": "Paracetamol -{Q}",
+      "price": 750.0,
+      "keys": [
+        "باراسيتامول كميه",
+        "paracetamol q"
+      ]
+    },
+    {
+      "id": "price::0387",
+      "name_ar": "هرمون الغدة الجار درقية",
+      "name_en": "Parathyroid Hormone (PTH)",
+      "price": 100.0,
+      "keys": [
+        "هرمون الغده الجار درقيه",
+        "parathyroid hormone pth"
+      ]
+    },
+    {
+      "id": "price::0388",
+      "name_ar": "زمن الثرومبوبلاستين الجزئي",
+      "name_en": "Partial Thromboplastin Time (PTT)",
+      "price": 39.0,
+      "keys": [
+        "زمن الثرومبوبلاستين الجزئي",
+        "partial thromboplastin time ptt"
+      ]
+    },
+    {
+      "id": "price::0389",
+      "name_ar": "الأجسام المضادة لفيروس بارفو B19 (IgG و IgM)",
+      "name_en": "Parvovirus B19 Abs (IgG&IgM)",
+      "price": 800.0,
+      "keys": [
+        "الاجسام المضاده لفيروس بارفو b19 igg و igm",
+        "parvovirus b19 abs igg igm"
+      ]
+    },
+    {
+      "id": "price::0390",
+      "name_ar": "استشارة فيلم الدم المحيطي",
+      "name_en": "Peripheral Blood Film Consultation",
+      "price": 90.0,
+      "keys": [
+        "استشاره فيلم الدم المحيطي",
+        "peripheral blood film consultation"
+      ]
+    },
+    {
+      "id": "price::0391",
+      "name_ar": "زرع وسرعة استجابة سائل البريتون",
+      "name_en": "Peritoneal Fluid C/S",
+      "price": 150.0,
+      "keys": [
+        "زرع وسرعه استجابه سائل البريتون",
+        "peritoneal fluid c s"
+      ]
+    },
+    {
+      "id": "price::0392",
+      "name_ar": "فينوباربيتون",
+      "name_en": "Phenobarbitone",
+      "price": 480.0,
+      "keys": [
+        "فينوباربيتون",
+        "phenobarbitone"
+      ]
+    },
+    {
+      "id": "price::0393",
+      "name_ar": "فينيتوين (إبانوتين)",
+      "name_en": "Phenytoin (Epanutin)",
+      "price": 480.0,
+      "keys": [
+        "فينيتوين ابانوتين",
+        "phenytoin epanutin"
+      ]
+    },
+    {
+      "id": "price::0394",
+      "name_ar": "الفوسفور في الدم",
+      "name_en": "Phosphrous (P) in Serum",
+      "price": 39.0,
+      "keys": [
+        "الفوسفور في الدم",
+        "phosphrous p in serum"
+      ]
+    },
+    {
+      "id": "price::0395",
+      "name_ar": "رينين البلازما (مباشر)",
+      "name_en": "Plasma Renin ( Direct )",
+      "price": 150.0,
+      "keys": [
+        "رينين البلازما مباشر",
+        "plasma renin direct"
+      ]
+    },
+    {
+      "id": "price::0396",
+      "name_ar": "مثبط منشط البلازمينوجين",
+      "name_en": "Plasminogen activator inhibitor -{BS}",
+      "price": 2400.0,
+      "keys": [
+        "مثبط منشط البلازمينوجين",
+        "plasminogen activator inhibitor bs"
+      ]
+    },
+    {
+      "id": "price::0397",
+      "name_ar": "أجسام مضادة ضد الصفائح الدموية (IgG) بواسطة التدفق الخلوي",
+      "name_en": "Platelet Ab –Direct (IgG) by Flowcytometry {Q}",
+      "price": 1400.0,
+      "keys": [
+        "اجسام مضاده ضد الصفائح الدمويه igg بواسطه التدفق الخلوي",
+        "platelet ab direct igg by flowcytometry q"
+      ]
+    },
+    {
+      "id": "price::0398",
+      "name_ar": "عدد الصفائح الدموية",
+      "name_en": "Platelet Count",
+      "price": 39.0,
+      "keys": [
+        "عدد الصفائح الدمويه",
+        "platelet count"
+      ]
+    },
+    {
+      "id": "price::0399",
+      "name_ar": "زرع وسرعة نمو السائل الجنبي",
+      "name_en": "Pleural Fluid C/S",
+      "price": 150.0,
+      "keys": [
+        "زرع وسرعه نمو السائل الجنبي",
+        "pleural fluid c s"
+      ]
+    },
+    {
+      "id": "price::0400",
+      "name_ar": "البورفيرينات في كريات الدم الحمراء (حرة)",
+      "name_en": "Porphyrins in Erythrocytes (Free) -{BS}",
+      "price": 1200.0,
+      "keys": [
+        "البورفيرينات في كريات الدم الحمراء حره",
+        "porphyrins in erythrocytes free bs"
+      ]
+    },
+    {
+      "id": "price::0401",
+      "name_ar": "البورفيرينات في البول",
+      "name_en": "Porphyrins in Urine -{Q}",
+      "price": 1600.0,
+      "keys": [
+        "البورفيرينات في البول",
+        "porphyrins in urine q"
+      ]
+    },
+    {
+      "id": "price::0402",
+      "name_ar": "البوتاسيوم في الدم",
+      "name_en": "Potassium (K) in Serum",
+      "price": 39.0,
+      "keys": [
+        "البوتاسيوم في الدم",
+        "potassium k in serum"
+      ]
+    },
+    {
+      "id": "price::0403",
+      "name_ar": "البوتاسيوم في البول",
+      "name_en": "Potassium (K) in Urine",
+      "price": 50.0,
+      "keys": [
+        "البوتاسيوم في البول",
+        "potassium k in urine"
+      ]
+    },
+    {
+      "id": "price::0404",
+      "name_ar": "البري ألبومين",
+      "name_en": "Prealbumin",
+      "price": 917.0,
+      "keys": [
+        "البري البومين",
+        "prealbumin"
+      ]
+    },
+    {
+      "id": "price::0405",
+      "name_ar": "اختبار الحمل",
+      "name_en": "Pregnancy Test",
+      "price": 39.0,
+      "keys": [
+        "اختبار الحمل",
+        "pregnancy test"
+      ]
+    },
+    {
+      "id": "price::0406",
+      "name_ar": "بروكالسيتونين",
+      "name_en": "Procalcitonin",
+      "price": 300.0,
+      "keys": [
+        "بروكالسيتونين",
+        "procalcitonin"
+      ]
+    },
+    {
+      "id": "price::0407",
+      "name_ar": "بروكولاجين النوع الأول (كمّي)",
+      "name_en": "Procollagen I {Q}",
+      "price": 600.0,
+      "keys": [
+        "بروكولاجين النوع الاول كمي",
+        "procollagen i q"
+      ]
+    },
+    {
+      "id": "price::0408",
+      "name_ar": "بروكولاجين النوع الثالث ببتيد",
+      "name_en": "Procollagen III Peptide -{BS}",
+      "price": 1200.0,
+      "keys": [
+        "بروكولاجين النوع الثالث ببتيد",
+        "procollagen iii peptide bs"
+      ]
+    },
+    {
+      "id": "price::0409",
+      "name_ar": "البروجستيرون",
+      "name_en": "Progesterone",
+      "price": 39.0,
+      "keys": [
+        "البروجستيرون",
+        "progesterone"
+      ]
+    },
+    {
+      "id": "price::0410",
+      "name_ar": "بروإنسولين",
+      "name_en": "Proinsulin",
+      "price": 2400.0,
+      "keys": [
+        "بروانسولين",
+        "proinsulin"
+      ]
+    },
+    {
+      "id": "price::0411",
+      "name_ar": "البرولاكتين",
+      "name_en": "Prolactin",
+      "price": 39.0,
+      "keys": [
+        "البرولاكتين",
+        "prolactin"
+      ]
+    },
+    {
+      "id": "price::0412",
+      "name_ar": "زرع سائل البروستاتا",
+      "name_en": "Prostatic Fluid C/S",
+      "price": 150.0,
+      "keys": [
+        "زرع سائل البروستاتا",
+        "prostatic fluid c s"
+      ]
+    },
+    {
+      "id": "price::0413",
+      "name_ar": "فحص سائل البروستاتا",
+      "name_en": "Prostatic Fluid Examination",
+      "price": 150.0,
+      "keys": [
+        "فحص سائل البروستاتا",
+        "prostatic fluid examination"
+      ]
+    },
+    {
+      "id": "price::0414",
+      "name_ar": "مستضد البروستاتا النوعي الحر (PSA الحر)",
+      "name_en": "Prostatic Specific Antigen (PSA) Free",
+      "price": 39.0,
+      "keys": [
+        "مستضد البروستاتا النوعي الحر psa الحر",
+        "prostatic specific antigen psa free"
+      ]
+    },
+    {
+      "id": "price::0415",
+      "name_ar": "مستضد البروستاتا النوعي الكلي",
+      "name_en": "Prostatic Specific Antigen (PSA) Total",
+      "price": 39.0,
+      "keys": [
+        "مستضد البروستاتا النوعي الكلي",
+        "prostatic specific antigen psa total"
+      ]
+    },
+    {
+      "id": "price::0416",
+      "name_ar": "نشاط البروتين C",
+      "name_en": "Protein C Activity",
+      "price": 500.0,
+      "keys": [
+        "نشاط البروتين c",
+        "protein c activity"
+      ]
+    },
+    {
+      "id": "price::0417",
+      "name_ar": "مستضد البروتين C",
+      "name_en": "Protein C Antigen",
+      "price": 550.0,
+      "keys": [
+        "مستضد البروتين c",
+        "protein c antigen"
+      ]
+    },
+    {
+      "id": "price::0418",
+      "name_ar": "رحلان البروتينات الكهربائي",
+      "name_en": "Protein Electrophoresis",
+      "price": 200.0,
+      "keys": [
+        "رحلان البروتينات الكهربائي",
+        "protein electrophoresis"
+      ]
+    },
+    {
+      "id": "price::0419",
+      "name_ar": "نشاط بروتين S",
+      "name_en": "Protein S Activity",
+      "price": 500.0,
+      "keys": [
+        "نشاط بروتين s",
+        "protein s activity"
+      ]
+    },
+    {
+      "id": "price::0420",
+      "name_ar": "مستضد بروتين S الحر",
+      "name_en": "Protein S Antigen Free",
+      "price": 250.0,
+      "keys": [
+        "مستضد بروتين s الحر",
+        "protein s antigen free"
+      ]
+    },
+    {
+      "id": "price::0421",
+      "name_ar": "مستضد بروتين S الكلي",
+      "name_en": "Protein S Antigen Total",
+      "price": 500.0,
+      "keys": [
+        "مستضد بروتين s الكلي",
+        "protein s antigen total"
+      ]
+    },
+    {
+      "id": "price::0422",
+      "name_ar": "زمن البروثرومبين",
+      "name_en": "Prothrombin Time (PT)",
+      "price": 39.0,
+      "keys": [
+        "زمن البروثرومبين",
+        "prothrombin time pt"
+      ]
+    },
+    {
+      "id": "price::0423",
+      "name_ar": "فحص الصديد وزراعة الحساسية",
+      "name_en": "Pus Examination C/S",
+      "price": 150.0,
+      "keys": [
+        "فحص الصديد وزراعه الحساسيه",
+        "pus examination c s"
+      ]
+    },
+    {
+      "id": "price::0424",
+      "name_ar": "نشاط بيروفات كيناز (PK) في الدم",
+      "name_en": "Pyruvate Kinase (PK) Activity {BS}",
+      "price": 1000.0,
+      "keys": [
+        "نشاط بيروفات كيناز pk في الدم",
+        "pyruvate kinase pk activity bs"
+      ]
+    },
+    {
+      "id": "price::0425",
+      "name_ar": "اختبار كوانتيفرون - الذهب بلس للكشف عن السل",
+      "name_en": "Quantiferon - TB Gold Plus Test",
+      "price": 900.0,
+      "keys": [
+        "اختبار كوانتيفرون الذهب بلس للكشف عن السل",
+        "quantiferon tb gold plus test"
+      ]
+    },
+    {
+      "id": "price::0426",
+      "name_ar": "المواد المختزلة في البراز",
+      "name_en": "Reducing Substance in Stool",
+      "price": 150.0,
+      "keys": [
+        "المواد المختزله في البراز",
+        "reducing substance in stool"
+      ]
+    },
+    {
+      "id": "price::0427",
+      "name_ar": "المواد المختزلة في البول",
+      "name_en": "Reducing Substance in Urine",
+      "price": 150.0,
+      "keys": [
+        "المواد المختزله في البول",
+        "reducing substance in urine"
+      ]
+    },
+    {
+      "id": "price::0428",
+      "name_ar": "الأجسام المضادة لفيروس الجهاز التنفسي المخلوي (RSV)",
+      "name_en": "Respiratory Syncitial Virus (RSV) Abs",
+      "price": 800.0,
+      "keys": [
+        "الاجسام المضاده لفيروس الجهاز التنفسي المخلوي rsv",
+        "respiratory syncitial virus rsv abs"
+      ]
+    },
+    {
+      "id": "price::0429",
+      "name_ar": "عدد الخلايا الشبكية",
+      "name_en": "Reticulocyte Count",
+      "price": 39.0,
+      "keys": [
+        "عدد الخلايا الشبكيه",
+        "reticulocyte count"
+      ]
+    },
+    {
+      "id": "price::0430",
+      "name_ar": "عامل الروماتويد (كمّي)",
+      "name_en": "Rheumatoid Factor (quantitative)",
+      "price": 39.0,
+      "keys": [
+        "عامل الروماتويد كمي",
+        "rheumatoid factor quantitative"
+      ]
+    },
+    {
+      "id": "price::0431",
+      "name_ar": "ريفوتريل (كلونازيبام) - كمية",
+      "name_en": "Rivotril (Clonazepam) -{Q}",
+      "price": 1800.0,
+      "keys": [
+        "ريفوتريل كلونازيبام كميه",
+        "rivotril clonazepam q"
+      ]
+    },
+    {
+      "id": "price::0432",
+      "name_ar": "مستضد فيروس الروتا",
+      "name_en": "Rotavirus Antigen",
+      "price": 320.0,
+      "keys": [
+        "مستضد فيروس الروتا",
+        "rotavirus antigen"
+      ]
+    },
+    {
+      "id": "price::0433",
+      "name_ar": "اختبار البلازما السريعة (RPR)",
+      "name_en": "RPR",
+      "price": 100.0,
+      "keys": [
+        "اختبار البلازما السريعه rpr",
+        "rpr"
+      ]
+    },
+    {
+      "id": "price::0434",
+      "name_ar": "حصبة ألمانية (IgG)",
+      "name_en": "Rubella (IgG)",
+      "price": 100.0,
+      "keys": [
+        "حصبه المانيه igg",
+        "rubella igg"
+      ]
+    },
+    {
+      "id": "price::0435",
+      "name_ar": "حصبة ألمانية (IgM)",
+      "name_en": "Rubella (IgM)",
+      "price": 100.0,
+      "keys": [
+        "حصبه المانيه igm",
+        "rubella igm"
+      ]
+    },
+    {
+      "id": "price::0436",
+      "name_ar": "أجسام مضادة للتصلب الجلدي (Anti scl70)",
+      "name_en": "Scleroderma antibody (Anti scl70)",
+      "price": 480.0,
+      "keys": [
+        "اجسام مضاده للتصلب الجلدي anti scl70",
+        "scleroderma antibody anti scl70"
+      ]
+    },
+    {
+      "id": "price::0437",
+      "name_ar": "السيلينيوم في المصل / البلازما",
+      "name_en": "Selenium in Serum / Plasma",
+      "price": 1080.0,
+      "keys": [
+        "السيلينيوم في المصل البلازما",
+        "selenium in serum plasma"
+      ]
+    },
+    {
+      "id": "price::0438",
+      "name_ar": "ألفا جلوكوزيداز في السائل المنوي",
+      "name_en": "Semen Alpha Glucosidase {BM}",
+      "price": 600.0,
+      "keys": [
+        "الفا جلوكوزيداز في السائل المنوي",
+        "semen alpha glucosidase bm"
+      ]
+    },
+    {
+      "id": "price::0439",
+      "name_ar": "زرع السائل المنوي",
+      "name_en": "Semen Culture",
+      "price": 150.0,
+      "keys": [
+        "زرع السائل المنوي",
+        "semen culture"
+      ]
+    },
+    {
+      "id": "price::0440",
+      "name_ar": "فحص السائل المنوي",
+      "name_en": "Semen Examination",
+      "price": 150.0,
+      "keys": [
+        "فحص السائل المنوي",
+        "semen examination"
+      ]
+    },
+    {
+      "id": "price::0441",
+      "name_ar": "تحليل الفركتوز في السائل المنوي - كمي",
+      "name_en": "Semen Fructose - {Q}",
+      "price": 600.0,
+      "keys": [
+        "تحليل الفركتوز في السائل المنوي كمي",
+        "semen fructose q"
+      ]
+    },
+    {
+      "id": "price::0442",
+      "name_ar": "مستوى السيروتونين في الدم",
+      "name_en": "Serotonin in Blood {BS}",
+      "price": 1400.0,
+      "keys": [
+        "مستوي السيروتونين في الدم",
+        "serotonin in blood bs"
+      ]
+    },
+    {
+      "id": "price::0443",
+      "name_ar": "الأسمولية في المصل",
+      "name_en": "Serum Osmolality",
+      "price": 800.0,
+      "keys": [
+        "الاسموليه في المصل",
+        "serum osmolality"
+      ]
+    },
+    {
+      "id": "price::0444",
+      "name_ar": "الجلوبيولين الرابط للهرمونات الجنسية",
+      "name_en": "Sex Hormone Binding Globulin (SHBG)",
+      "price": 150.0,
+      "keys": [
+        "الجلوبيولين الرابط للهرمونات الجنسيه",
+        "sex hormone binding globulin shbg"
+      ]
+    },
+    {
+      "id": "price::0445",
+      "name_ar": "اختبار ذوبان خلايا الدم المنجلية",
+      "name_en": "Sickle Cell Solubility Test",
+      "price": 39.0,
+      "keys": [
+        "اختبار ذوبان خلايا الدم المنجليه",
+        "sickle cell solubility test"
+      ]
+    },
+    {
+      "id": "price::0446",
+      "name_ar": "الفضة في المصل/البلازما {كمية}",
+      "name_en": "Silver, Serum/Plasma {Q}",
+      "price": 1600.0,
+      "keys": [
+        "الفضه في المصل البلازما كميه",
+        "silver serum plasma q"
+      ]
+    },
+    {
+      "id": "price::0447",
+      "name_ar": "اختبار جيني فردي بواسطة تفاعل البوليميراز المتسلسل الكمي",
+      "name_en": "Single Gene Testing by qPCR",
+      "price": 1000.0,
+      "keys": [
+        "اختبار جيني فردي بواسطه تفاعل البوليميراز المتسلسل الكمي",
+        "single gene testing by qpcr"
+      ]
+    },
+    {
+      "id": "price::0448",
+      "name_ar": "اختبار جيني فردي بواسطة تسلسل سانجر (طفرة واحدة)",
+      "name_en": "Single Gene Testing by Sanger (Single Mutation)",
+      "price": 1000.0,
+      "keys": [
+        "اختبار جيني فردي بواسطه تسلسل سانجر طفره واحده",
+        "single gene testing by sanger single mutation"
+      ]
+    },
+    {
+      "id": "price::0449",
+      "name_ar": "تحليل ضمور العضلات الشوكي باستخدام MLPA",
+      "name_en": "SMA (Spinal Muscular Atrophy) by MLPA",
+      "price": 2000.0,
+      "keys": [
+        "تحليل ضمور العضلات الشوكي باستخدام mlpa",
+        "sma spinal muscular atrophy by mlpa"
+      ]
+    },
+    {
+      "id": "price::0450",
+      "name_ar": "مسحة للكشف عن الليشمانيا",
+      "name_en": "Smear for Leishmania detection",
+      "price": 200.0,
+      "keys": [
+        "مسحه للكشف عن الليشمانيا",
+        "smear for leishmania detection"
+      ]
+    },
+    {
+      "id": "price::0451",
+      "name_ar": "الصوديوم في الدم",
+      "name_en": "Sodium (Na) in Serum",
+      "price": 39.0,
+      "keys": [
+        "الصوديوم في الدم",
+        "sodium na in serum"
+      ]
+    },
+    {
+      "id": "price::0452",
+      "name_ar": "تحليل الصوديوم في البول",
+      "name_en": "Sodium (Na) in Urine",
+      "price": 39.0,
+      "keys": [
+        "تحليل الصوديوم في البول",
+        "sodium na in urine"
+      ]
+    },
+    {
+      "id": "price::0453",
+      "name_ar": "الأجسام المضادة لمستضد الكبد الذائب - كمية",
+      "name_en": "Soluble Liver Antigen Autoantibody -{Q}",
+      "price": 640.0,
+      "keys": [
+        "الاجسام المضاده لمستضد الكبد الذائب كميه",
+        "soluble liver antigen autoantibody q"
+      ]
+    },
+    {
+      "id": "price::0454",
+      "name_ar": "زرع وحساسية البلغم",
+      "name_en": "Sputum C/S",
+      "price": 150.0,
+      "keys": [
+        "زرع وحساسيه البلغم",
+        "sputum c s"
+      ]
+    },
+    {
+      "id": "price::0455",
+      "name_ar": "فحص البلغم",
+      "name_en": "Sputum Examination",
+      "price": 150.0,
+      "keys": [
+        "فحص البلغم",
+        "sputum examination"
+      ]
+    },
+    {
+      "id": "price::0456",
+      "name_ar": "فحص البلغم مع الزرع والحساسية",
+      "name_en": "Sputum Examination C/S",
+      "price": 150.0,
+      "keys": [
+        "فحص البلغم مع الزرع والحساسيه",
+        "sputum examination c s"
+      ]
+    },
+    {
+      "id": "price::0457",
+      "name_ar": "زرع البراز",
+      "name_en": "Stool Culture",
+      "price": 150.0,
+      "keys": [
+        "زرع البراز",
+        "stool culture"
+      ]
+    },
+    {
+      "id": "price::0458",
+      "name_ar": "فحص البراز",
+      "name_en": "Stool Examination",
+      "price": 50.0,
+      "keys": [
+        "فحص البراز",
+        "stool examination"
+      ]
+    },
+    {
+      "id": "price::0459",
+      "name_ar": "اختبار السلفونيل يوريا",
+      "name_en": "Sulfonylurea {BM}",
+      "price": 3200.0,
+      "keys": [
+        "اختبار السلفونيل يوريا",
+        "sulfonylurea bm"
+      ]
+    },
+    {
+      "id": "price::0460",
+      "name_ar": "زرع ومسحة الحساسية",
+      "name_en": "Swab Culture& Sensitivity",
+      "price": 150.0,
+      "keys": [
+        "زرع ومسحه الحساسيه",
+        "swab culture sensitivity"
+      ]
+    },
+    {
+      "id": "price::0461",
+      "name_ar": "زرع سائل المفصل وحساسيته",
+      "name_en": "Synovial Fluid C/S",
+      "price": 150.0,
+      "keys": [
+        "زرع سائل المفصل وحساسيته",
+        "synovial fluid c s"
+      ]
+    },
+    {
+      "id": "price::0462",
+      "name_ar": "فحص سائل المفصل",
+      "name_en": "Synovial Fluid Examination",
+      "price": 400.0,
+      "keys": [
+        "فحص سائل المفصل",
+        "synovial fluid examination"
+      ]
+    },
+    {
+      "id": "price::0463",
+      "name_ar": "اختبار كمية الزهري",
+      "name_en": "Syphilis Quantitative",
+      "price": 100.0,
+      "keys": [
+        "اختبار كميه الزهري",
+        "syphilis quantitative"
+      ]
+    },
+    {
+      "id": "price::0464",
+      "name_ar": "فحص الأجسام المضادة لمرض الزهري (FTA)",
+      "name_en": "Syphilis Screen (FTA) Abs -{Q}",
+      "price": 800.0,
+      "keys": [
+        "فحص الاجسام المضاده لمرض الزهري fta",
+        "syphilis screen fta abs q"
+      ]
+    },
+    {
+      "id": "price::0465",
+      "name_ar": "هرمون ثلاثي يود الثيرونين (T3)",
+      "name_en": "T3",
+      "price": 39.0,
+      "keys": [
+        "هرمون ثلاثي يود الثيرونين t3",
+        "t3"
+      ]
+    },
+    {
+      "id": "price::0466",
+      "name_ar": "هرمون الثيروكسين (T4)",
+      "name_en": "T4",
+      "price": 39.0,
+      "keys": [
+        "هرمون الثيروكسين t4",
+        "t4"
+      ]
+    },
+    {
+      "id": "price::0467",
+      "name_ar": "هرمون الثيروكسين الحر (Free T4)",
+      "name_en": "T4 (Free)",
+      "price": 39.0,
+      "keys": [
+        "هرمون الثيروكسين الحر free t4",
+        "t4 free"
+      ]
+    },
+    {
+      "id": "price::0468",
+      "name_ar": "مستوى تاكروليموس (FK506)",
+      "name_en": "Tacrolimus (FK506) {Q}",
+      "price": 2000.0,
+      "keys": [
+        "مستوي تاكروليموس fk506",
+        "tacrolimus fk506 q"
+      ]
+    },
+    {
+      "id": "price::0469",
+      "name_ar": "فيلم السل (البكتيريا المتفطرة الحمضية)",
+      "name_en": "TB (AFB) Film",
+      "price": 100.0,
+      "keys": [
+        "فيلم السل البكتيريا المتفطره الحمضيه",
+        "tb afb film"
+      ]
+    },
+    {
+      "id": "price::0470",
+      "name_ar": "هرمون التستوستيرون الحر",
+      "name_en": "Testosterone (Free)",
+      "price": 39.0,
+      "keys": [
+        "هرمون التستوستيرون الحر",
+        "testosterone free"
+      ]
+    },
+    {
+      "id": "price::0471",
+      "name_ar": "ثيوفيلين",
+      "name_en": "Theophylline",
+      "price": 680.0,
+      "keys": [
+        "ثيوفيلين",
+        "theophylline"
+      ]
+    },
+    {
+      "id": "price::0472",
+      "name_ar": "فحص مسحة الحلق مع الزرع والحساسية",
+      "name_en": "Throat Swab Examination, C/S",
+      "price": 150.0,
+      "keys": [
+        "فحص مسحه الحلق مع الزرع والحساسيه",
+        "throat swab examination c s"
+      ]
+    },
+    {
+      "id": "price::0473",
+      "name_ar": "زمن الثرومبين",
+      "name_en": "Thrombin Time",
+      "price": 200.0,
+      "keys": [
+        "زمن الثرومبين",
+        "thrombin time"
+      ]
+    },
+    {
+      "id": "price::0474",
+      "name_ar": "ثيروغلوبولين",
+      "name_en": "Thyroglobulin",
+      "price": 50.0,
+      "keys": [
+        "ثيروغلوبولين",
+        "thyroglobulin"
+      ]
+    },
+    {
+      "id": "price::0475",
+      "name_ar": "الهرمون المحفز للغدة الدرقية",
+      "name_en": "Thyroid Stimulating Hormone (TSH)",
+      "price": 39.0,
+      "keys": [
+        "الهرمون المحفز للغده الدرقيه",
+        "thyroid stimulating hormone tsh"
+      ]
+    },
+    {
+      "id": "price::0476",
+      "name_ar": "الجلوبيولين الرابط للثيروكسين (TBG)",
+      "name_en": "Thyroxine Binding Globulin (TBG) - {Q}",
+      "price": 1600.0,
+      "keys": [
+        "الجلوبيولين الرابط للثيروكسين tbg",
+        "thyroxine binding globulin tbg q"
+      ]
+    },
+    {
+      "id": "price::0477",
+      "name_ar": "المنشط البلازمي للنسيج (TPA)",
+      "name_en": "Tissue Plasminogen Activator (TPA)",
+      "price": 1600.0,
+      "keys": [
+        "المنشط البلازمي للنسيج tpa",
+        "tissue plasminogen activator tpa"
+      ]
+    },
+    {
+      "id": "price::0478",
+      "name_ar": "توبيراميت (توبرا ماكس)",
+      "name_en": "Topiramate (Topramax)",
+      "price": 2400.0,
+      "keys": [
+        "توبيراميت توبرا ماكس",
+        "topiramate topramax"
+      ]
+    },
+    {
+      "id": "price::0479",
+      "name_ar": "السعة الكلية لربط الحديد",
+      "name_en": "Total Iron Binding Capacity (TIBC)",
+      "price": 39.0,
+      "keys": [
+        "السعه الكليه لربط الحديد",
+        "total iron binding capacity tibc"
+      ]
+    },
+    {
+      "id": "price::0480",
+      "name_ar": "البروتين الكلي في الدم",
+      "name_en": "Total Protein in Serum",
+      "price": 39.0,
+      "keys": [
+        "البروتين الكلي في الدم",
+        "total protein in serum"
+      ]
+    },
+    {
+      "id": "price::0481",
+      "name_ar": "إجمالي البروتين في البول",
+      "name_en": "Total Protein in urine",
+      "price": 50.0,
+      "keys": [
+        "اجمالي البروتين في البول",
+        "total protein in urine"
+      ]
+    },
+    {
+      "id": "price::0482",
+      "name_ar": "التحاليل المصلية للتوكسوكاريازيس",
+      "name_en": "Toxocariasis serology",
+      "price": 1200.0,
+      "keys": [
+        "التحاليل المصليه للتوكسوكاريازيس",
+        "toxocariasis serology"
+      ]
+    },
+    {
+      "id": "price::0483",
+      "name_ar": "الأجسام المضادة توكسوبلازما IgG",
+      "name_en": "Toxoplasma (IgG)",
+      "price": 100.0,
+      "keys": [
+        "الاجسام المضاده توكسوبلازما igg",
+        "toxoplasma igg"
+      ]
+    },
+    {
+      "id": "price::0484",
+      "name_ar": "الأجسام المضادة توكسوبلازما IgM",
+      "name_en": "Toxoplasma (IgM)",
+      "price": 100.0,
+      "keys": [
+        "الاجسام المضاده توكسوبلازما igm",
+        "toxoplasma igm"
+      ]
+    },
+    {
+      "id": "price::0485",
+      "name_ar": "قوة ارتباط الأجسام المضادة توكسوبلازما IgG",
+      "name_en": "Toxoplasmosis Antibody Avidity IgG {BS}",
+      "price": 1000.0,
+      "keys": [
+        "قوه ارتباط الاجسام المضاده توكسوبلازما igg",
+        "toxoplasmosis antibody avidity igg bs"
+      ]
+    },
+    {
+      "id": "price::0486",
+      "name_ar": "الترانسفيرين",
+      "name_en": "Transferrin",
+      "price": 200.0,
+      "keys": [
+        "الترانسفيرين",
+        "transferrin"
+      ]
+    },
+    {
+      "id": "price::0487",
+      "name_ar": "نسبة تشبع الترانسفيرين",
+      "name_en": "Transferrin Saturation Ratio",
+      "price": 100.0,
+      "keys": [
+        "نسبه تشبع الترانسفيرين",
+        "transferrin saturation ratio"
+      ]
+    },
+    {
+      "id": "price::0488",
+      "name_ar": "تحليل تريبونيما باليدوم (TPHA) النوعي",
+      "name_en": "Treponema Pallidum (TPHA) (qualitative)",
+      "price": 100.0,
+      "keys": [
+        "تحليل تريبونيما باليدوم tpha النوعي",
+        "treponema pallidum tpha qualitative"
+      ]
+    },
+    {
+      "id": "price::0489",
+      "name_ar": "تحليل تريبونيما باليدوم (TPHA) العيار",
+      "name_en": "Treponema Pallidum (TPHA) (titer)",
+      "price": 100.0,
+      "keys": [
+        "تحليل تريبونيما باليدوم tpha العيار",
+        "treponema pallidum tpha titer"
+      ]
+    },
+    {
+      "id": "price::0490",
+      "name_ar": "الدهون الثلاثية",
+      "name_en": "Triglycerides (TG) in Serum",
+      "price": 39.0,
+      "keys": [
+        "الدهون الثلاثيه",
+        "triglycerides tg in serum"
+      ]
+    },
+    {
+      "id": "price::0491",
+      "name_ar": "اختبار العلامات الثلاثي النوعي",
+      "name_en": "Triple Marker Test -{Q}",
+      "price": 1800.0,
+      "keys": [
+        "اختبار العلامات الثلاثي النوعي",
+        "triple marker test q"
+      ]
+    },
+    {
+      "id": "price::0492",
+      "name_ar": "تروبونين I",
+      "name_en": "Troponin I",
+      "price": 100.0,
+      "keys": [
+        "تروبونين i",
+        "troponin i"
+      ]
+    },
+    {
+      "id": "price::0493",
+      "name_ar": "تريبتاز - كمية",
+      "name_en": "Tryptase -{Q}",
+      "price": 900.0,
+      "keys": [
+        "تريبتاز كميه",
+        "tryptase q"
+      ]
+    },
+    {
+      "id": "price::0494",
+      "name_ar": "الجلوبيولينات المناعية المحفزة للغدة الدرقية",
+      "name_en": "TSI (thyroid stimulating immunoglobulin)",
+      "price": 500.0,
+      "keys": [
+        "الجلوبيولينات المناعيه المحفزه للغده الدرقيه",
+        "tsi thyroid stimulating immunoglobulin"
+      ]
+    },
+    {
+      "id": "price::0495",
+      "name_ar": "تفاعل البوليميراز المتسلسل لمجموعة السل - نسيج - كمية",
+      "name_en": "Tuberculosis Complex PCR - Tissue-{Q}",
+      "price": 1500.0,
+      "keys": [
+        "تفاعل البوليميراز المتسلسل لمجموعه السل نسيج كميه",
+        "tuberculosis complex pcr tissue q"
+      ]
+    },
+    {
+      "id": "price::0496",
+      "name_ar": "عامل نخر الورم",
+      "name_en": "Tumor Necrosis Factor (TNF)",
+      "price": 1600.0,
+      "keys": [
+        "عامل نخر الورم",
+        "tumor necrosis factor tnf"
+      ]
+    },
+    {
+      "id": "price::0497",
+      "name_ar": "اليوريا في الدم",
+      "name_en": "Urea in Serum",
+      "price": 39.0,
+      "keys": [
+        "اليوريا في الدم",
+        "urea in serum"
+      ]
+    },
+    {
+      "id": "price::0498",
+      "name_ar": "اليوريا في مصل الدم قبل الغسيل الكلوي",
+      "name_en": "Urea in Serum Pre-Dialysis",
+      "price": 39.0,
+      "keys": [
+        "اليوريا في مصل الدم قبل الغسيل الكلوي",
+        "urea in serum pre dialysis"
+      ]
+    },
+    {
+      "id": "price::0499",
+      "name_ar": "نيتروجين اليوريا في بول 24 ساعة",
+      "name_en": "Urea Nitrogen, 24-Hour Urine",
+      "price": 60.0,
+      "keys": [
+        "نيتروجين اليوريا في بول 24 ساعه",
+        "urea nitrogen 24 hour urine"
+      ]
+    },
+    {
+      "id": "price::0500",
+      "name_ar": "فحص وزراعة إفرازات الإحليل",
+      "name_en": "Urethral Discharge Examination C/S",
+      "price": 150.0,
+      "keys": [
+        "فحص وزراعه افرازات الاحليل",
+        "urethral discharge examination c s"
+      ]
+    },
+    {
+      "id": "price::0501",
+      "name_ar": "مسحة الإحليل مع تصوير",
+      "name_en": "Urethral Swab Film",
+      "price": 150.0,
+      "keys": [
+        "مسحه الاحليل مع تصوير",
+        "urethral swab film"
+      ]
+    },
+    {
+      "id": "price::0502",
+      "name_ar": "حمض اليوريك في الدم",
+      "name_en": "Uric Acid in Serum",
+      "price": 39.0,
+      "keys": [
+        "حمض اليوريك في الدم",
+        "uric acid in serum"
+      ]
+    },
+    {
+      "id": "price::0503",
+      "name_ar": "حمض اليوريك في البول",
+      "name_en": "Uric Acid in Urine",
+      "price": 39.0,
+      "keys": [
+        "حمض اليوريك في البول",
+        "uric acid in urine"
+      ]
+    },
+    {
+      "id": "price::0504",
+      "name_ar": "تحليل البول",
+      "name_en": "Urine Analysis",
+      "price": 50.0,
+      "keys": [
+        "تحليل البول",
+        "urine analysis"
+      ]
+    },
+    {
+      "id": "price::0505",
+      "name_ar": "تحليل البول وزرع وحساسية",
+      "name_en": "Urine Analysis & C/S",
+      "price": 150.0,
+      "keys": [
+        "تحليل البول وزرع وحساسيه",
+        "urine analysis c s"
+      ]
+    },
+    {
+      "id": "price::0506",
+      "name_ar": "زرع البول",
+      "name_en": "Urine Culture",
+      "price": 150.0,
+      "keys": [
+        "زرع البول",
+        "urine culture"
+      ]
+    },
+    {
+      "id": "price::0507",
+      "name_ar": "تركيز الأسمول في البول",
+      "name_en": "Urine Osmolality",
+      "price": 800.0,
+      "keys": [
+        "تركيز الاسمول في البول",
+        "urine osmolality"
+      ]
+    },
+    {
+      "id": "price::0508",
+      "name_ar": "التحليل الكهربائي لبروتينات البول",
+      "name_en": "Urine Protein Electrophoresis",
+      "price": 800.0,
+      "keys": [
+        "التحليل الكهربائي لبروتينات البول",
+        "urine protein electrophoresis"
+      ]
+    },
+    {
+      "id": "price::0509",
+      "name_ar": "زرع وفحص مسحة مهبلية",
+      "name_en": "Vaginal Swab Examination C/S",
+      "price": 150.0,
+      "keys": [
+        "زرع وفحص مسحه مهبليه",
+        "vaginal swab examination c s"
+      ]
+    },
+    {
+      "id": "price::0510",
+      "name_ar": "حمض فانيل ماندليك",
+      "name_en": "Vanillylmandelic Acid (VMA){Q}",
+      "price": 720.0,
+      "keys": [
+        "حمض فانيل ماندليك",
+        "vanillylmandelic acid vma q"
+      ]
+    },
+    {
+      "id": "price::0511",
+      "name_ar": "الأجسام المضادة من نوع IgG لفيروس جدري الماء والحزام الناري",
+      "name_en": "Varicella Zoster IgG",
+      "price": 150.0,
+      "keys": [
+        "الاجسام المضاده من نوع igg لفيروس جدري الماء والحزام الناري",
+        "varicella zoster igg"
+      ]
+    },
+    {
+      "id": "price::0512",
+      "name_ar": "الأجسام المضادة من نوع IgM لفيروس جدري الماء والحزام الناري",
+      "name_en": "Varicella Zoster IgM",
+      "price": 150.0,
+      "keys": [
+        "الاجسام المضاده من نوع igm لفيروس جدري الماء والحزام الناري",
+        "varicella zoster igm"
+      ]
+    },
+    {
+      "id": "price::0513",
+      "name_ar": "البروتين الدهني منخفض الكثافة جداً",
+      "name_en": "Very Low Density Lipoprotein (VLDL)",
+      "price": 50.0,
+      "keys": [
+        "البروتين الدهني منخفض الكثافه جدا",
+        "very low density lipoprotein vldl"
+      ]
+    },
+    {
+      "id": "price::0514",
+      "name_ar": "فيتامين ب12",
+      "name_en": "Vitamin B12",
+      "price": 39.0,
+      "keys": [
+        "فيتامين ب12",
+        "vitamin b12"
+      ]
+    },
+    {
+      "id": "price::0515",
+      "name_ar": "فيتامين ب3 (نياسين)",
+      "name_en": "Vitamin B3 (Niacin) {Q}",
+      "price": 850.0,
+      "keys": [
+        "فيتامين ب3 نياسين",
+        "vitamin b3 niacin q"
+      ]
+    },
+    {
+      "id": "price::0516",
+      "name_ar": "فيتامين ب5 (حمض البانتوثينيك)",
+      "name_en": "Vitamin B5 (pantothenic acid)",
+      "price": 550.0,
+      "keys": [
+        "فيتامين ب5 حمض البانتوثينيك",
+        "vitamin b5 pantothenic acid"
+      ]
+    },
+    {
+      "id": "price::0517",
+      "name_ar": "فيتامين ب7 (البيوتين)",
+      "name_en": "Vitamin B7 (Biotin)",
+      "price": 800.0,
+      "keys": [
+        "فيتامين ب7 البيوتين",
+        "vitamin b7 biotin"
+      ]
+    },
+    {
+      "id": "price::0518",
+      "name_ar": "فيتامين ج (حمض الأسكوربيك)",
+      "name_en": "Vitamin C (Ascorbic Acid )",
+      "price": 150.0,
+      "keys": [
+        "فيتامين ج حمض الاسكوربيك",
+        "vitamin c ascorbic acid"
+      ]
+    },
+    {
+      "id": "price::0519",
+      "name_ar": "فيتامين د (1.25-ديهيدروكسي كوليكالسيفيرول)",
+      "name_en": "Vitamin D (1.25 Dihydroxycholecalciferol)",
+      "price": 1100.0,
+      "keys": [
+        "فيتامين د 1 25 ديهيدروكسي كوليكالسيفيرول",
+        "vitamin d 1 25 dihydroxycholecalciferol"
+      ]
+    },
+    {
+      "id": "price::0520",
+      "name_ar": "فيتامين د (25 هيدروكسي فيتامين د - الكلي)",
+      "name_en": "Vitamin D (25 OH-Vit D -Total)",
+      "price": 39.0,
+      "keys": [
+        "فيتامين د 25 هيدروكسي فيتامين د الكلي",
+        "vitamin d 25 oh vit d total"
+      ]
+    },
+    {
+      "id": "price::0521",
+      "name_ar": "فحص مسحة الفرج مع الزرع والحساسية",
+      "name_en": "Vulval Swab Examination C/S",
+      "price": 150.0,
+      "keys": [
+        "فحص مسحه الفرج مع الزرع والحساسيه",
+        "vulval swab examination c s"
+      ]
+    },
+    {
+      "id": "price::0522",
+      "name_ar": "تسلسل الجينوم الكامل الثلاثي مع تقرير (CNV + الميتوكوندريا)",
+      "name_en": "Whole Genome Sequencing Trio with report ( CNV+ Mitochondrial )",
+      "price": 30000.0,
+      "keys": [
+        "تسلسل الجينوم الكامل الثلاثي مع تقرير cnv + الميتوكوندريا",
+        "whole genome sequencing trio with report cnv+ mitochondrial"
+      ]
+    },
+    {
+      "id": "price::0523",
+      "name_ar": "تسلسل الجينوم الكامل مع تقرير (CNV + الميتوكوندريا)",
+      "name_en": "Whole Genome Sequencing with report ( CNV+ Mitochondrial )",
+      "price": 12000.0,
+      "keys": [
+        "تسلسل الجينوم الكامل مع تقرير cnv + الميتوكوندريا",
+        "whole genome sequencing with report cnv+ mitochondrial"
+      ]
+    },
+    {
+      "id": "price::0524",
+      "name_ar": "اختبار ويدال",
+      "name_en": "Widal Test",
+      "price": 150.0,
+      "keys": [
+        "اختبار ويدال",
+        "widal test"
+      ]
+    },
+    {
+      "id": "price::0525",
+      "name_ar": "حذف دقيق في كروموسوم Y",
+      "name_en": "Y Chromosome Microdeletion",
+      "price": 1500.0,
+      "keys": [
+        "حذف دقيق في كروموسوم y",
+        "y chromosome microdeletion"
+      ]
+    },
+    {
+      "id": "price::0526",
+      "name_ar": "الزنك في الدم",
+      "name_en": "Zinc",
+      "price": 39.0,
+      "keys": [
+        "الزنك في الدم",
+        "zinc"
+      ]
+    },
+    {
+      "id": "price::0527",
+      "name_ar": "مستوى زولبيديم (ستيلنوكس) في المصل {BS}",
+      "name_en": "Zolpidem (Stilnox) In Serum {BS}",
+      "price": 1000.0,
+      "keys": [
+        "مستوي زولبيديم ستيلنوكس في المصل bs",
+        "zolpidem stilnox in serum bs"
+      ]
+    }
+  ]
+}

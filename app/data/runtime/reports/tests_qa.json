@@ -1,0 +1,141 @@
+{
+  "input_file": "app/data/sources/excel/analyses_with_prices.xlsx",
+  "clean_output": "app/data/runtime/rag/tests_clean.jsonl",
+  "chunks_output": "app/data/runtime/rag/tests_chunks.jsonl",
+  "total_rows_scanned": 574,
+  "records_written": 574,
+  "chunks_written": 574,
+  "missing_price_count": 99,
+  "unique_categories_count": 17,
+  "unique_categories_sample": [
+    "الهرمونات والخصوبة",
+    "الدم والتخثر",
+    "وظائف الكبد والكلى",
+    "الأمراض المناعية",
+    "الفيروسات والأمراض المعدية",
+    "المزارع البكتيرية",
+    "العضلات والقلب",
+    "الحساسية",
+    "دلالات الأورام",
+    "المعادن",
+    "أدوية وسموم",
+    "وظائف البنكرياس",
+    "التحاليل الجينية",
+    "المعادن والأملاح",
+    "الجهاز الهضمي"
+  ],
+  "unique_raw_categories_count": 18,
+  "unique_category_norm_count": 17,
+  "missing_benefit_count": 0,
+  "missing_symptoms_count": 0,
+  "missing_preparation_count": 0,
+  "sample_clean_records": [
+    {
+      "source": "tests",
+      "id": "tests::0001",
+      "canonical_ar": "عامل النمو الشبيه بالأنسولين-1",
+      "canonical_en": "(IGF-1) Somatomedin C",
+      "canonical_name": "(IGF-1) Somatomedin C",
+      "canonical_name_clean": "(IGF-1) Somatomedin C",
+      "code": null,
+      "category": "الهرمونات والخصوبة",
+      "category_norm": "الهرمونات والخصوبة",
+      "sample_type": "2.0 ml serum Frozen",
+      "benefit": "يقيس مستوى هرمون النمو ثابت لايتأثر بالنوم والتوتر ، يستخدم لتشخيص اضطرابات النمو عند الأطفال وتقييم وظيفة الغدة النخامية",
+      "symptoms": "تغيرات في النمو (قصر القامة أو الضخامة )، تغيرات المزاج، اضطرابات النوم، مشاكل في الخصوبة، تغيرات في نمو الشعر تقييم افراز هرمون النمو",
+      "preparation": "يفضل إجراؤه في وقت محدد من اليوم (صباحاً عادة)، تجنب الإجهاد قبل التحليل، قد يتطلب التوقيت في دورة معينة للنساء",
+      "complementary_tests": "هرمون النمو (GH)، IGFBP-3، هرمونات الغدة الدرقية (TSH, T4)",
+      "related_tests": "FSH, LH, Prolactin, Testosterone, Estradiol",
+      "alternative_tests": "DHEA-S, Cortisol, ACTH",
+      "price": null,
+      "match_score": 0.0
+    },
+    {
+      "source": "tests",
+      "id": "tests::0002",
+      "canonical_ar": "السعة غير المشبعة لربط الحديد",
+      "canonical_en": "(unsaturated iron-binding capacity) UIBC",
+      "canonical_name": "157 - (unsaturated iron-binding capacity) UIBC",
+      "canonical_name_clean": "(unsaturated iron-binding capacity) UIBC",
+      "code": 157,
+      "category": "الدم والتحثر",
+      "category_norm": "الدم والتخثر",
+      "sample_type": "3.0 ml Heparin Whole blood Collected 2-8 °C",
+      "benefit": "يقيس كمية الترانسفيرين غير المرتبط بالحديد يستخدم لتقيم حالة الحديد والتميز بين أنواع فقر الدم",
+      "symptoms": "شحوب، تعب وإرهاق، ضيق في التنفس، دوخة، برودة الأطراف، اشتباه نقص الحديد أو تسمم الحديد",
+      "preparation": "لا يتطلب صيام، يمكن إجراؤه في أي وقت، يفضل تجنب الأطعمة الدسمة قبل ساعات من التحليل",
+      "complementary_tests": "الحديد، TIBC، الفيريتين، نسبة تشبع الترانسفيرين",
+      "related_tests": "CBC, Hemoglobin, Hematocrit, WBC, Platelets",
+      "alternative_tests": "Blood Smear, Reticulocyte Count, Bone Marrow",
+      "price": 39.0,
+      "match_score": 93.02325581395348
+    },
+    {
+      "source": "tests",
+      "id": "tests::0003",
+      "canonical_ar": "11-ديوكسي كورتيزول",
+      "canonical_en": "11Desoxycortisol (Compound S)",
+      "canonical_name": "800 - 11Desoxycortisol (Compound S) -{Q}",
+      "canonical_name_clean": "11Desoxycortisol (Compound S)",
+      "code": 800,
+      "category": "الهرمونات والخصوبة",
+      "category_norm": "الهرمونات والخصوبة",
+      "sample_type": "3.0 ml Serum 2-8 °C",
+      "benefit": "يستخدم لتشخيص اضطرابات الغدة الكظرية",
+      "symptoms": "غموض جنسي اضطراب هرموني للمواليد استشر طبيبا",
+      "preparation": "يفضل إجراؤه في وقت محدد من اليوم (صباحاً عادة)، تجنب الإجهاد قبل التحليل، قد يتطلب التوقيت في دورة معينة للنساء",
+      "complementary_tests": "الكورتيزول، ACTH، 17-OHP، اختبار تحفيز ACTH",
+      "related_tests": "FSH, LH, Prolactin, Testosterone, Estradiol",
+      "alternative_tests": "DHEA-S, Cortisol, ACTH",
+      "price": 1500.0,
+      "match_score": 84.05797101449275
+    }
+  ],
+  "sample_chunks": [
+    {
+      "id": "tests::0001",
+      "text": "اسم التحليل: عامل النمو الشبيه بالأنسولين-1 (IGF-1) Somatomedin C\nالتصنيف: الهرمونات والخصوبة\nنوع العينة: 2.0 ml serum Frozen\nفائدة التحليل: يقيس مستوى هرمون النمو ثابت لايتأثر بالنوم والتوتر ، يستخدم لتشخيص اضطرابات النمو عند الأطفال وتقييم وظيفة الغدة النخامية\nالأعراض المرتبطة: تغيرات في النمو (قصر القامة أو الضخامة )، تغيرات المزاج، اضطرابات النوم، مشاكل في الخصوبة، تغيرات في نمو الشعر تقييم افراز هرمون النمو\nالتحضير قبل التحليل: يفضل إجراؤه في وقت محدد من اليوم (صباحاً عادة)، تجنب الإجهاد قبل التحليل، قد يتطلب التوقيت في دورة معينة للنساء\nتحاليل مكملة: هرمون النمو (GH)، IGFBP-3، هرمونات الغدة الدرقية (TSH, T4)\nتحاليل قريبة: FSH, LH, Prolactin, Testosterone, Estradiol\nتحاليل بديلة: DHEA-S, Cortisol, ACTH\nالسعر: غير متوفر",
+      "metadata": {
+        "source": "tests",
+        "canonical_ar": "عامل النمو الشبيه بالأنسولين-1",
+        "canonical_en": "(IGF-1) Somatomedin C",
+        "category": "الهرمونات والخصوبة",
+        "category_norm": "الهرمونات والخصوبة",
+        "code": null,
+        "canonical_name_clean": "(IGF-1) Somatomedin C",
+        "sample_type": "2.0 ml serum Frozen",
+        "price": null
+      }
+    },
+    {
+      "id": "tests::0002",
+      "text": "اسم التحليل: السعة غير المشبعة لربط الحديد (unsaturated iron-binding capacity) UIBC\nالتصنيف: الدم والتخثر\nنوع العينة: 3.0 ml Heparin Whole blood Collected 2-8 °C\nفائدة التحليل: يقيس كمية الترانسفيرين غير المرتبط بالحديد يستخدم لتقيم حالة الحديد والتميز بين أنواع فقر الدم\nالأعراض المرتبطة: شحوب، تعب وإرهاق، ضيق في التنفس، دوخة، برودة الأطراف، اشتباه نقص الحديد أو تسمم الحديد\nالتحضير قبل التحليل: لا يتطلب صيام، يمكن إجراؤه في أي وقت، يفضل تجنب الأطعمة الدسمة قبل ساعات من التحليل\nتحاليل مكملة: الحديد، TIBC، الفيريتين، نسبة تشبع الترانسفيرين\nتحاليل قريبة: CBC, Hemoglobin, Hematocrit, WBC, Platelets\nتحاليل بديلة: Blood Smear, Reticulocyte Count, Bone Marrow\nالسعر: 39.0",
+      "metadata": {
+        "source": "tests",
+        "canonical_ar": "السعة غير المشبعة لربط الحديد",
+        "canonical_en": "(unsaturated iron-binding capacity) UIBC",
+        "category": "الدم والتحثر",
+        "category_norm": "الدم والتخثر",
+        "code": 157,
+        "canonical_name_clean": "(unsaturated iron-binding capacity) UIBC",
+        "sample_type": "3.0 ml Heparin Whole blood Collected 2-8 °C",
+        "price": 39.0
+      }
+    },
+    {
+      "id": "tests::0003",
+      "text": "اسم التحليل: 11-ديوكسي كورتيزول 11Desoxycortisol (Compound S)\nالتصنيف: الهرمونات والخصوبة\nنوع العينة: 3.0 ml Serum 2-8 °C\nفائدة التحليل: يستخدم لتشخيص اضطرابات الغدة الكظرية\nالأعراض المرتبطة: غموض جنسي اضطراب هرموني للمواليد استشر طبيبا\nالتحضير قبل التحليل: يفضل إجراؤه في وقت محدد من اليوم (صباحاً عادة)، تجنب الإجهاد قبل التحليل، قد يتطلب التوقيت في دورة معينة للنساء\nتحاليل مكملة: الكورتيزول، ACTH، 17-OHP، اختبار تحفيز ACTH\nتحاليل قريبة: FSH, LH, Prolactin, Testosterone, Estradiol\nتحاليل بديلة: DHEA-S, Cortisol, ACTH\nالسعر: 1500.0",
+      "metadata": {
+        "source": "tests",
+        "canonical_ar": "11-ديوكسي كورتيزول",
+        "canonical_en": "11Desoxycortisol (Compound S)",
+        "category": "الهرمونات والخصوبة",
+        "category_norm": "الهرمونات والخصوبة",
+        "code": 800,
+        "canonical_name_clean": "11Desoxycortisol (Compound S)",
+        "sample_type": "3.0 ml Serum 2-8 °C",
+        "price": 1500.0
+      }
+    }
+  ]
+}

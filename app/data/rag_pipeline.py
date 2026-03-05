@@ -13,6 +13,7 @@ import os
 import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from app.core.runtime_paths import TESTS_CHUNKS_PATH, path_exists
 from app.utils.arabic_normalizer import normalize_for_matching
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,23 @@ def _load_json_robust(path: str) -> Optional[Dict]:
         return None
 
 
+def load_runtime_chunks_jsonl(path):
+    """
+    Reads JSONL chunks {id, text, metadata}
+    Returns list[dict]
+    """
+    import json
+
+    chunks = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            chunks.append(json.loads(line))
+    return chunks
+
+
 def _build_document_text(test: Dict[str, Any]) -> str:
     """Build searchable text from a test record (for embedding)."""
     parts = [
@@ -82,6 +100,42 @@ def _cosine_similarity(a: List[float], b: List[float]) -> float:
 
 def load_rag_knowledge() -> Tuple[List[Dict], Dict]:
     """Load RAG knowledge base. Raises if not built."""
+    if path_exists(TESTS_CHUNKS_PATH):
+        chunks = load_runtime_chunks_jsonl(TESTS_CHUNKS_PATH)
+        tests: List[Dict[str, Any]] = []
+        for chunk in chunks:
+            metadata = chunk.get("metadata") or {}
+            chunk_text = str(chunk.get("text") or "").strip()
+            line_map: Dict[str, str] = {}
+            for raw_line in chunk_text.splitlines():
+                line = raw_line.strip()
+                if ":" in line:
+                    k, v = line.split(":", 1)
+                    line_map[k.strip()] = v.strip()
+
+            tests.append(
+                {
+                    "id": chunk.get("id"),
+                    "analysis_name_ar": metadata.get("canonical_ar"),
+                    "analysis_name_en": metadata.get("canonical_en"),
+                    "description": line_map.get("فائدة التحليل") or chunk_text,
+                    "symptoms": line_map.get("الأعراض المرتبطة", ""),
+                    "category": metadata.get("category_norm") or metadata.get("category"),
+                    "sample_type": metadata.get("sample_type"),
+                    "preparation": line_map.get("التحضير قبل التحليل", ""),
+                    "complementary_tests": line_map.get("تحاليل مكملة", ""),
+                    "related_tests": line_map.get("تحاليل قريبة", ""),
+                    "alternative_tests": line_map.get("تحاليل بديلة", ""),
+                    "price": metadata.get("price"),
+                    "__chunk_text": chunk_text,
+                }
+            )
+
+        logger.info("RAG runtime chunks loaded: %s", len(tests))
+        logger.info("path: %s", TESTS_CHUNKS_PATH)
+        return tests, {"source": "runtime_chunks", "path": str(TESTS_CHUNKS_PATH)}
+
+    logger.info("RAG fallback -> rag_knowledge_base.json")
     data = _load_json_robust(RAG_KNOWLEDGE_PATH)
     if not data:
         raise FileNotFoundError(
@@ -100,14 +154,18 @@ def load_embeddings() -> Optional[Dict]:
 
 def is_rag_ready() -> bool:
     """Check if RAG system is built and ready."""
+    if path_exists(TESTS_CHUNKS_PATH):
+        try:
+            return len(load_runtime_chunks_jsonl(TESTS_CHUNKS_PATH)) > 0
+        except Exception:
+            return False
     if not os.path.exists(RAG_KNOWLEDGE_PATH):
         return False
-    emb = load_embeddings()
-    if not emb:
+    try:
+        tests, _ = load_rag_knowledge()
+        return len(tests) > 0
+    except Exception:
         return False
-    tests, _ = load_rag_knowledge()
-    te = emb.get("test_embeddings") or []
-    return len(te) == len(tests)
 
 
 def _extract_search_terms(query: str) -> str:
@@ -353,8 +411,8 @@ def retrieve(
     similarity_threshold: float = DEFAULT_SIMILARITY_THRESHOLD,
 ) -> Tuple[List[Dict], bool]:
     """
-    Hybrid retrieval: semantic + lexical.
-    Returns merged results; has_sufficient = True if semantic OR lexical finds a match.
+    Lexical retrieval only.
+    Returns merged results; has_sufficient = True if lexical finds a match.
     """
     tests, _ = load_rag_knowledge()
     lex_min = LEXICAL_MIN_SCORE / 100.0
@@ -374,50 +432,23 @@ def retrieve(
         detected_tokens,
         len(structured_results),
         len(lexical_results),
-        lexical_has_sufficient,
+        True,
     )
-
-    # Semantic search only when lexical is insufficient.
-    # This avoids blocking on external embedding calls when we already have a solid lexical hit.
-    semantic_results: List[Dict] = []
-    if not lexical_has_sufficient:
-        emb_data = load_embeddings()
-        if emb_data:
-            test_embeddings = emb_data.get("test_embeddings") or []
-            if len(test_embeddings) == len(tests):
-                try:
-                    from app.services.embeddings_service import get_embedding
-                    q_emb = get_embedding(query)
-                    if q_emb:
-                        scored = []
-                        for i, emb in enumerate(test_embeddings):
-                            if emb:
-                                sim = _cosine_similarity(q_emb, emb)
-                                scored.append((i, sim))
-                        scored.sort(key=lambda x: x[1], reverse=True)
-                        for i, score in scored[:max_results]:
-                            semantic_results.append({
-                                "test": tests[i],
-                                "score": score,
-                                "source": "semantic",
-                            })
-                except Exception as e:
-                    logger.debug("Semantic search failed: %s", e)
 
     # Merge: by test key, keep best score per test
     def _key(t: Dict) -> str:
-        return str(t.get("analysis_name_ar", "")) + "|" + str(t.get("analysis_name_en", ""))
+        return str(t.get("id", "")) + "|" + str(t.get("analysis_name_ar", "")) + "|" + str(t.get("analysis_name_en", ""))
 
     best_by_key: Dict[str, Dict] = {}
-    for r in semantic_results + lexical_results:
+    for r in lexical_results:
         t = r["test"]
         k = _key(t)
         score = r["score"]
-        src = r.get("source", "semantic")
+        src = r.get("source", "lexical")
         if k not in best_by_key or score > best_by_key[k]["score"]:
             best_by_key[k] = {"test": t, "score": score, "source": src}
 
-    # Include if passes semantic threshold OR lexical threshold
+    # Include lexical results passing lexical threshold (or explicit similarity threshold).
     merged = [
         v for v in best_by_key.values()
         if (v["score"] >= similarity_threshold)
@@ -426,11 +457,7 @@ def retrieve(
     merged.sort(key=lambda x: x["score"], reverse=True)
     merged = merged[:max_results]
 
-    has_sufficient = any(
-        r["score"] >= similarity_threshold
-        or (r.get("source") == "lexical" and r["score"] >= lex_min)
-        for r in merged
-    )
+    has_sufficient = any((r.get("source") == "lexical" and r["score"] >= lex_min) for r in merged)
 
     return merged, has_sufficient
 
@@ -483,7 +510,11 @@ def get_grounded_context(
     parts = ["📊 **معلومات التحاليل ذات الصلة:**\n"]
     for i, r in enumerate(above_threshold[:max_tests], 1):
         test = r["test"]
-        score = r["score"]
+        chunk_text = (test.get("__chunk_text") or "").strip()
+        if chunk_text:
+            parts.append(f"\n{i}. {chunk_text}\n" + "-" * 50 + "\n")
+            continue
+
         lines = []
         name_ar = test.get("analysis_name_ar", "غير متوفر")
         name_en = test.get("analysis_name_en", "")
@@ -526,3 +557,8 @@ def get_grounded_context(
             pass
     
     return context_str, True
+
+
+if __name__ == "__main__":
+    chunks = load_runtime_chunks_jsonl(TESTS_CHUNKS_PATH)
+    print("Loaded runtime chunks:", len(chunks))

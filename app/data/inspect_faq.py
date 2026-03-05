@@ -4,8 +4,9 @@ import io
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 import pandas as pd
+from app.core.paths import EXCEL_FAQ_PATH
 
-df = pd.read_excel('faq.xlsx')
+df = pd.read_excel(EXCEL_FAQ_PATH)
 print('Shape:', df.shape)
 print('\nColumns:', df.columns.tolist())
 print('\nAll FAQs:')
