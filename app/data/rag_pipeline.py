@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import re
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from app.core.runtime_paths import TESTS_CHUNKS_PATH, path_exists
@@ -30,6 +31,9 @@ LEXICAL_MIN_SCORE = 50
 
 # Message when no relevant info found (professional, no "system" mention)
 NO_INFO_MESSAGE = "عذراً، حالياً ما عندنا معلومات كافية عن هذا الطلب."
+
+SYNONYMS_PATH = Path("app/data/runtime/synonyms/synonyms_ar.json")
+_RAG_SYNONYMS_CACHE = None
 
 
 def _load_json_robust(path: str) -> Optional[Dict]:
@@ -66,6 +70,252 @@ def load_runtime_chunks_jsonl(path):
                 continue
             chunks.append(json.loads(line))
     return chunks
+
+
+def load_rag_synonyms():
+    global _RAG_SYNONYMS_CACHE
+    if _RAG_SYNONYMS_CACHE is not None:
+        return _RAG_SYNONYMS_CACHE
+    if path_exists(SYNONYMS_PATH):
+        with open(SYNONYMS_PATH, "r", encoding="utf-8") as f:
+            _RAG_SYNONYMS_CACHE = json.load(f)
+            return _RAG_SYNONYMS_CACHE
+    _RAG_SYNONYMS_CACHE = {}
+    return _RAG_SYNONYMS_CACHE
+
+
+def expand_test_query(text: str) -> str:
+    raw_query = text or ""
+    query_norm_full = _safe_normalize_for_matching(raw_query)
+    search_terms = _extract_search_terms(raw_query)
+    query_key = _safe_normalize_for_matching(search_terms or query_norm_full)
+    if not query_key:
+        return ""
+
+    synonyms = load_rag_synonyms()
+    tests_syn = synonyms.get("tests") if isinstance(synonyms, dict) else {}
+    if not isinstance(tests_syn, dict):
+        return query_key
+
+    scored_matches: List[Tuple[float, str, List[str]]] = []
+
+    for concept in tests_syn.values():
+        if not isinstance(concept, dict):
+            continue
+        aliases = concept.get("aliases") or []
+        if not isinstance(aliases, list):
+            continue
+
+        matched_aliases: List[str] = []
+        best_score = 0.0
+        for alias in aliases:
+            alias_n = _safe_normalize_for_matching(str(alias))
+            if not alias_n or len(alias_n) < 3:
+                continue
+            if alias_n == query_key:
+                matched_aliases.append(alias_n)
+                best_score = max(best_score, 1.0)
+            elif len(query_key) >= 3 and query_key in alias_n:
+                matched_aliases.append(alias_n)
+                best_score = max(best_score, 0.92)
+            elif len(alias_n) >= 3 and alias_n in query_key:
+                matched_aliases.append(alias_n)
+                best_score = max(best_score, 0.9)
+            else:
+                q_tokens = set(query_key.split())
+                a_tokens = set(alias_n.split())
+                if q_tokens and a_tokens:
+                    overlap = len(q_tokens & a_tokens) / max(1, len(q_tokens))
+                    if overlap >= 0.5:
+                        matched_aliases.append(alias_n)
+                        best_score = max(best_score, 0.75 + min(0.2, overlap * 0.2))
+
+        if not matched_aliases:
+            continue
+
+        display_n = _safe_normalize_for_matching(str(concept.get("display_name") or ""))
+        scored_matches.append((best_score, display_n, matched_aliases[:3]))
+
+    scored_matches.sort(key=lambda x: x[0], reverse=True)
+    scored_matches = scored_matches[:3]
+
+    additions: List[str] = []
+    seen: Set[str] = {query_key}
+    for _score, display_n, aliases_n in scored_matches:
+        if display_n and display_n not in seen:
+            seen.add(display_n)
+            additions.append(display_n)
+        for a in aliases_n:
+            if a not in seen:
+                seen.add(a)
+                additions.append(a)
+
+    return " ".join([query_key, *additions]).strip()
+
+
+def _as_list(value: Any) -> List[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(v) for v in value if v is not None]
+    if isinstance(value, str):
+        if not value.strip():
+            return []
+        return [value]
+    return [str(value)]
+
+
+def _collect_concept_matches(query_norm: str, max_matches: int = 8) -> List[Dict[str, Any]]:
+    if not query_norm:
+        return []
+
+    synonyms = load_rag_synonyms()
+    concepts = synonyms.get("concepts") if isinstance(synonyms, dict) else {}
+    if not isinstance(concepts, dict):
+        return []
+
+    q_tokens = set(query_norm.split()[:24])
+    matches: List[Dict[str, Any]] = []
+
+    for concept_key, concept in concepts.items():
+        if not isinstance(concept, dict):
+            continue
+        display = str(concept.get("display_name") or "").strip()
+        aliases = _as_list(concept.get("aliases"))
+        related_tests = _as_list(concept.get("related_tests"))
+        signals = concept.get("signals") if isinstance(concept.get("signals"), dict) else {}
+        symptom_signals = _as_list(signals.get("symptoms"))
+        preparation_signals = _as_list(signals.get("preparation"))
+        category_signals = _as_list(signals.get("category"))
+        benefit_signals = _as_list(signals.get("benefit"))
+
+        candidates = [
+            *_as_list(display),
+            *aliases,
+            *related_tests,
+            *symptom_signals,
+            *preparation_signals,
+            *category_signals,
+            *benefit_signals,
+        ][:48]
+
+        best_score = 0.0
+        matched_terms: List[str] = []
+        for term in candidates:
+            term_n = _safe_normalize_for_matching(term)
+            if not term_n or len(term_n) < 2:
+                continue
+            if term_n == query_norm:
+                best_score = max(best_score, 1.0)
+                matched_terms.append(term_n)
+                continue
+            if len(query_norm) >= 3 and query_norm in term_n:
+                best_score = max(best_score, 0.93)
+                matched_terms.append(term_n)
+                continue
+            if len(term_n) >= 3 and term_n in query_norm:
+                best_score = max(best_score, 0.9)
+                matched_terms.append(term_n)
+                continue
+            t_tokens = set(term_n.split())
+            if q_tokens and t_tokens:
+                if not (q_tokens & t_tokens):
+                    continue
+                overlap = len(q_tokens & t_tokens) / max(1, min(len(q_tokens), len(t_tokens)))
+                if overlap >= 0.5:
+                    best_score = max(best_score, 0.72 + min(0.2, overlap * 0.2))
+                    matched_terms.append(term_n)
+
+        if best_score < 0.65:
+            continue
+
+        matches.append(
+            {
+                "key": str(concept_key),
+                "score": best_score,
+                "display_name": display,
+                "aliases": aliases,
+                "related_tests": related_tests,
+                "signals": {
+                    "symptoms": symptom_signals,
+                    "preparation": preparation_signals,
+                    "category": category_signals,
+                    "benefit": benefit_signals,
+                },
+                "matched_terms": matched_terms[:6],
+            }
+        )
+
+    matches.sort(key=lambda x: x["score"], reverse=True)
+    return matches[:max_matches]
+
+
+def expand_query_with_concepts(text: str) -> str:
+    query_norm = _safe_normalize_for_matching(text or "")
+    if not query_norm:
+        return ""
+
+    matches = _collect_concept_matches(query_norm, max_matches=6)
+    if not matches:
+        return query_norm
+
+    additions: List[str] = []
+    seen: Set[str] = {query_norm}
+    max_terms = 60
+    max_chars = 1200
+
+    for match in matches:
+        fields = [
+            match.get("display_name"),
+            *(match.get("aliases") or []),
+            *(match.get("related_tests") or []),
+            *((match.get("signals") or {}).get("symptoms") or []),
+            *((match.get("signals") or {}).get("preparation") or []),
+            *((match.get("signals") or {}).get("category") or []),
+        ]
+        for item in fields:
+            item_n = _safe_normalize_for_matching(str(item or ""))
+            if not item_n or len(item_n) < 2 or item_n in seen:
+                continue
+            seen.add(item_n)
+            additions.append(item_n)
+            if len(additions) >= max_terms:
+                break
+            if len(" ".join([query_norm, *additions])) >= max_chars:
+                break
+        if len(additions) >= max_terms or len(" ".join([query_norm, *additions])) >= max_chars:
+            break
+
+    return " ".join([query_norm, *additions]).strip()
+
+
+def _query_asks_preparation(text: str) -> bool:
+    t = _safe_normalize_for_matching(text or "")
+    if not t:
+        return False
+    keywords = (
+        "صيام",
+        "صايم",
+        "تحضير",
+        "قبل التحليل",
+        "preparation",
+        "fasting",
+    )
+    return any(k in t for k in keywords)
+
+
+def _query_asks_symptoms(text: str) -> bool:
+    t = _safe_normalize_for_matching(text or "")
+    if not t:
+        return False
+    keywords = (
+        "اعراض",
+        "أعراض",
+        "عرض",
+        "symptom",
+        "symptoms",
+    )
+    return any(_safe_normalize_for_matching(k) in t for k in keywords)
 
 
 def _build_document_text(test: Dict[str, Any]) -> str:
@@ -173,32 +423,44 @@ def _extract_search_terms(query: str) -> str:
     Extract core search terms from query for lexical search.
     Removes common question phrases to improve matching for short test names.
     """
-    q = (query or "").strip()
+    q = (query or "").strip().lower()
     if not q:
         return ""
-    q_lower = q.lower()
-    # Normalize vitamin D variants: "فيتامين دال" -> "فيتامين د"
-    if "فيتامين دال" in q_lower or "vitamin d" in q_lower:
-        q_lower = q_lower.replace("فيتامين دال", "فيتامين د").replace("vitamin d", "فيتامين د")
-    # Remove common Arabic/English question prefixes (case-insensitive)
-    patterns = [
-        r"^(do you have|do you offer|is there|have you got|can you do)\s+",
-        r"^(هل لديكم|هل تتوفر|هل يوجد|عندكم|عندنا|عندي|لدي|نفسر|نقدم)\s*",
-        r"^(تحليل|فحص|اختبار|تحاليل|فحوص)\s*",
-        r"^\s*(تحليل|فحص|اختبار)\s*",  # after other removals, e.g. " تحليل nipt" -> "nipt"
-        r"\s*(test|analysis|فحص|تحليل|تحاليل)\s*$",
-        r"^what is\s+(the\s+)?",
-        r"^ما هو\s+(تحليل\s+)?",
-        r"^\?+\s*|\s*\?+$",  # leading/trailing ?
-        # Symptom-based query cleanup: "ايش التحاليل اللي ممكن اسويها", "ماهي التحاليل"
-        r"\s*(ايش|اللي|ممكن|اسويها|ماهي|ماهو)\s*",
-        r"\s*(التحاليل|الفحوصات)\s*(اللي|التي)?\s*(ممكن|يمكن)?\s*(اسويها|أعملها)?\s*$",
-    ]
-    for pat in patterns:
-        q_lower = re.sub(pat, " ", q_lower, flags=re.IGNORECASE)
-    q_lower = re.sub(r"\s+", " ", q_lower).strip()
-    return q_lower if q_lower else (query or "").strip().lower()
 
+    q = q.replace("??????? ???", "??????? ?")
+    q = re.sub(r"[??!.?,:;]+", " ", q)
+
+    leading_phrases = [
+        "?? ??",
+        "?? ??",
+        "???",
+        "??",
+        "??",
+        "?? ????",
+        "please",
+        "what is",
+        "do you have",
+        "do you offer",
+        "is there",
+    ]
+    for phrase in leading_phrases:
+        if q.startswith(phrase + " "):
+            q = q[len(phrase):].strip()
+
+    drop_tokens = {
+        "?????",
+        "??????",
+        "???",
+        "????",
+        "??????",
+        "???????",
+        "????????",
+        "test",
+        "analysis",
+    }
+    kept_tokens = [tok for tok in q.split() if tok not in drop_tokens]
+    cleaned = " ".join(kept_tokens).strip()
+    return cleaned or (query or "").strip().lower()
 
 def _contains_arabic(text: str) -> bool:
     return any("\u0600" <= ch <= "\u06FF" for ch in (text or ""))
@@ -417,10 +679,27 @@ def retrieve(
     tests, _ = load_rag_knowledge()
     lex_min = LEXICAL_MIN_SCORE / 100.0
 
-    detected_tokens = _extract_lab_code_tokens(query)
-    structured_results = _structured_code_match(query, tests, max_results=max_results)
+    expanded_query = expand_test_query(query)
+    concept_expanded_query = expand_query_with_concepts(expanded_query)
+    print(
+        "RAG_SYNONYM_DEBUG",
+        {
+            "original": str(query or "").encode("unicode_escape").decode("ascii"),
+            "expanded": str(expanded_query[:200]).encode("unicode_escape").decode("ascii"),
+        },
+    )
+    print(
+        "RAG_CONCEPT_DEBUG",
+        {
+            "original": str(query or "").encode("unicode_escape").decode("ascii"),
+            "expanded": str(concept_expanded_query[:250]).encode("unicode_escape").decode("ascii"),
+        },
+    )
+
+    detected_tokens = _extract_lab_code_tokens(concept_expanded_query)
+    structured_results = _structured_code_match(concept_expanded_query, tests, max_results=max_results)
     lexical_results = _lexical_retrieve(
-        query,
+        concept_expanded_query,
         tests,
         max_results=max_results,
         min_score=LEXICAL_MIN_SCORE,
@@ -439,11 +718,47 @@ def retrieve(
     def _key(t: Dict) -> str:
         return str(t.get("id", "")) + "|" + str(t.get("analysis_name_ar", "")) + "|" + str(t.get("analysis_name_en", ""))
 
+    concept_matches = _collect_concept_matches(_safe_normalize_for_matching(expanded_query), max_matches=8)
+    strong_concept_aliases: Set[str] = set()
+    prep_signals: Set[str] = set()
+    symptom_signals: Set[str] = set()
+    for m in concept_matches:
+        for alias in m.get("aliases", []):
+            alias_n = _safe_normalize_for_matching(alias)
+            if alias_n and len(alias_n) >= 4:
+                strong_concept_aliases.add(alias_n)
+        sig = m.get("signals") or {}
+        for p in sig.get("preparation", []):
+            p_n = _safe_normalize_for_matching(p)
+            if p_n and len(p_n) >= 3:
+                prep_signals.add(p_n)
+        for s in sig.get("symptoms", []):
+            s_n = _safe_normalize_for_matching(s)
+            if s_n and len(s_n) >= 3:
+                symptom_signals.add(s_n)
+
+    asks_preparation = _query_asks_preparation(query)
+    asks_symptoms = _query_asks_symptoms(query)
+
     best_by_key: Dict[str, Dict] = {}
     for r in lexical_results:
         t = r["test"]
         k = _key(t)
         score = r["score"]
+        # Small boost when expanded query directly includes canonical test name fields.
+        name_ar = _safe_normalize_for_matching(t.get("analysis_name_ar") or "")
+        name_en = _safe_normalize_for_matching(t.get("analysis_name_en") or "")
+        expanded_norm = _safe_normalize_for_matching(concept_expanded_query)
+        if (name_ar and name_ar in expanded_norm) or (name_en and name_en in expanded_norm):
+            score = min(1.0, score + 0.05)
+        chunk_text = _safe_normalize_for_matching(t.get("__chunk_text") or _build_document_text(t))
+        if chunk_text:
+            if strong_concept_aliases and any(a in chunk_text for a in strong_concept_aliases):
+                score = min(1.0, score + 0.03)
+            if asks_preparation and prep_signals and any(s in chunk_text for s in prep_signals):
+                score = min(1.0, score + 0.03)
+            if asks_symptoms and symptom_signals and any(s in chunk_text for s in symptom_signals):
+                score = min(1.0, score + 0.03)
         src = r.get("source", "lexical")
         if k not in best_by_key or score > best_by_key[k]["score"]:
             best_by_key[k] = {"test": t, "score": score, "source": src}

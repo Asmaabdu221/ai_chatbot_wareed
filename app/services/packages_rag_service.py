@@ -1,35 +1,55 @@
-"""
-Packages semantic fallback service (RAG-lite over packages_kb.json only).
+﻿"""
+Runtime packages semantic fallback service (lexical/fuzzy over runtime chunks).
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
+import re
+from difflib import SequenceMatcher
 from typing import Any, Optional
 
-from app.services.embeddings_service import get_embedding, get_embeddings
+from app.core.runtime_paths import PACKAGES_CHUNKS_PATH, path_exists
 
 logger = logging.getLogger(__name__)
 
-PACKAGES_KB_PATH = Path(__file__).resolve().parents[1] / "data" / "packages_kb.json"
-
 _KB_CACHE: Optional[list[dict[str, Any]]] = None
-_DOC_EMBEDDINGS_CACHE: Optional[list[list[float]]] = None
+
+_DIACRITICS_RE = re.compile(r"[\u064B-\u065F\u0670]")
+_PUNCT_RE = re.compile(r"[^\w\s\u0600-\u06FF]")
+_WS_RE = re.compile(r"\s+")
 
 
-def _norm(v: list[float]) -> float:
-    return sum(x * x for x in v) ** 0.5
+def _norm_text(text: str) -> str:
+    value = (text or "").strip().lower()
+    if not value:
+        return ""
+    value = _DIACRITICS_RE.sub("", value)
+    value = value.replace("ـ", "")
+    value = value.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
+    value = value.replace("ى", "ي").replace("ة", "ه")
+    value = _PUNCT_RE.sub(" ", value)
+    value = _WS_RE.sub(" ", value).strip()
+    return value
 
 
-def _cosine_similarity(a: list[float], b: list[float]) -> float:
-    na = _norm(a)
-    nb = _norm(b)
-    if na == 0 or nb == 0:
-        return 0.0
-    dot = sum(x * y for x, y in zip(a, b))
-    return dot / (na * nb)
+def _iter_runtime_chunks() -> list[dict[str, Any]]:
+    if not path_exists(PACKAGES_CHUNKS_PATH):
+        return []
+    rows: list[dict[str, Any]] = []
+    with PACKAGES_CHUNKS_PATH.open("r", encoding="utf-8") as f:
+        for line in f:
+            raw = (line or "").strip()
+            if not raw:
+                continue
+            try:
+                obj = json.loads(raw)
+            except Exception:
+                continue
+            if isinstance(obj, dict):
+                rows.append(obj)
+    return rows
 
 
 def load_packages_kb() -> list[dict[str, Any]]:
@@ -37,80 +57,76 @@ def load_packages_kb() -> list[dict[str, Any]]:
     if _KB_CACHE is not None:
         return _KB_CACHE
 
-    if not PACKAGES_KB_PATH.exists():
-        logger.warning("packages_kb.json not found at %s", PACKAGES_KB_PATH)
+    rows = _iter_runtime_chunks()
+    if not rows:
         _KB_CACHE = []
         return _KB_CACHE
 
-    try:
-        raw = json.loads(PACKAGES_KB_PATH.read_text(encoding="utf-8"))
-        if not isinstance(raw, list):
-            logger.warning("packages_kb.json must be a list")
-            _KB_CACHE = []
-            return _KB_CACHE
-        _KB_CACHE = [r for r in raw if isinstance(r, dict)]
-    except Exception as exc:
-        logger.warning("failed loading packages_kb.json: %s", exc)
-        _KB_CACHE = []
+    print("PATH=runtime_packages")
+    _KB_CACHE = rows
     return _KB_CACHE
 
 
-def _ensure_doc_embeddings() -> list[list[float]]:
-    global _DOC_EMBEDDINGS_CACHE
-    if _DOC_EMBEDDINGS_CACHE is not None:
-        return _DOC_EMBEDDINGS_CACHE
+def _score(query_norm: str, row: dict[str, Any]) -> float:
+    text = str(row.get("text") or "").strip()
+    package_name = str(row.get("package_name") or "").strip()
+    section = str(row.get("main_category") or "").strip()
+    tags = row.get("tags") if isinstance(row.get("tags"), list) else []
 
-    kb = load_packages_kb()
-    if not kb:
-        _DOC_EMBEDDINGS_CACHE = []
-        return _DOC_EMBEDDINGS_CACHE
+    haystack = " ".join([p for p in [package_name, section, text, " ".join(str(t) for t in tags)] if p])
+    hay_norm = _norm_text(haystack)
+    if not hay_norm:
+        return 0.0
 
-    texts = []
-    for doc in kb:
-        name = str(doc.get("name") or "").strip()
-        section = str(doc.get("section") or "").strip()
-        content = str(doc.get("content") or "").strip()
-        texts.append("\n".join([p for p in [name, section, content] if p]))
+    if query_norm == _norm_text(package_name):
+        return 1.0
+    if query_norm in hay_norm:
+        return 0.92
+    if hay_norm in query_norm and len(hay_norm) >= 6:
+        return 0.86
 
-    vectors = get_embeddings(texts) if texts else []
-    if len(vectors) != len(texts):
-        vectors = [[] for _ in texts]
+    q_tokens = set(query_norm.split())
+    h_tokens = set(hay_norm.split())
+    if q_tokens and h_tokens:
+        overlap = len(q_tokens & h_tokens) / max(len(q_tokens), 1)
+        if overlap >= 0.5:
+            return 0.75 + min(0.15, overlap * 0.2)
 
-    _DOC_EMBEDDINGS_CACHE = [v if isinstance(v, list) else [] for v in vectors]
-    return _DOC_EMBEDDINGS_CACHE
+    sim = SequenceMatcher(None, query_norm, hay_norm[: max(len(query_norm) * 4, len(query_norm))]).ratio()
+    if sim >= 0.8:
+        return 0.65 + min(0.2, sim * 0.25)
+
+    return 0.0
 
 
 def semantic_search_packages(query: str, top_k: int = 3) -> list[dict[str, Any]]:
-    query = (query or "").strip()
-    if not query:
+    query_norm = _norm_text(query)
+    if not query_norm:
         return []
 
     kb = load_packages_kb()
     if not kb:
-        return []
-
-    q_emb = get_embedding(query)
-    if not q_emb:
-        return []
-
-    doc_embeddings = _ensure_doc_embeddings()
-    if not doc_embeddings or len(doc_embeddings) != len(kb):
+        print("PATH=runtime_packages no_match")
         return []
 
     scored: list[dict[str, Any]] = []
-    for i, emb in enumerate(doc_embeddings):
-        if not emb:
+    for row in kb:
+        s = _score(query_norm, row)
+        if s <= 0:
             continue
-        score = _cosine_similarity(q_emb, emb)
         scored.append(
             {
-                "id": kb[i].get("id"),
-                "name": kb[i].get("name"),
-                "section": kb[i].get("section"),
-                "content": kb[i].get("content"),
-                "score": float(score),
+                "id": row.get("id") or row.get("package_id"),
+                "name": row.get("package_name"),
+                "section": row.get("main_category"),
+                "content": row.get("text"),
+                "score": float(s),
             }
         )
+
+    if not scored:
+        print("PATH=runtime_packages no_match")
+        return []
 
     scored.sort(key=lambda x: x["score"], reverse=True)
     return scored[: max(top_k, 0)]

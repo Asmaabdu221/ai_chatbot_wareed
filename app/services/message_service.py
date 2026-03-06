@@ -9,6 +9,7 @@ import os
 import re
 import tempfile
 import json
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
@@ -58,6 +59,9 @@ WAREED_CUSTOMER_SERVICE_PHONE = "920003694"
 
 _FAQ_CACHE = None
 _PRICES_CACHE = None
+_SYNONYMS_CACHE = None
+
+SYNONYMS_PATH = Path("app/data/runtime/synonyms/synonyms_ar.json")
 
 _ESCALATION_BLOCKED_PHRASES = (
     "we will contact you",
@@ -140,6 +144,8 @@ _GENERAL_PRICE_TRIGGERS = {
     "أبي سعر",
 }
 
+_PRICE_QUERY_KEYWORDS = ("سعر", "بكم", "كم سعر", "تكلفه", "تكلفة", "السعر")
+
 
 def load_runtime_faq():
     global _FAQ_CACHE
@@ -165,6 +171,18 @@ def load_runtime_prices():
     return _PRICES_CACHE
 
 
+def load_runtime_synonyms():
+    global _SYNONYMS_CACHE
+    if _SYNONYMS_CACHE is not None:
+        return _SYNONYMS_CACHE
+    if path_exists(SYNONYMS_PATH):
+        with open(SYNONYMS_PATH, "r", encoding="utf-8") as f:
+            _SYNONYMS_CACHE = json.load(f)
+            return _SYNONYMS_CACHE
+    _SYNONYMS_CACHE = {}
+    return _SYNONYMS_CACHE
+
+
 def normalize_text_ar(s: str) -> str:
     value = str(s or "").strip().lower()
     if not value:
@@ -188,6 +206,70 @@ def contains_match(query_norm: str, candidate_norm: str) -> bool:
     if len(q) < 2 or len(c) < 2:
         return False
     return c in q or q in c
+
+
+def expand_query_with_synonyms(text: str) -> str:
+    query_norm = normalize_text_ar(text)
+    if not query_norm:
+        return ""
+
+    synonyms = load_runtime_synonyms()
+    if not isinstance(synonyms, dict):
+        return query_norm
+
+    additions: list[str] = []
+    seen = {query_norm}
+
+    def _add_term(term: str) -> None:
+        n = normalize_text_ar(term)
+        if not n or n in seen:
+            return
+        seen.add(n)
+        additions.append(n)
+
+    def _match_aliases(aliases: list[str], display: str = "") -> None:
+        matched = []
+        for alias in aliases:
+            a = normalize_text_ar(alias)
+            if not a:
+                continue
+            if a in query_norm or query_norm in a:
+                matched.append(a)
+        if matched:
+            if display:
+                _add_term(display)
+            for m in matched[:4]:
+                _add_term(m)
+
+    for bucket_key in ("tests", "packages", "branches"):
+        bucket = synonyms.get(bucket_key) or {}
+        if not isinstance(bucket, dict):
+            continue
+        for concept in bucket.values():
+            if not isinstance(concept, dict):
+                continue
+            aliases = concept.get("aliases") or []
+            if not isinstance(aliases, list):
+                continue
+            display_name = str(concept.get("display_name") or "").strip()
+            _match_aliases([str(a) for a in aliases], display=display_name)
+
+    faq_intents = synonyms.get("faq_intents") or {}
+    if isinstance(faq_intents, dict):
+        for intent_key, aliases in faq_intents.items():
+            if not isinstance(aliases, list):
+                continue
+            _match_aliases([str(a) for a in aliases], display=str(intent_key))
+
+    routing = synonyms.get("routing") or {}
+    if isinstance(routing, dict):
+        for route_key, aliases in routing.items():
+            if not isinstance(aliases, list):
+                continue
+            _match_aliases([str(a) for a in aliases], display=str(route_key))
+
+    expanded = " ".join([query_norm, *additions]).strip()
+    return expanded
 
 
 def _runtime_faq_lookup(query: str) -> dict | None:
@@ -223,12 +305,88 @@ def _runtime_faq_lookup(query: str) -> dict | None:
     return contains_matches[0]
 
 
-def _runtime_price_lookup_reply(query: str) -> str | None:
+def extract_price_query_candidate(text: str) -> str:
+    normalized = normalize_text_ar(text)
+    if not normalized:
+        return ""
+    # Remove query fillers to keep only the core test phrase/code.
+    normalized = normalized.replace("كم سعر", " ")
+    drop_words = {
+        "كم",
+        "سعر",
+        "بكم",
+        "تكلفه",
+        "تكلفة",
+        "السعر",
+        "التحليل",
+        "تحليل",
+        "فحص",
+        "اختبار",
+    }
+    tokens = [t for t in normalized.split() if t and t not in drop_words]
+    return re.sub(r"\s+", " ", " ".join(tokens)).strip()
+
+
+def build_price_aliases(record: dict) -> list[str]:
+    aliases: set[str] = set()
+
+    def _add(value: str | None) -> None:
+        text = str(value or "").strip()
+        if text:
+            aliases.add(text)
+
+    for key in ("name_ar", "name_en", "canonical_name_clean", "canonical_name"):
+        _add(record.get(key))
+
+    code_value = record.get("code")
+    if code_value is not None and str(code_value).strip():
+        _add(str(code_value).strip())
+
+    for key in (record.get("keys") or []):
+        _add(str(key))
+
+    derived: set[str] = set()
+    for alias in list(aliases):
+        cleaned = re.sub(r"[\(\)\[\]\{\}]", " ", alias)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        _add(cleaned)
+
+        dashed = re.sub(r"[-/]+", " ", cleaned)
+        dashed = re.sub(r"\s+", " ", dashed).strip()
+        _add(dashed)
+
+        for part in re.split(r"[-/]", alias):
+            part = part.strip()
+            if part:
+                derived.add(part)
+
+        norm_words = normalize_text_ar(cleaned).split()
+        for token in norm_words:
+            if token.isdigit() or len(token) > 3:
+                derived.add(token)
+        if len(norm_words) >= 2:
+            for i in range(len(norm_words) - 1):
+                bi = f"{norm_words[i]} {norm_words[i + 1]}".strip()
+                if bi:
+                    derived.add(bi)
+        if len(norm_words) >= 3:
+            tri = " ".join(norm_words[:3]).strip()
+            if tri:
+                derived.add(tri)
+
+    for item in derived:
+        _add(item)
+
+    return sorted(aliases)
+
+
+def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
     query_norm = normalize_text_ar(query)
     if not query_norm:
         return None
 
-    if not any(k in query_norm for k in ("سعر", "بكم", "كم سعر", "تكلفه", "تكلفة", "السعر")):
+    is_price_question = any(k in query_norm for k in _PRICE_QUERY_KEYWORDS) or _is_general_price_query(query)
+    if not is_price_question:
         return None
 
     prices_data = load_runtime_prices()
@@ -239,31 +397,210 @@ def _runtime_price_lookup_reply(query: str) -> str | None:
     else:
         price_items = []
 
-    candidates: list[dict] = []
-    for item in price_items:
+    candidate_norm = extract_price_query_candidate(query)
+    if not candidate_norm:
+        candidate_norm = query_norm
+
+    is_numeric_candidate = bool(re.fullmatch(r"\d+", candidate_norm))
+    candidate_len = len(candidate_norm)
+
+    def _debug_payload(best_match: str | None, score: float) -> dict:
+        safe_candidate = str(candidate_norm).encode("unicode_escape").decode("ascii")
+        safe_match = (
+            str(best_match).encode("unicode_escape").decode("ascii")
+            if best_match is not None
+            else None
+        )
+        return {"candidate": safe_candidate, "best_match": safe_match, "best_score": score}
+
+    # Numeric-only rule: only strict code match is allowed.
+    if is_numeric_candidate:
+        for item in price_items:
+            if not isinstance(item, dict):
+                continue
+            code_value = str(item.get("code") or "").strip()
+            if code_value and code_value == candidate_norm:
+                display_name = (
+                    (item.get("name_ar") or "").strip()
+                    or (item.get("canonical_name_clean") or "").strip()
+                    or (item.get("name_en") or "").strip()
+                    or "التحليل"
+                )
+                price_value = item.get("price")
+                print("PATH=runtime_price code")
+                print(
+                    "PRICE_MATCH_DEBUG",
+                    _debug_payload(display_name, 1000),
+                )
+                if price_value is None:
+                    return f"سعر {display_name}: غير متوفر حالياً"
+                return f"سعر {display_name}: {price_value}"
+        print("PATH=runtime_price no_match")
+        print(
+            "PRICE_MATCH_DEBUG",
+            _debug_payload(None, 0),
+        )
+        return safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender)
+
+    generic_alias_blacklist = {"vit", "test", "analysis", "serum", "lab", "blood"}
+
+    best_item: dict | None = None
+    best_path = "no_match"
+    best_score = -1.0
+    second_score = -1.0
+    fuzzy_budget = 1200
+
+    try:
+        from difflib import SequenceMatcher
+    except Exception:
+        SequenceMatcher = None
+
+    for idx, item in enumerate(price_items):
         if not isinstance(item, dict):
             continue
-        name_ar = item.get("name_ar") or ""
-        name_en = item.get("canonical_en") or item.get("name_en") or ""
-        ar_norm = normalize_text_ar(name_ar)
-        en_norm = normalize_text_ar(name_en)
-        if contains_match(query_norm, ar_norm) or contains_match(query_norm, en_norm):
-            candidates.append(item)
+
+        aliases = build_price_aliases(item)
+        alias_norms: list[str] = []
+        for alias in aliases:
+            alias_n = normalize_text_ar(alias)
+            if alias_n:
+                alias_norms.append(alias_n)
+        alias_norms = list(dict.fromkeys(alias_norms))
+
+        filtered_aliases: list[str] = []
+        for alias_n in alias_norms:
+            if len(alias_n) < 4:
+                continue
+            tokens = alias_n.split()
+            if len(tokens) == 1 and tokens[0] in generic_alias_blacklist:
+                continue
+            filtered_aliases.append(alias_n)
+        if not filtered_aliases:
             continue
-        for key in (item.get("keys") or []):
-            if contains_match(query_norm, normalize_text_ar(key)):
-                candidates.append(item)
-                break
 
-    if len(candidates) != 1:
-        return None
+        normalized_names: list[str] = []
+        for key in ("name_ar", "canonical_name_clean", "name_en", "canonical_name"):
+            val = normalize_text_ar(item.get(key) or "")
+            if val:
+                normalized_names.append(val)
+        normalized_names = list(dict.fromkeys(normalized_names))
 
-    matched = candidates[0]
-    price_value = matched.get("price")
-    name_ar = (matched.get("name_ar") or matched.get("name_en") or "التحليل").strip()
-    matched_ref = matched.get("id") or matched.get("name_ar") or matched.get("name_en")
-    print("PATH=runtime_lookup price", matched_ref)
-    return f"سعر {name_ar}: {price_value if price_value is not None else 'غير متوفر'}"
+        local_path = "no_match"
+        local_score = -1.0
+
+        # 2) exact alias match
+        if candidate_norm in filtered_aliases:
+            local_path = "exact"
+            local_score = 500 - (idx / 10000)
+
+        # 3) exact normalized name match
+        if local_score < 490 and candidate_norm in normalized_names:
+            local_path = "name_exact"
+            local_score = 490 - (idx / 10000)
+
+        # 4) alias contains candidate (candidate length >= 5)
+        if local_score < 450 and candidate_len >= 5:
+            for alias_n in filtered_aliases:
+                if candidate_norm in alias_n:
+                    coverage = (candidate_len / max(len(alias_n), 1)) * 100.0
+                    score = 400 + min(coverage, 50) - (idx / 10000)
+                    if score > local_score:
+                        local_score = score
+                        local_path = "alias"
+
+        # 5) candidate contains alias (alias length >= 5)
+        if local_score < 440:
+            for alias_n in filtered_aliases:
+                if len(alias_n) < 5:
+                    continue
+                if alias_n in candidate_norm:
+                    coverage = (len(alias_n) / max(candidate_len, 1)) * 100.0
+                    score = 350 + min(coverage, 50) - (idx / 10000)
+                    if score > local_score:
+                        local_score = score
+                        local_path = "alias"
+
+        # 6) fuzzy match with stricter thresholds
+        if local_score < 300 and SequenceMatcher is not None and len(candidate_norm) >= 3 and fuzzy_budget > 0:
+            max_ratio = 0.0
+            for alias_n in filtered_aliases:
+                if fuzzy_budget <= 0:
+                    break
+                fuzzy_budget -= 1
+                ratio = SequenceMatcher(None, candidate_norm, alias_n).ratio() * 100
+                threshold = 90 if len(alias_n) < 8 else 85
+                if ratio < threshold:
+                    continue
+                if ratio > max_ratio:
+                    max_ratio = ratio
+            if max_ratio > 0:
+                local_path = "fuzzy"
+                local_score = 300 + max_ratio - (idx / 10000)
+
+        if local_score > second_score:
+            second_score = local_score
+        if local_score > best_score:
+            second_score = best_score
+            best_score = local_score
+            best_item = item
+            best_path = local_path
+
+    if not best_item or best_score < 300:
+        print("PATH=runtime_price no_match")
+        print(
+            "PRICE_MATCH_DEBUG",
+            _debug_payload(None, round(best_score, 2) if best_score >= 0 else 0),
+        )
+        return safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender)
+
+    # Ambiguous top results should not return a possibly wrong price.
+    if second_score >= 0 and abs(best_score - second_score) < 5:
+        best_name = (
+            (best_item.get("name_ar") or "").strip()
+            or (best_item.get("canonical_name_clean") or "").strip()
+            or (best_item.get("name_en") or "").strip()
+            or "التحليل"
+        )
+        print("PATH=runtime_price no_match")
+        print(
+            "PRICE_MATCH_DEBUG",
+            _debug_payload(best_name, round(best_score, 2)),
+        )
+        return safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender)
+
+    display_name = (
+        (best_item.get("name_ar") or "").strip()
+        or (best_item.get("canonical_name_clean") or "").strip()
+        or (best_item.get("name_en") or "").strip()
+        or "التحليل"
+    )
+    price_value = best_item.get("price")
+
+    if best_path == "code":
+        print("PATH=runtime_price code")
+    elif best_path == "exact":
+        print("PATH=runtime_price exact")
+    elif best_path == "name_exact":
+        print("PATH=runtime_price exact")
+    elif best_path == "fuzzy":
+        print("PATH=runtime_price fuzzy")
+    elif best_path == "alias":
+        print("PATH=runtime_price alias")
+    else:
+        print("PATH=runtime_price no_match")
+        print(
+            "PRICE_MATCH_DEBUG",
+            _debug_payload(None, round(best_score, 2)),
+        )
+        return safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender)
+
+    print(
+        "PRICE_MATCH_DEBUG",
+        _debug_payload(display_name, round(best_score, 2)),
+    )
+    if price_value is None:
+        return f"سعر {display_name}: غير متوفر حالياً"
+    return f"سعر {display_name}: {price_value}"
 
 
 def is_test_related_question(text: str) -> bool:
@@ -2137,6 +2474,11 @@ def send_message_with_attachment(
             extracted_context = extract_text_from_document(attachment_content, attachment_filename or "")
 
     question_for_ai = effective_content or "Voice message"
+    expanded_query = expand_query_with_synonyms(question_for_ai) or question_for_ai
+    print(
+        "PATH=synonyms_expanded",
+        {"original": question_for_ai, "expanded": expanded_query[:200]},
+    )
     ai_prompt = question_for_ai
     if attachment_content:
         ai_prompt = (
@@ -2180,24 +2522,24 @@ def send_message_with_attachment(
     if _is_working_hours_query(question_for_ai):
         return _save_assistant_reply(_working_hours_deterministic_reply())
 
-    runtime_price_reply = _runtime_price_lookup_reply(question_for_ai)
+    runtime_price_reply = _runtime_price_lookup_reply(expanded_query, gender)
     if runtime_price_reply:
         return _save_assistant_reply(runtime_price_reply)
 
     if _is_general_price_query(question_for_ai):
-        specific_pkg = match_single_package(question_for_ai)
+        specific_pkg = match_single_package(expanded_query)
         if specific_pkg and (specific_pkg.get("price_raw") is not None):
             return _save_assistant_reply(_format_package_details_strict(specific_pkg))
 
         return _save_assistant_reply("للاستفسار عن الأسعار: 920003694")
 
-    runtime_faq_match = _runtime_faq_lookup(question_for_ai)
+    runtime_faq_match = _runtime_faq_lookup(expanded_query)
     if runtime_faq_match and runtime_faq_match.get("a"):
         print("PATH=runtime_lookup faq", runtime_faq_match.get("id"))
         return _save_assistant_reply(str(runtime_faq_match.get("a")).strip())
 
     if is_test_related_question(question_for_ai):
-        ctx, has_match = get_grounded_context(question_for_ai, max_tests=3)
+        ctx, has_match = get_grounded_context(expanded_query, max_tests=3)
         if has_match and ctx and ctx.strip():
             print("PATH=runtime_rag tests")
             return _save_assistant_reply("حسب معلومات المختبر:\n" + ctx)
@@ -2210,14 +2552,14 @@ def send_message_with_attachment(
 
     user_asked_home_visit = _user_explicitly_asked_home_visit(question_for_ai)
 
-    light_intent, light_intent_meta = _classify_light_intent(question_for_ai)
+    light_intent, light_intent_meta = _classify_light_intent(expanded_query)
     logger.info(
         "light intent classification | intent=%s | meta=%s",
         light_intent,
         light_intent_meta,
     )
 
-    branch_bypass_reply = _branch_lookup_bypass_reply(question_for_ai, conversation_id, light_intent)
+    branch_bypass_reply = _branch_lookup_bypass_reply(expanded_query, conversation_id, light_intent)
     if branch_bypass_reply:
         return _save_assistant_reply(branch_bypass_reply)
 
@@ -2225,7 +2567,7 @@ def send_message_with_attachment(
     if symptoms_bypass_reply:
         return _save_assistant_reply(symptoms_bypass_reply)
 
-    package_bypass_reply = _package_lookup_bypass_reply(question_for_ai, conversation_id)
+    package_bypass_reply = _package_lookup_bypass_reply(expanded_query, conversation_id)
     if package_bypass_reply:
         return _save_assistant_reply(package_bypass_reply)
 
