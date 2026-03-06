@@ -25,6 +25,7 @@ from app.data.rag_pipeline import (
     is_rag_ready,
     NO_INFO_MESSAGE,
     retrieve,
+    get_grounded_context,
     RAG_KNOWLEDGE_PATH,
     RAG_EMBEDDINGS_PATH,
 )
@@ -263,6 +264,32 @@ def _runtime_price_lookup_reply(query: str) -> str | None:
     matched_ref = matched.get("id") or matched.get("name_ar") or matched.get("name_en")
     print("PATH=runtime_lookup price", matched_ref)
     return f"سعر {name_ar}: {price_value if price_value is not None else 'غير متوفر'}"
+
+
+def is_test_related_question(text: str) -> bool:
+    value = str(text or "")
+    if not value.strip():
+        return False
+    lowered = value.lower()
+    markers = (
+        "تحليل",
+        "فحص",
+        "اختبار",
+        "اعراض",
+        "أعراض",
+        "صيام",
+        "تحضير",
+        "قبل التحليل",
+        "hba1c",
+        "سكر",
+        "cbc",
+        "ferritin",
+        "tsh",
+        "vit",
+        "vitamin",
+        "فيتامين",
+    )
+    return any(marker in value or marker in lowered for marker in markers)
 
 
 def _normalize_light(text: str) -> str:
@@ -2164,14 +2191,22 @@ def send_message_with_attachment(
 
         return _save_assistant_reply("للاستفسار عن الأسعار: 920003694")
 
-    stateful_reply = _handle_stateful_conversation(conversation_id, question_for_ai)
-    if stateful_reply:
-        return _save_assistant_reply(stateful_reply)
-
     runtime_faq_match = _runtime_faq_lookup(question_for_ai)
     if runtime_faq_match and runtime_faq_match.get("a"):
         print("PATH=runtime_lookup faq", runtime_faq_match.get("id"))
         return _save_assistant_reply(str(runtime_faq_match.get("a")).strip())
+
+    if is_test_related_question(question_for_ai):
+        ctx, has_match = get_grounded_context(question_for_ai, max_tests=3)
+        if has_match and ctx and ctx.strip():
+            print("PATH=runtime_rag tests")
+            return _save_assistant_reply("حسب معلومات المختبر:\n" + ctx)
+        print("PATH=runtime_rag no_match -> clarify")
+        return _save_assistant_reply(safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender))
+
+    stateful_reply = _handle_stateful_conversation(conversation_id, question_for_ai)
+    if stateful_reply:
+        return _save_assistant_reply(stateful_reply)
 
     user_asked_home_visit = _user_explicitly_asked_home_visit(question_for_ai)
 
