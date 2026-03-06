@@ -29,7 +29,9 @@ from app.data.rag_pipeline import (
     RAG_EMBEDDINGS_PATH,
 )
 from app.core.config import settings
+from app.core.runtime_paths import FAQ_INDEX_PATH, TESTS_PRICE_INDEX_PATH, path_exists
 from app.utils.arabic_normalizer import normalize_for_matching
+from app.utils.gender_tone import apply_gender_variant, guess_gender, safe_clarify_message
 from app.services.report_parser_service import parse_lab_report_text, compose_report_summary, is_report_explanation_request
 from app.services.response_fallback_service import sanitize_for_ui, compose_context_fallback
 from app.data.style_pipeline import search_style_examples
@@ -52,6 +54,9 @@ from app.services.packages_rag_service import semantic_search_packages
 logger = logging.getLogger(__name__)
 
 WAREED_CUSTOMER_SERVICE_PHONE = "920003694"
+
+_FAQ_CACHE = None
+_PRICES_CACHE = None
 
 _ESCALATION_BLOCKED_PHRASES = (
     "we will contact you",
@@ -133,6 +138,131 @@ _GENERAL_PRICE_TRIGGERS = {
     "ابي سعر",
     "أبي سعر",
 }
+
+
+def load_runtime_faq():
+    global _FAQ_CACHE
+    if _FAQ_CACHE is not None:
+        return _FAQ_CACHE
+    if path_exists(FAQ_INDEX_PATH):
+        with open(FAQ_INDEX_PATH, "r", encoding="utf-8") as f:
+            _FAQ_CACHE = json.load(f)
+            return _FAQ_CACHE
+    _FAQ_CACHE = []
+    return _FAQ_CACHE
+
+
+def load_runtime_prices():
+    global _PRICES_CACHE
+    if _PRICES_CACHE is not None:
+        return _PRICES_CACHE
+    if path_exists(TESTS_PRICE_INDEX_PATH):
+        with open(TESTS_PRICE_INDEX_PATH, "r", encoding="utf-8") as f:
+            _PRICES_CACHE = json.load(f)
+            return _PRICES_CACHE
+    _PRICES_CACHE = []
+    return _PRICES_CACHE
+
+
+def normalize_text_ar(s: str) -> str:
+    value = str(s or "").strip().lower()
+    if not value:
+        return ""
+    value = re.sub(r"[\u064B-\u065F\u0670\u0640]", "", value)
+    value = (
+        value.replace("أ", "ا")
+        .replace("إ", "ا")
+        .replace("آ", "ا")
+        .replace("ى", "ي")
+        .replace("ة", "ه")
+    )
+    value = re.sub(r"[^\w\s\u0600-\u06FF]", " ", value)
+    value = re.sub(r"\s+", " ", value).strip()
+    return value
+
+
+def contains_match(query_norm: str, candidate_norm: str) -> bool:
+    q = (query_norm or "").strip()
+    c = (candidate_norm or "").strip()
+    if len(q) < 2 or len(c) < 2:
+        return False
+    return c in q or q in c
+
+
+def _runtime_faq_lookup(query: str) -> dict | None:
+    query_norm = normalize_text_ar(query)
+    if not query_norm:
+        return None
+    faq_items = load_runtime_faq()
+    if not isinstance(faq_items, list):
+        return None
+
+    exact_match = None
+    contains_matches: list[dict] = []
+    for item in faq_items:
+        if not isinstance(item, dict):
+            continue
+        candidate_norm = normalize_text_ar(item.get("q_norm") or item.get("q") or "")
+        if not candidate_norm:
+            continue
+        if candidate_norm == query_norm:
+            exact_match = item
+            break
+        if contains_match(query_norm, candidate_norm):
+            contains_matches.append(item)
+
+    if exact_match:
+        return exact_match
+    if not contains_matches:
+        return None
+    contains_matches.sort(
+        key=lambda it: len(normalize_text_ar(it.get("q_norm") or it.get("q") or "")),
+        reverse=True,
+    )
+    return contains_matches[0]
+
+
+def _runtime_price_lookup_reply(query: str) -> str | None:
+    query_norm = normalize_text_ar(query)
+    if not query_norm:
+        return None
+
+    if not any(k in query_norm for k in ("سعر", "بكم", "كم سعر", "تكلفه", "تكلفة", "السعر")):
+        return None
+
+    prices_data = load_runtime_prices()
+    if isinstance(prices_data, dict):
+        price_items = prices_data.get("records") or []
+    elif isinstance(prices_data, list):
+        price_items = prices_data
+    else:
+        price_items = []
+
+    candidates: list[dict] = []
+    for item in price_items:
+        if not isinstance(item, dict):
+            continue
+        name_ar = item.get("name_ar") or ""
+        name_en = item.get("canonical_en") or item.get("name_en") or ""
+        ar_norm = normalize_text_ar(name_ar)
+        en_norm = normalize_text_ar(name_en)
+        if contains_match(query_norm, ar_norm) or contains_match(query_norm, en_norm):
+            candidates.append(item)
+            continue
+        for key in (item.get("keys") or []):
+            if contains_match(query_norm, normalize_text_ar(key)):
+                candidates.append(item)
+                break
+
+    if len(candidates) != 1:
+        return None
+
+    matched = candidates[0]
+    price_value = matched.get("price")
+    name_ar = (matched.get("name_ar") or matched.get("name_en") or "التحليل").strip()
+    matched_ref = matched.get("id") or matched.get("name_ar") or matched.get("name_en")
+    print("PATH=runtime_lookup price", matched_ref)
+    return f"سعر {name_ar}: {price_value if price_value is not None else 'غير متوفر'}"
 
 
 def _normalize_light(text: str) -> str:
@@ -1906,6 +2036,51 @@ def send_message_with_attachment(
     if conv is None:
         return None
 
+    user_obj = getattr(conv, "user", None)
+    display_name = None
+    if user_obj is not None:
+        display_name = (
+            getattr(user_obj, "display_name", None)
+            or getattr(user_obj, "username", None)
+            or getattr(user_obj, "email", None)
+        )
+    gender = guess_gender(display_name)
+
+    def tone(text_male: str, text_female: str, text_neutral: str) -> str:
+        return apply_gender_variant(text_male, text_female, text_neutral, gender)
+
+    def _apply_gender_addressing(text: str) -> str:
+        content = str(text or "")
+        if not content:
+            return content
+        tafaddal = tone("تفضل", "تفضلين", "تفضل")
+        tawasal = tone("تواصل", "تواصلي", "تواصل")
+        arsil = tone("ارسل", "ارسلي", "ارسل")
+        token_map = (
+            ("تفضلين", tafaddal),
+            ("تفضل", tafaddal),
+            ("تواصلي", tawasal),
+            ("تواصل", tawasal),
+            ("ارسلي", arsil),
+            ("ارسل", arsil),
+        )
+        for src, dst in token_map:
+            content = re.sub(rf"(?<![\u0600-\u06FF]){re.escape(src)}(?![\u0600-\u06FF])", dst, content)
+        return content
+
+    def _save_assistant_reply(raw_text: str, token_count: int = 0) -> tuple[Message, Message]:
+        final_text = sanitize_for_ui(_apply_gender_addressing(raw_text))
+        assistant_msg = add_message(
+            db,
+            conversation_id,
+            MessageRole.ASSISTANT,
+            final_text,
+            token_count=token_count,
+        )
+        db.commit()
+        db.refresh(assistant_msg)
+        return user_msg, assistant_msg
+
     extracted_context = ""
     normalized_attachment_type = (attachment_type or "").lower()
     is_audio = normalized_attachment_type == "audio" or (
@@ -1961,105 +2136,42 @@ def send_message_with_attachment(
 
     services_start_reply = _resolve_services_branches_home_visit_start_reply(conversation_id, question_for_ai)
     if services_start_reply:
-        assistant_msg = add_message(
-            db,
-            conversation_id,
-            MessageRole.ASSISTANT,
-            services_start_reply,
-            token_count=0,
-        )
-        db.commit()
-        db.refresh(assistant_msg)
-        return user_msg, assistant_msg
+        return _save_assistant_reply(services_start_reply)
 
     prep_button_reply = _resolve_preparation_button_reply(question_for_ai)
     if prep_button_reply:
-        assistant_msg = add_message(
-            db,
-            conversation_id,
-            MessageRole.ASSISTANT,
-            prep_button_reply,
-            token_count=0,
-        )
-        db.commit()
-        db.refresh(assistant_msg)
-        return user_msg, assistant_msg
+        return _save_assistant_reply(prep_button_reply)
 
     home_visit_booking_reply = _resolve_home_visit_booking_reply(db, conversation_id, question_for_ai)
     if home_visit_booking_reply:
-        assistant_msg = add_message(
-            db,
-            conversation_id,
-            MessageRole.ASSISTANT,
-            home_visit_booking_reply,
-            token_count=0,
-        )
-        db.commit()
-        db.refresh(assistant_msg)
-        return user_msg, assistant_msg
+        return _save_assistant_reply(home_visit_booking_reply)
 
     phone_followup_reply = _resolve_customer_phone_followup(db, conversation_id, question_for_ai)
     if phone_followup_reply:
-        assistant_msg = add_message(
-            db,
-            conversation_id,
-            MessageRole.ASSISTANT,
-            phone_followup_reply,
-            token_count=0,
-        )
-        db.commit()
-        db.refresh(assistant_msg)
-        return user_msg, assistant_msg
+        return _save_assistant_reply(phone_followup_reply)
 
     if _is_working_hours_query(question_for_ai):
-        assistant_msg = add_message(
-            db,
-            conversation_id,
-            MessageRole.ASSISTANT,
-            _working_hours_deterministic_reply(),
-            token_count=0,
-        )
-        db.commit()
-        db.refresh(assistant_msg)
-        return user_msg, assistant_msg
+        return _save_assistant_reply(_working_hours_deterministic_reply())
+
+    runtime_price_reply = _runtime_price_lookup_reply(question_for_ai)
+    if runtime_price_reply:
+        return _save_assistant_reply(runtime_price_reply)
 
     if _is_general_price_query(question_for_ai):
         specific_pkg = match_single_package(question_for_ai)
         if specific_pkg and (specific_pkg.get("price_raw") is not None):
-            assistant_msg = add_message(
-                db,
-                conversation_id,
-                MessageRole.ASSISTANT,
-                _format_package_details_strict(specific_pkg),
-                token_count=0,
-            )
-            db.commit()
-            db.refresh(assistant_msg)
-            return user_msg, assistant_msg
+            return _save_assistant_reply(_format_package_details_strict(specific_pkg))
 
-        assistant_msg = add_message(
-            db,
-            conversation_id,
-            MessageRole.ASSISTANT,
-            "للاستفسار عن الأسعار: 920003694",
-            token_count=0,
-        )
-        db.commit()
-        db.refresh(assistant_msg)
-        return user_msg, assistant_msg
+        return _save_assistant_reply("للاستفسار عن الأسعار: 920003694")
 
     stateful_reply = _handle_stateful_conversation(conversation_id, question_for_ai)
     if stateful_reply:
-        assistant_msg = add_message(
-            db,
-            conversation_id,
-            MessageRole.ASSISTANT,
-            sanitize_for_ui(stateful_reply),
-            token_count=0,
-        )
-        db.commit()
-        db.refresh(assistant_msg)
-        return user_msg, assistant_msg
+        return _save_assistant_reply(stateful_reply)
+
+    runtime_faq_match = _runtime_faq_lookup(question_for_ai)
+    if runtime_faq_match and runtime_faq_match.get("a"):
+        print("PATH=runtime_lookup faq", runtime_faq_match.get("id"))
+        return _save_assistant_reply(str(runtime_faq_match.get("a")).strip())
 
     user_asked_home_visit = _user_explicitly_asked_home_visit(question_for_ai)
 
@@ -2072,54 +2184,18 @@ def send_message_with_attachment(
 
     branch_bypass_reply = _branch_lookup_bypass_reply(question_for_ai, conversation_id, light_intent)
     if branch_bypass_reply:
-        assistant_msg = add_message(
-            db,
-            conversation_id,
-            MessageRole.ASSISTANT,
-            branch_bypass_reply,
-            token_count=0,
-        )
-        db.commit()
-        db.refresh(assistant_msg)
-        return user_msg, assistant_msg
+        return _save_assistant_reply(branch_bypass_reply)
 
     symptoms_bypass_reply = _symptoms_rag_bypass_reply(question_for_ai)
     if symptoms_bypass_reply:
-        assistant_msg = add_message(
-            db,
-            conversation_id,
-            MessageRole.ASSISTANT,
-            sanitize_for_ui(symptoms_bypass_reply),
-            token_count=0,
-        )
-        db.commit()
-        db.refresh(assistant_msg)
-        return user_msg, assistant_msg
+        return _save_assistant_reply(symptoms_bypass_reply)
 
     package_bypass_reply = _package_lookup_bypass_reply(question_for_ai, conversation_id)
     if package_bypass_reply:
-        assistant_msg = add_message(
-            db,
-            conversation_id,
-            MessageRole.ASSISTANT,
-            sanitize_for_ui(package_bypass_reply),
-            token_count=0,
-        )
-        db.commit()
-        db.refresh(assistant_msg)
-        return user_msg, assistant_msg
+        return _save_assistant_reply(package_bypass_reply)
 
     if light_intent == "branch_location" and not light_intent_meta.get("has_city_or_area"):
-        assistant_msg = add_message(
-            db,
-            conversation_id,
-            MessageRole.ASSISTANT,
-            _branch_location_prompt(),
-            token_count=0,
-        )
-        db.commit()
-        db.refresh(assistant_msg)
-        return user_msg, assistant_msg
+        return _save_assistant_reply(_branch_location_prompt())
 
     intent_payload = classify_intent(question_for_ai)
     intent = intent_payload.get("intent", "services_overview")
@@ -2138,28 +2214,11 @@ def send_message_with_attachment(
     route_type, fixed_reply = route_question(question_for_ai)
     if fixed_reply:
         logger.info("Question routed to fixed response (route=%s)", route_type)
-        assistant_msg = add_message(
-            db,
-            conversation_id,
-            MessageRole.ASSISTANT,
-            sanitize_for_ui(fixed_reply),
-            token_count=0,
-        )
-        db.commit()
-        db.refresh(assistant_msg)
-        return user_msg, assistant_msg
+        return _save_assistant_reply(fixed_reply)
 
     if intent_payload.get("needs_clarification") and intent_payload.get("clarifying_question"):
-        assistant_msg = add_message(
-            db,
-            conversation_id,
-            MessageRole.ASSISTANT,
-            sanitize_for_ui(intent_payload["clarifying_question"]),
-            token_count=0,
-        )
-        db.commit()
-        db.refresh(assistant_msg)
-        return user_msg, assistant_msg
+        clarify_reply = safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender)
+        return _save_assistant_reply(clarify_reply)
 
     if light_intent == "branch_location":
         verified_branch_answer = _direct_kb_faq_answer(question_for_ai, "branches_locations")
@@ -2169,26 +2228,8 @@ def send_message_with_attachment(
                 bool(light_intent_meta.get("has_city_or_area")),
                 allow_home_visit=user_asked_home_visit,
             )
-            assistant_msg = add_message(
-                db,
-                conversation_id,
-                MessageRole.ASSISTANT,
-                verified_branch_answer,
-                token_count=0,
-            )
-            db.commit()
-            db.refresh(assistant_msg)
-            return user_msg, assistant_msg
-        assistant_msg = add_message(
-            db,
-            conversation_id,
-            MessageRole.ASSISTANT,
-            _branch_location_prompt(light_intent_meta.get("city_or_area") or ""),
-            token_count=0,
-        )
-        db.commit()
-        db.refresh(assistant_msg)
-        return user_msg, assistant_msg
+            return _save_assistant_reply(verified_branch_answer)
+        return _save_assistant_reply(_branch_location_prompt(light_intent_meta.get("city_or_area") or ""))
 
     if intent in {
         "branches_locations",
@@ -2200,37 +2241,19 @@ def send_message_with_attachment(
         faq_answer = _direct_kb_faq_answer(question_for_ai, intent)
         if light_intent == "branch_location" or intent == "working_hours":
             if not faq_answer or not _has_verified_branch_info(faq_answer):
-                assistant_msg = add_message(
-                    db,
-                    conversation_id,
-                    MessageRole.ASSISTANT,
-                    _branch_location_prompt(light_intent_meta.get("city_or_area") or ""),
-                    token_count=0,
-                )
-                db.commit()
-                db.refresh(assistant_msg)
-                return user_msg, assistant_msg
+                return _save_assistant_reply(_branch_location_prompt(light_intent_meta.get("city_or_area") or ""))
             faq_answer = _sanitize_branch_location_response(
                 faq_answer,
                 bool(light_intent_meta.get("has_city_or_area")),
                 allow_home_visit=user_asked_home_visit,
             )
-            assistant_msg = add_message(db, conversation_id, MessageRole.ASSISTANT, faq_answer, token_count=0)
-            db.commit()
-            db.refresh(assistant_msg)
-            return user_msg, assistant_msg
+            return _save_assistant_reply(faq_answer)
         if faq_answer:
-            assistant_msg = add_message(db, conversation_id, MessageRole.ASSISTANT, faq_answer, token_count=0)
-            db.commit()
-            db.refresh(assistant_msg)
-            return user_msg, assistant_msg
+            return _save_assistant_reply(faq_answer)
 
     if intent == "symptom_based_suggestion":
         suggestion = _symptom_guidance(question_for_ai)
-        assistant_msg = add_message(db, conversation_id, MessageRole.ASSISTANT, suggestion, token_count=0)
-        db.commit()
-        db.refresh(assistant_msg)
-        return user_msg, assistant_msg
+        return _save_assistant_reply(suggestion)
 
     # PDF report summarizer (works even if LLM is unavailable).
     is_pdf_attachment = bool(attachment_content and (attachment_filename or "").lower().endswith(".pdf"))
@@ -2238,16 +2261,7 @@ def send_message_with_attachment(
     if is_pdf_attachment and wants_report_explain and extracted_context:
         parsed_rows = parse_lab_report_text(extracted_context)
         report_reply = compose_report_summary(parsed_rows)
-        assistant_msg = add_message(
-            db,
-            conversation_id,
-            MessageRole.ASSISTANT,
-            sanitize_for_ui(report_reply),
-            token_count=0,
-        )
-        db.commit()
-        db.refresh(assistant_msg)
-        return user_msg, assistant_msg
+        return _save_assistant_reply(report_reply)
 
     threshold = getattr(settings, "RAG_SIMILARITY_THRESHOLD", 0.58)
     merged_context_parts: list[str] = []
@@ -2400,13 +2414,4 @@ def send_message_with_attachment(
     assistant_content = _ensure_result_time_clause(assistant_content, light_intent)
     assistant_content = _enforce_escalation_policy(assistant_content)
 
-    assistant_msg = add_message(
-        db,
-        conversation_id,
-        MessageRole.ASSISTANT,
-        sanitize_for_ui(assistant_content),
-        token_count=tokens,
-    )
-    db.commit()
-    db.refresh(assistant_msg)
-    return user_msg, assistant_msg
+    return _save_assistant_reply(assistant_content, token_count=tokens)
