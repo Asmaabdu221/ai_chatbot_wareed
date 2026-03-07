@@ -34,6 +34,7 @@ NO_INFO_MESSAGE = "عذراً، حالياً ما عندنا معلومات كا
 
 SYNONYMS_PATH = Path("app/data/runtime/synonyms/synonyms_ar.json")
 _RAG_SYNONYMS_CACHE = None
+_RAG_CONCEPT_INDEX_CACHE = None
 
 
 def _load_json_robust(path: str) -> Optional[Dict]:
@@ -91,6 +92,10 @@ def expand_test_query(text: str) -> str:
     query_key = _safe_normalize_for_matching(search_terms or query_norm_full)
     if not query_key:
         return ""
+    # Broad Arabic questions are handled by concept expansion in retrieve().
+    # Keep this stage lightweight to avoid overly long expansions.
+    if _contains_arabic(query_key) and len(query_key.split()) >= 2:
+        return query_key
 
     synonyms = load_rag_synonyms()
     tests_syn = synonyms.get("tests") if isinstance(synonyms, dict) else {}
@@ -99,6 +104,8 @@ def expand_test_query(text: str) -> str:
 
     scored_matches: List[Tuple[float, str, List[str]]] = []
 
+    max_aliases_per_concept = 80
+    max_alias_len = 140
     for concept in tests_syn.values():
         if not isinstance(concept, dict):
             continue
@@ -108,7 +115,9 @@ def expand_test_query(text: str) -> str:
 
         matched_aliases: List[str] = []
         best_score = 0.0
-        for alias in aliases:
+        for alias in aliases[:max_aliases_per_concept]:
+            if len(str(alias or "")) > max_alias_len:
+                continue
             alias_n = _safe_normalize_for_matching(str(alias))
             if not alias_n or len(alias_n) < 3:
                 continue
@@ -165,46 +174,108 @@ def _as_list(value: Any) -> List[str]:
     return [str(value)]
 
 
-def _collect_concept_matches(query_norm: str, max_matches: int = 8) -> List[Dict[str, Any]]:
-    if not query_norm:
-        return []
+def _build_concept_light_index() -> List[Dict[str, Any]]:
+    global _RAG_CONCEPT_INDEX_CACHE
+    if _RAG_CONCEPT_INDEX_CACHE is not None:
+        return _RAG_CONCEPT_INDEX_CACHE
 
     synonyms = load_rag_synonyms()
     concepts = synonyms.get("concepts") if isinstance(synonyms, dict) else {}
     if not isinstance(concepts, dict):
-        return []
+        _RAG_CONCEPT_INDEX_CACHE = []
+        return _RAG_CONCEPT_INDEX_CACHE
 
-    q_tokens = set(query_norm.split()[:24])
-    matches: List[Dict[str, Any]] = []
-
+    index: List[Dict[str, Any]] = []
     for concept_key, concept in concepts.items():
         if not isinstance(concept, dict):
             continue
+
+        display = str(concept.get("display_name") or "").strip()
+        aliases = _as_list(concept.get("aliases"))[:3]
+        related_tests = _as_list(concept.get("related_tests"))[:5]
+        signals = concept.get("signals") if isinstance(concept.get("signals"), dict) else {}
+        symptom_signals = _as_list(signals.get("symptoms"))[:3]
+        preparation_signals = _as_list(signals.get("preparation"))[:3]
+        category_signals = _as_list(signals.get("category"))[:3]
+        benefit_signals = _as_list(signals.get("benefit"))[:3]
+
+        terms: List[str] = []
+        seen_terms: Set[str] = set()
+
+        def _add_term(v: str) -> None:
+            n = _safe_normalize_for_matching(v)
+            if not n or len(n) < 2 or len(n) > 120 or n in seen_terms:
+                return
+            seen_terms.add(n)
+            terms.append(n)
+
+        _add_term(display)
+        for source in (
+            aliases,
+            related_tests,
+            symptom_signals,
+            preparation_signals,
+            category_signals,
+            benefit_signals,
+        ):
+            for item in source:
+                _add_term(str(item))
+
+        if not terms:
+            continue
+
+        index.append(
+            {
+                "key": str(concept_key),
+                "display_name": display,
+                "aliases": aliases,
+                "related_tests": related_tests,
+                "signals": {
+                    "symptoms": symptom_signals,
+                    "preparation": preparation_signals,
+                    "category": category_signals,
+                    "benefit": benefit_signals,
+                },
+                "terms": terms,
+            }
+        )
+
+    _RAG_CONCEPT_INDEX_CACHE = index
+    return _RAG_CONCEPT_INDEX_CACHE
+
+
+def _collect_concept_matches(query_norm: str, max_matches: int = 8) -> List[Dict[str, Any]]:
+    if not query_norm:
+        return []
+
+    concept_index = _build_concept_light_index()
+    if not concept_index:
+        return []
+
+    q_tokens = set(query_norm.split()[:16])
+    q_tokens_long = {t for t in q_tokens if len(t) >= 2}
+    matches: List[Dict[str, Any]] = []
+
+    for concept in concept_index:
         display = str(concept.get("display_name") or "").strip()
         aliases = _as_list(concept.get("aliases"))
         related_tests = _as_list(concept.get("related_tests"))
-        signals = concept.get("signals") if isinstance(concept.get("signals"), dict) else {}
-        symptom_signals = _as_list(signals.get("symptoms"))
-        preparation_signals = _as_list(signals.get("preparation"))
-        category_signals = _as_list(signals.get("category"))
-        benefit_signals = _as_list(signals.get("benefit"))
-
-        candidates = [
-            *_as_list(display),
-            *aliases,
-            *related_tests,
-            *symptom_signals,
-            *preparation_signals,
-            *category_signals,
-            *benefit_signals,
-        ][:48]
+        sig = concept.get("signals") if isinstance(concept.get("signals"), dict) else {}
+        symptom_signals = _as_list(sig.get("symptoms"))
+        preparation_signals = _as_list(sig.get("preparation"))
+        category_signals = _as_list(sig.get("category"))
+        benefit_signals = _as_list(sig.get("benefit"))
+        candidates = _as_list(concept.get("terms"))
 
         best_score = 0.0
         matched_terms: List[str] = []
         for term in candidates:
-            term_n = _safe_normalize_for_matching(term)
-            if not term_n or len(term_n) < 2:
+            term_n = str(term or "").strip()
+            if not term_n:
                 continue
+            if q_tokens_long and not any((tk in term_n) or (term_n in tk) for tk in q_tokens_long):
+                if len(term_n) >= 4 and term_n not in query_norm:
+                    continue
             if term_n == query_norm:
                 best_score = max(best_score, 1.0)
                 matched_terms.append(term_n)
@@ -231,7 +302,7 @@ def _collect_concept_matches(query_norm: str, max_matches: int = 8) -> List[Dict
 
         matches.append(
             {
-                "key": str(concept_key),
+                "key": str(concept.get("key") or ""),
                 "score": best_score,
                 "display_name": display,
                 "aliases": aliases,
@@ -254,6 +325,8 @@ def expand_query_with_concepts(text: str) -> str:
     query_norm = _safe_normalize_for_matching(text or "")
     if not query_norm:
         return ""
+    if _contains_arabic(query_norm) and len(query_norm.split()) >= 2:
+        return query_norm
 
     matches = _collect_concept_matches(query_norm, max_matches=6)
     if not matches:
@@ -318,6 +391,37 @@ def _query_asks_symptoms(text: str) -> bool:
     return any(_safe_normalize_for_matching(k) in t for k in keywords)
 
 
+def _is_symptom_query(text_norm: str) -> bool:
+    t = _safe_normalize_for_matching(text_norm or "")
+    if not t:
+        return False
+    keywords = (
+        "اعراض",
+        "أعراض",
+        "يشير",
+        "سبب",
+        "نقص",
+        "ارتفاع",
+        "انخفاض",
+    )
+    return any(_safe_normalize_for_matching(k) in t for k in keywords)
+
+
+def _is_preparation_query(text_norm: str) -> bool:
+    t = _safe_normalize_for_matching(text_norm or "")
+    if not t:
+        return False
+    keywords = (
+        "صيام",
+        "صايم",
+        "تحضير",
+        "قبل التحليل",
+        "يحتاج صيام",
+        "بدون صيام",
+    )
+    return any(_safe_normalize_for_matching(k) in t for k in keywords)
+
+
 def _build_document_text(test: Dict[str, Any]) -> str:
     """Build searchable text from a test record (for embedding)."""
     parts = [
@@ -368,6 +472,7 @@ def load_rag_knowledge() -> Tuple[List[Dict], Dict]:
                     "id": chunk.get("id"),
                     "analysis_name_ar": metadata.get("canonical_ar"),
                     "analysis_name_en": metadata.get("canonical_en"),
+                    "canonical_name_clean": metadata.get("canonical_name_clean"),
                     "description": line_map.get("فائدة التحليل") or chunk_text,
                     "symptoms": line_map.get("الأعراض المرتبطة", ""),
                     "category": metadata.get("category_norm") or metadata.get("category"),
@@ -719,14 +824,22 @@ def retrieve(
         return str(t.get("id", "")) + "|" + str(t.get("analysis_name_ar", "")) + "|" + str(t.get("analysis_name_en", ""))
 
     concept_matches = _collect_concept_matches(_safe_normalize_for_matching(expanded_query), max_matches=8)
+    matched_concept_keys = [str(m.get("key") or "") for m in concept_matches if m.get("key")]
     strong_concept_aliases: Set[str] = set()
     prep_signals: Set[str] = set()
     symptom_signals: Set[str] = set()
+    related_test_scores: Dict[str, float] = {}
     for m in concept_matches:
+        base_weight = float(m.get("score") or 0.0)
         for alias in m.get("aliases", []):
             alias_n = _safe_normalize_for_matching(alias)
             if alias_n and len(alias_n) >= 4:
                 strong_concept_aliases.add(alias_n)
+        for rt in m.get("related_tests", []):
+            rt_n = _safe_normalize_for_matching(rt)
+            if not rt_n or len(rt_n) < 2:
+                continue
+            related_test_scores[rt_n] = max(related_test_scores.get(rt_n, 0.0), base_weight)
         sig = m.get("signals") or {}
         for p in sig.get("preparation", []):
             p_n = _safe_normalize_for_matching(p)
@@ -737,8 +850,43 @@ def retrieve(
             if s_n and len(s_n) >= 3:
                 symptom_signals.add(s_n)
 
-    asks_preparation = _query_asks_preparation(query)
-    asks_symptoms = _query_asks_symptoms(query)
+    concept_related_tests = [
+        name for name, _score in sorted(related_test_scores.items(), key=lambda x: x[1], reverse=True)[:20]
+    ]
+    print(
+        "RAG_CONCEPT_MATCHES",
+        {
+            "query": str(query or "").encode("unicode_escape").decode("ascii"),
+            "matched_concepts": [
+                str(x).encode("unicode_escape").decode("ascii")
+                for x in matched_concept_keys
+            ],
+            "related_tests": [
+                str(x).encode("unicode_escape").decode("ascii")
+                for x in concept_related_tests[:10]
+            ],
+        },
+    )
+
+    asks_preparation = _is_preparation_query(query)
+    asks_symptoms = _is_symptom_query(query)
+
+    def _related_test_match(names: List[str], related_items: List[str]) -> bool:
+        if not names or not related_items:
+            return False
+        for n in names:
+            if not n:
+                continue
+            for rt in related_items:
+                if not rt:
+                    continue
+                if n == rt:
+                    return True
+                if len(rt) >= 3 and rt in n:
+                    return True
+                if len(n) >= 3 and n in rt:
+                    return True
+        return False
 
     best_by_key: Dict[str, Dict] = {}
     for r in lexical_results:
@@ -749,16 +897,23 @@ def retrieve(
         name_ar = _safe_normalize_for_matching(t.get("analysis_name_ar") or "")
         name_en = _safe_normalize_for_matching(t.get("analysis_name_en") or "")
         expanded_norm = _safe_normalize_for_matching(concept_expanded_query)
-        if (name_ar and name_ar in expanded_norm) or (name_en and name_en in expanded_norm):
+        canonical_clean = _safe_normalize_for_matching(t.get("canonical_name_clean") or "")
+        if (
+            (name_ar and name_ar in expanded_norm)
+            or (name_en and name_en in expanded_norm)
+            or (canonical_clean and canonical_clean in expanded_norm)
+        ):
             score = min(1.0, score + 0.05)
+        if _related_test_match([name_ar, name_en, canonical_clean], concept_related_tests):
+            score = min(1.0, score + 0.10)
         chunk_text = _safe_normalize_for_matching(t.get("__chunk_text") or _build_document_text(t))
         if chunk_text:
             if strong_concept_aliases and any(a in chunk_text for a in strong_concept_aliases):
-                score = min(1.0, score + 0.03)
+                score = min(1.0, score + 0.05)
             if asks_preparation and prep_signals and any(s in chunk_text for s in prep_signals):
-                score = min(1.0, score + 0.03)
+                score = min(1.0, score + 0.05)
             if asks_symptoms and symptom_signals and any(s in chunk_text for s in symptom_signals):
-                score = min(1.0, score + 0.03)
+                score = min(1.0, score + 0.05)
         src = r.get("source", "lexical")
         if k not in best_by_key or score > best_by_key[k]["score"]:
             best_by_key[k] = {"test": t, "score": score, "source": src}
