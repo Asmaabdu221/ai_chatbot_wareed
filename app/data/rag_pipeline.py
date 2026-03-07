@@ -35,6 +35,7 @@ NO_INFO_MESSAGE = "عذراً، حالياً ما عندنا معلومات كا
 SYNONYMS_PATH = Path("app/data/runtime/synonyms/synonyms_ar.json")
 _RAG_SYNONYMS_CACHE = None
 _RAG_CONCEPT_INDEX_CACHE = None
+_RAG_DIRECT_TEST_INDEX_CACHE = None
 
 
 def _load_json_robust(path: str) -> Optional[Dict]:
@@ -319,6 +320,241 @@ def _collect_concept_matches(query_norm: str, max_matches: int = 8) -> List[Dict
 
     matches.sort(key=lambda x: x["score"], reverse=True)
     return matches[:max_matches]
+
+
+def _is_code_like_token(token: str) -> bool:
+    t = (token or "").strip()
+    if not t:
+        return False
+    if re.fullmatch(r"[A-Za-z]{2,10}\d{0,3}[A-Za-z]{0,3}\d{0,2}", t):
+        return True
+    return bool(re.fullmatch(r"[A-Za-z0-9]{2,12}", t) and any(ch.isdigit() for ch in t))
+
+
+def _build_direct_test_light_index() -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
+    global _RAG_DIRECT_TEST_INDEX_CACHE
+    if _RAG_DIRECT_TEST_INDEX_CACHE is not None:
+        return _RAG_DIRECT_TEST_INDEX_CACHE
+
+    synonyms = load_rag_synonyms()
+    tests_syn = synonyms.get("tests") if isinstance(synonyms, dict) else {}
+    if not isinstance(tests_syn, dict):
+        _RAG_DIRECT_TEST_INDEX_CACHE = ([], {})
+        return _RAG_DIRECT_TEST_INDEX_CACHE
+
+    entries: List[Dict[str, Any]] = []
+    alias_freq: Dict[str, int] = {}
+    for concept_key, concept in tests_syn.items():
+        if not isinstance(concept, dict):
+            continue
+
+        display = str(concept.get("display_name") or "").strip()
+        display_n = _safe_normalize_for_matching(display)
+        key_n = _safe_normalize_for_matching(str(concept_key or ""))
+        canonical_candidates = [
+            concept.get("canonical_name"),
+            concept.get("canonical_name_clean"),
+            concept.get("name"),
+            concept.get("title"),
+        ]
+        canonical_terms = [
+            _safe_normalize_for_matching(str(v or ""))
+            for v in canonical_candidates
+            if str(v or "").strip()
+        ]
+        aliases = _as_list(concept.get("aliases"))
+        alias_terms: List[str] = []
+        seen_alias: Set[str] = set()
+        for a in aliases[:200]:
+            an = _safe_normalize_for_matching(str(a))
+            if not an or len(an) < 2 or an in seen_alias:
+                continue
+            seen_alias.add(an)
+            alias_terms.append(an)
+            alias_freq[an] = alias_freq.get(an, 0) + 1
+
+        entries.append(
+            {
+                "key": str(concept_key or ""),
+                "display_name": display,
+                "display_n": display_n,
+                "key_n": key_n,
+                "canonical_terms": canonical_terms,
+                "alias_terms": alias_terms,
+                "aliases": aliases[:20],
+            }
+        )
+
+    _RAG_DIRECT_TEST_INDEX_CACHE = (entries, alias_freq)
+    return _RAG_DIRECT_TEST_INDEX_CACHE
+
+
+def _collect_direct_test_matches(query_norm: str, max_matches: int = 8) -> List[Dict[str, Any]]:
+    q = _safe_normalize_for_matching(query_norm or "")
+    if not q:
+        return []
+
+    direct_entries, alias_freq = _build_direct_test_light_index()
+    if not direct_entries:
+        return []
+
+    q_tokens = [t for t in q.split() if t]
+    q_token_set = set(q_tokens[:12])
+    query_has_code = bool(_extract_lab_code_tokens(query_norm)) or any(_is_code_like_token(t) for t in q_tokens)
+    matches: List[Dict[str, Any]] = []
+
+    for entry in direct_entries:
+        concept_key = entry["key"]
+        display = entry["display_name"]
+        display_n = entry["display_n"]
+        key_n = entry["key_n"]
+        canonical_terms = entry["canonical_terms"]
+        alias_terms = entry["alias_terms"]
+        aliases = entry["aliases"]
+
+        best_score = 0.0
+        match_type = ""
+        matched_terms: List[str] = []
+
+        def _try_update(score: float, reason: str, term: str) -> None:
+            nonlocal best_score, match_type
+            if score > best_score:
+                best_score = score
+                match_type = reason
+            if term and term not in matched_terms:
+                matched_terms.append(term)
+
+        for candidate in [display_n, key_n, *canonical_terms]:
+            if not candidate:
+                continue
+            if candidate == q:
+                _try_update(0.98, "exact_display_or_canonical", candidate)
+            elif len(q) >= 3 and q in candidate:
+                _try_update(0.90, "display_or_canonical_overlap", candidate)
+            elif len(candidate) >= 3 and candidate in q:
+                _try_update(0.90, "display_or_canonical_overlap", candidate)
+
+            if query_has_code:
+                c_tokens = candidate.split()
+                for ct in c_tokens:
+                    if _is_code_like_token(ct) and ct == q:
+                        _try_update(0.93, "abbreviation_or_code", ct)
+                    elif _is_code_like_token(ct) and ct in q_token_set:
+                        _try_update(0.90, "abbreviation_or_code", ct)
+
+        for alias in alias_terms:
+            if alias == q:
+                freq = alias_freq.get(alias, 1)
+                if _is_code_like_token(alias) and freq > 3:
+                    _try_update(0.78, "ambiguous_exact_alias", alias)
+                else:
+                    _try_update(1.0, "exact_alias", alias)
+                continue
+            if not _is_code_like_token(q):
+                if len(q) >= 3 and q in alias:
+                    _try_update(0.92, "strong_contains", alias)
+                elif len(alias) >= 3 and alias in q:
+                    _try_update(0.90, "strong_contains", alias)
+                else:
+                    a_tokens = set(alias.split())
+                    if q_token_set and a_tokens and (q_token_set & a_tokens):
+                        overlap = len(q_token_set & a_tokens) / max(1, min(len(q_token_set), len(a_tokens)))
+                        if overlap >= 0.67:
+                            _try_update(0.84 + min(0.08, overlap * 0.1), "token_overlap", alias)
+
+            if query_has_code:
+                for at in alias.split():
+                    if not _is_code_like_token(at):
+                        continue
+                    freq = alias_freq.get(at, 1)
+                    if at == q:
+                        if freq > 3:
+                            _try_update(0.76, "ambiguous_code_alias", at)
+                        else:
+                            _try_update(0.93, "abbreviation_or_code", at)
+                    elif at in q_token_set:
+                        if freq > 3:
+                            _try_update(0.76, "ambiguous_code_alias", at)
+                        else:
+                            _try_update(0.90, "abbreviation_or_code", at)
+
+        if best_score < 0.8:
+            continue
+
+        matches.append(
+            {
+                "key": str(concept_key or ""),
+                "display_name": display,
+                "score": best_score,
+                "match_type": match_type,
+                "matched_terms": matched_terms[:6],
+                "aliases": aliases[:20],
+            }
+        )
+
+    matches.sort(key=lambda x: x["score"], reverse=True)
+    return matches[:max_matches]
+
+
+def _is_direct_entity_query(text_norm: str) -> bool:
+    q = _safe_normalize_for_matching(text_norm or "")
+    if not q:
+        return False
+
+    q_tokens = [t for t in q.split() if t]
+    if not q_tokens:
+        return False
+
+    token_count = len(q_tokens)
+    short_or_medium = token_count <= 6 and len(q) <= 80
+    if not short_or_medium:
+        return False
+
+    broad_markers = {
+        _safe_normalize_for_matching(x)
+        for x in (
+            "ما هي",
+            "تحاليل",
+            "تحليلات",
+            "اعراض",
+            "أعراض",
+            "اسباب",
+            "أسباب",
+            "ماسبب",
+            "why",
+            "symptoms",
+            "causes",
+            "benefits",
+            "preparation",
+        )
+    }
+    broad_hits = sum(1 for t in q_tokens if t in broad_markers)
+
+    has_code_like = bool(_extract_lab_code_tokens(text_norm or "")) or any(
+        _is_code_like_token(t) for t in q_tokens
+    )
+    direct_matches = _collect_direct_test_matches(q, max_matches=3)
+    top_score = float(direct_matches[0]["score"]) if direct_matches else 0.0
+    top_type = str(direct_matches[0].get("match_type") or "") if direct_matches else ""
+
+    if has_code_like and top_score >= 0.84:
+        return True
+    if has_code_like and token_count <= 3:
+        return True
+    if top_score >= 0.97:
+        return True
+    if top_score >= 0.9 and broad_hits <= 1:
+        return True
+    if top_type == "exact_alias" and top_score >= 0.9:
+        return True
+
+    looks_like_title = (_contains_arabic(q) and token_count <= 4 and broad_hits == 0) or (
+        not _contains_arabic(q) and token_count <= 3
+    )
+    if looks_like_title and top_score >= 0.86:
+        return True
+
+    return False
 
 
 def expand_query_with_concepts(text: str) -> str:
@@ -801,16 +1037,74 @@ def retrieve(
         },
     )
 
+    direct_query_norm = _safe_normalize_for_matching(_extract_search_terms(query) or query)
+    direct_test_matches = _collect_direct_test_matches(direct_query_norm, max_matches=8)
+    is_direct_entity = _is_direct_entity_query(direct_query_norm)
+    print(
+        "RAG_DIRECT_ENTITY_DEBUG",
+        {
+            "query": str(query or "").encode("unicode_escape").decode("ascii"),
+            "is_direct_entity": is_direct_entity,
+            "direct_matches": [
+                {
+                    "key": str(m.get("key") or "").encode("unicode_escape").decode("ascii"),
+                    "display_name": str(m.get("display_name") or "").encode("unicode_escape").decode("ascii"),
+                    "score": round(float(m.get("score") or 0.0), 4),
+                    "match_type": str(m.get("match_type") or ""),
+                }
+                for m in direct_test_matches[:5]
+            ],
+        },
+    )
+
+    direct_exact_alias_terms: Set[str] = set()
+    direct_display_terms: Set[str] = set()
+    direct_code_terms: Set[str] = set()
+    query_code_terms: Set[str] = set()
+    for tk in _extract_lab_code_tokens(query):
+        tk_n = _safe_normalize_for_matching(tk)
+        if tk_n:
+            query_code_terms.add(tk_n)
+    for tk in direct_query_norm.split():
+        if _is_code_like_token(tk):
+            query_code_terms.add(tk)
+    for m in direct_test_matches:
+        m_score = float(m.get("score") or 0.0)
+        m_display = _safe_normalize_for_matching(m.get("display_name") or "")
+        m_key = _safe_normalize_for_matching(m.get("key") or "")
+        if m_display and m_score >= 0.92:
+            direct_display_terms.add(m_display)
+        if m_key and m_score >= 0.92:
+            direct_display_terms.add(m_key)
+        m_type = str(m.get("match_type") or "")
+        for mt in m.get("matched_terms", []):
+            mt_n = _safe_normalize_for_matching(mt)
+            if not mt_n:
+                continue
+            if m_type == "exact_alias" and mt_n == direct_query_norm:
+                direct_exact_alias_terms.add(mt_n)
+            if m_type in {"exact_display_or_canonical", "display_or_canonical_overlap"} and m_score >= 0.9:
+                direct_display_terms.add(mt_n)
+            if (
+                m_type == "abbreviation_or_code"
+                or (_is_code_like_token(mt_n) and (mt_n == direct_query_norm or mt_n in query_code_terms))
+            ):
+                direct_code_terms.add(mt_n)
+
+    retrieval_pool = max(max_results, 5)
+    if is_direct_entity:
+        retrieval_pool = max(retrieval_pool * 6, 24)
+    else:
+        retrieval_pool = max(retrieval_pool * 3, 12)
+
     detected_tokens = _extract_lab_code_tokens(concept_expanded_query)
-    structured_results = _structured_code_match(concept_expanded_query, tests, max_results=max_results)
+    structured_results = _structured_code_match(concept_expanded_query, tests, max_results=retrieval_pool)
     lexical_results = _lexical_retrieve(
         concept_expanded_query,
         tests,
-        max_results=max_results,
+        max_results=retrieval_pool,
         min_score=LEXICAL_MIN_SCORE,
     )
-    lexical_results = structured_results + lexical_results
-    lexical_has_sufficient = any(r["score"] >= lex_min for r in lexical_results)
     logger.info(
         "retrieval routing | detected_tokens=%s | structured_hits=%s | lexical_hits=%s | semantic_skipped=%s",
         detected_tokens,
@@ -822,6 +1116,41 @@ def retrieve(
     # Merge: by test key, keep best score per test
     def _key(t: Dict) -> str:
         return str(t.get("id", "")) + "|" + str(t.get("analysis_name_ar", "")) + "|" + str(t.get("analysis_name_en", ""))
+
+    direct_results: List[Dict[str, Any]] = []
+    if direct_test_matches:
+        for t in tests:
+            name_ar = _safe_normalize_for_matching(t.get("analysis_name_ar") or "")
+            name_en = _safe_normalize_for_matching(t.get("analysis_name_en") or "")
+            canonical_clean = _safe_normalize_for_matching(t.get("canonical_name_clean") or "")
+            test_names = [name_ar, name_en, canonical_clean]
+            direct_score = 0.0
+            if direct_exact_alias_terms and any(n and n in direct_exact_alias_terms for n in test_names):
+                direct_score = max(direct_score, 0.99)
+            if direct_display_terms and any(
+                n and any((n == dt) or (len(dt) >= 3 and dt in n) or (len(n) >= 3 and n in dt) for dt in direct_display_terms)
+                for n in test_names
+            ):
+                direct_score = max(direct_score, 0.95)
+            if direct_code_terms and any(
+                n and any((n == code) or (len(code) >= 2 and code in n) for code in direct_code_terms)
+                for n in test_names
+            ):
+                direct_score = max(direct_score, 0.9)
+            if query_code_terms:
+                token_space = set(f"{name_ar} {name_en} {canonical_clean}".split())
+                if token_space and any(code in token_space for code in query_code_terms):
+                    direct_score = max(direct_score, 0.9)
+            if direct_score > 0:
+                direct_results.append({"test": t, "score": direct_score, "source": "direct"})
+        direct_results.sort(key=lambda x: x["score"], reverse=True)
+        direct_results = direct_results[:retrieval_pool]
+
+    lexical_results = structured_results + lexical_results + direct_results
+    lexical_has_sufficient = any(
+        (r.get("source") in {"lexical", "structured", "direct"}) and float(r.get("score") or 0.0) >= lex_min
+        for r in lexical_results
+    )
 
     concept_matches = _collect_concept_matches(_safe_normalize_for_matching(expanded_query), max_matches=8)
     matched_concept_keys = [str(m.get("key") or "") for m in concept_matches if m.get("key")]
@@ -893,11 +1222,14 @@ def retrieve(
         t = r["test"]
         k = _key(t)
         score = r["score"]
+        direct_rank = 0
+        direct_confidence = 0.0
         # Small boost when expanded query directly includes canonical test name fields.
         name_ar = _safe_normalize_for_matching(t.get("analysis_name_ar") or "")
         name_en = _safe_normalize_for_matching(t.get("analysis_name_en") or "")
         expanded_norm = _safe_normalize_for_matching(concept_expanded_query)
         canonical_clean = _safe_normalize_for_matching(t.get("canonical_name_clean") or "")
+        test_names = [name_ar, name_en, canonical_clean]
         if (
             (name_ar and name_ar in expanded_norm)
             or (name_en and name_en in expanded_norm)
@@ -905,7 +1237,35 @@ def retrieve(
         ):
             score = min(1.0, score + 0.05)
         if _related_test_match([name_ar, name_en, canonical_clean], concept_related_tests):
-            score = min(1.0, score + 0.10)
+            score = min(1.0, score + 0.05)
+        if is_direct_entity and direct_test_matches:
+            if direct_exact_alias_terms and any(n and n in direct_exact_alias_terms for n in test_names):
+                score = min(1.0, score + 0.12)
+                direct_rank = max(direct_rank, 3)
+                direct_confidence = max(direct_confidence, 1.0)
+            elif direct_display_terms and any(
+                n and any((n == dt) or (len(dt) >= 3 and dt in n) or (len(n) >= 3 and n in dt) for dt in direct_display_terms)
+                for n in test_names
+            ):
+                score = min(1.0, score + 0.10)
+                direct_rank = max(direct_rank, 2)
+                direct_confidence = max(direct_confidence, 0.9)
+            elif direct_code_terms and any(
+                n and any((n == code) or (len(code) >= 2 and code in n) for code in direct_code_terms)
+                for n in test_names
+            ):
+                score = min(1.0, score + 0.08)
+                direct_rank = max(direct_rank, 1)
+                direct_confidence = max(direct_confidence, 0.8)
+            elif query_code_terms:
+                token_space = set(f"{name_ar} {name_en} {canonical_clean}".split())
+                if token_space and any(code in token_space for code in query_code_terms):
+                    score = min(1.0, score + 0.08)
+                    direct_rank = max(direct_rank, 1)
+                    direct_confidence = max(direct_confidence, 0.8)
+            else:
+                # Keep direct-entity ranking focused on specific test mappings.
+                score = max(0.0, score - 0.03)
         chunk_text = _safe_normalize_for_matching(t.get("__chunk_text") or _build_document_text(t))
         if chunk_text:
             if strong_concept_aliases and any(a in chunk_text for a in strong_concept_aliases):
@@ -915,8 +1275,22 @@ def retrieve(
             if asks_symptoms and symptom_signals and any(s in chunk_text for s in symptom_signals):
                 score = min(1.0, score + 0.05)
         src = r.get("source", "lexical")
-        if k not in best_by_key or score > best_by_key[k]["score"]:
-            best_by_key[k] = {"test": t, "score": score, "source": src}
+        if (
+            k not in best_by_key
+            or score > best_by_key[k]["score"]
+            or (
+                is_direct_entity
+                and direct_rank > int(best_by_key[k].get("direct_rank") or 0)
+                and score >= float(best_by_key[k]["score"]) - 0.02
+            )
+        ):
+            best_by_key[k] = {
+                "test": t,
+                "score": score,
+                "source": src,
+                "direct_rank": direct_rank,
+                "direct_confidence": direct_confidence,
+            }
 
     # Include lexical results passing lexical threshold (or explicit similarity threshold).
     merged = [
@@ -924,10 +1298,24 @@ def retrieve(
         if (v["score"] >= similarity_threshold)
         or (v.get("source") == "lexical" and v["score"] >= lex_min)
     ]
-    merged.sort(key=lambda x: x["score"], reverse=True)
+    if is_direct_entity:
+        merged.sort(
+            key=lambda x: (
+                int(x.get("direct_rank") or 0),
+                float(x.get("direct_confidence") or 0.0),
+                float(x["score"]),
+            ),
+            reverse=True,
+        )
+    else:
+        merged.sort(key=lambda x: x["score"], reverse=True)
     merged = merged[:max_results]
 
-    has_sufficient = any((r.get("source") == "lexical" and r["score"] >= lex_min) for r in merged)
+    has_sufficient = any(
+        (r.get("source") in {"lexical", "structured", "direct"} and r["score"] >= lex_min)
+        or (r["score"] >= similarity_threshold)
+        for r in merged
+    )
 
     return merged, has_sufficient
 
