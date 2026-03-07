@@ -33,9 +33,11 @@ LEXICAL_MIN_SCORE = 50
 NO_INFO_MESSAGE = "عذراً، حالياً ما عندنا معلومات كافية عن هذا الطلب."
 
 SYNONYMS_PATH = Path("app/data/runtime/synonyms/synonyms_ar.json")
+SITE_KNOWLEDGE_CHUNKS_PATH = Path("app/data/sources/web/site_knowledge_chunks_hard.jsonl")
 _RAG_SYNONYMS_CACHE = None
 _RAG_CONCEPT_INDEX_CACHE = None
 _RAG_DIRECT_TEST_INDEX_CACHE = None
+_SITE_KNOWLEDGE_CACHE = None
 
 
 def _load_json_robust(path: str) -> Optional[Dict]:
@@ -72,6 +74,21 @@ def load_runtime_chunks_jsonl(path):
                 continue
             chunks.append(json.loads(line))
     return chunks
+
+
+def load_site_knowledge_chunks() -> List[Dict[str, Any]]:
+    global _SITE_KNOWLEDGE_CACHE
+    if _SITE_KNOWLEDGE_CACHE is not None:
+        return _SITE_KNOWLEDGE_CACHE
+    if not os.path.exists(SITE_KNOWLEDGE_CHUNKS_PATH):
+        _SITE_KNOWLEDGE_CACHE = []
+        return _SITE_KNOWLEDGE_CACHE
+    try:
+        _SITE_KNOWLEDGE_CACHE = load_runtime_chunks_jsonl(SITE_KNOWLEDGE_CHUNKS_PATH)
+    except Exception as exc:
+        logger.warning("Could not load site knowledge chunks: %s", exc)
+        _SITE_KNOWLEDGE_CACHE = []
+    return _SITE_KNOWLEDGE_CACHE
 
 
 def load_rag_synonyms():
@@ -1415,6 +1432,64 @@ def get_grounded_context(
             pass
     
     return context_str, True
+
+
+def get_site_fallback_context(query: str, max_chunks: int = 3) -> str:
+    query_norm = _safe_normalize_for_matching(_extract_search_terms(query) or query or "")
+    if not query_norm:
+        return ""
+    chunks = load_site_knowledge_chunks()
+    if not chunks:
+        return ""
+
+    q_tokens = set(query_norm.split())
+    use_arabic_fast = _contains_arabic(query_norm)
+    SequenceMatcher = None
+    if not use_arabic_fast:
+        try:
+            from difflib import SequenceMatcher as _SM
+            SequenceMatcher = _SM
+        except Exception:
+            SequenceMatcher = None
+
+    scored: List[Tuple[float, str]] = []
+    for ch in chunks:
+        if not isinstance(ch, dict):
+            continue
+        text_raw = str(ch.get("text") or "").strip()
+        if not text_raw:
+            continue
+        text_norm = _safe_normalize_for_matching(text_raw[:2000])
+        if not text_norm:
+            continue
+
+        score = 0.0
+        if query_norm == text_norm:
+            score = 1.0
+        elif len(query_norm) >= 3 and query_norm in text_norm:
+            score = 0.95
+        elif len(text_norm) >= 3 and text_norm in query_norm:
+            score = 0.9
+        else:
+            t_tokens = set(text_norm.split())
+            if q_tokens and t_tokens:
+                overlap = len(q_tokens & t_tokens) / max(1, len(q_tokens))
+                if overlap >= 0.35:
+                    score = max(score, 0.65 + min(0.2, overlap * 0.3))
+            if score < 0.62 and SequenceMatcher is not None and len(query_norm) >= 4:
+                ratio = SequenceMatcher(None, query_norm, text_norm[:260]).ratio()
+                if ratio >= 0.72:
+                    score = max(score, 0.58 + ratio * 0.3)
+        if score >= 0.62:
+            scored.append((score, text_raw))
+
+    if not scored:
+        return ""
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    top = [t for _, t in scored[:max(1, max_chunks)]]
+    print("PATH=runtime_site_fallback")
+    return "\n" + ("\n" + "-" * 50 + "\n").join(top)
 
 
 if __name__ == "__main__":

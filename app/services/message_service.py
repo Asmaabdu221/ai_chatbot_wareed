@@ -27,6 +27,7 @@ from app.data.rag_pipeline import (
     NO_INFO_MESSAGE,
     retrieve,
     get_grounded_context,
+    get_site_fallback_context,
     RAG_KNOWLEDGE_PATH,
     RAG_EMBEDDINGS_PATH,
     expand_test_query as rag_expand_test_query,
@@ -591,7 +592,7 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
             "PRICE_MATCH_DEBUG",
             _debug_payload(None, 0),
         )
-        return safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender)
+        return None
 
     generic_alias_blacklist = {"vit", "test", "analysis", "serum", "lab", "blood"}
     MAX_SCAN_ITEMS = 450
@@ -654,14 +655,14 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
                 return f"سعر {display_name}: {price_value}"
         print("PATH=runtime_price no_match")
         print("PRICE_MATCH_DEBUG", _debug_payload(None, 0))
-        return safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender)
+        return None
 
     # Broad concept mode: try related tests directly in ranked order, then exit quickly.
     if is_broad_concept_query:
         if not concept_related_norm:
             print("PATH=runtime_price no_match")
             print("PRICE_MATCH_DEBUG", _debug_payload(None, 0))
-            return safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender)
+            return None
         scanned = 0
         max_concept_scan = 180
         for rel in concept_related_norm[:5]:
@@ -672,7 +673,7 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
                 if scanned > max_concept_scan:
                     print("PATH=runtime_price no_match")
                     print("PRICE_MATCH_DEBUG", _debug_payload(None, 0))
-                    return safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender)
+                    return None
                 code_norm = normalize_text_ar(str(item.get("code") or ""))
                 normalized_names = []
                 for key in ("name_ar", "canonical_name_clean", "name_en", "canonical_name"):
@@ -703,7 +704,7 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
                     return f"سعر {display_name}: {price_value}"
         print("PATH=runtime_price no_match")
         print("PRICE_MATCH_DEBUG", _debug_payload(None, 0))
-        return safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender)
+        return None
 
     best_item: dict | None = None
     best_path = "no_match"
@@ -834,7 +835,7 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
             "PRICE_MATCH_DEBUG",
             _debug_payload(None, round(best_score, 2) if best_score >= 0 else 0),
         )
-        return safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender)
+        return None
 
     if not best_item or best_score < 300:
         print("PATH=runtime_price no_match")
@@ -842,7 +843,7 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
             "PRICE_MATCH_DEBUG",
             _debug_payload(None, round(best_score, 2) if best_score >= 0 else 0),
         )
-        return safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender)
+        return None
 
     # Ambiguous top results should not return a possibly wrong price.
     if second_score >= 0 and abs(best_score - second_score) < 5:
@@ -857,7 +858,7 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
             "PRICE_MATCH_DEBUG",
             _debug_payload(best_name, round(best_score, 2)),
         )
-        return safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender)
+        return None
 
     display_name = (
         (best_item.get("name_ar") or "").strip()
@@ -885,7 +886,7 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
             "PRICE_MATCH_DEBUG",
             _debug_payload(None, round(best_score, 2)),
         )
-        return safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender)
+        return None
 
     print(
         "PRICE_MATCH_DEBUG",
@@ -2815,6 +2816,11 @@ def send_message_with_attachment(
     if _is_working_hours_query(question_for_ai):
         return _save_assistant_reply(_working_hours_deterministic_reply())
 
+    runtime_faq_match = _runtime_faq_lookup(expanded_query)
+    if runtime_faq_match and runtime_faq_match.get("a"):
+        print("PATH=runtime_lookup faq", runtime_faq_match.get("id"))
+        return _save_assistant_reply(str(runtime_faq_match.get("a")).strip())
+
     runtime_price_reply = _runtime_price_lookup_reply(expanded_query, gender)
     if runtime_price_reply:
         return _save_assistant_reply(runtime_price_reply)
@@ -2826,18 +2832,13 @@ def send_message_with_attachment(
 
         return _save_assistant_reply("للاستفسار عن الأسعار: 920003694")
 
-    runtime_faq_match = _runtime_faq_lookup(expanded_query)
-    if runtime_faq_match and runtime_faq_match.get("a"):
-        print("PATH=runtime_lookup faq", runtime_faq_match.get("id"))
-        return _save_assistant_reply(str(runtime_faq_match.get("a")).strip())
-
     if is_test_related_question(question_for_ai):
         ctx, has_match = get_grounded_context(expanded_query, max_tests=3)
         if has_match and ctx and ctx.strip():
             print("PATH=runtime_rag tests")
             return _save_assistant_reply("حسب معلومات المختبر:\n" + ctx)
         print("PATH=runtime_rag no_match -> clarify")
-        return _save_assistant_reply(safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender))
+        # Continue to other runtime primary paths before final clarification.
 
     stateful_reply = _handle_stateful_conversation(conversation_id, question_for_ai)
     if stateful_reply:
@@ -2863,6 +2864,10 @@ def send_message_with_attachment(
     package_bypass_reply = _package_lookup_bypass_reply(expanded_query, conversation_id)
     if package_bypass_reply:
         return _save_assistant_reply(package_bypass_reply)
+
+    site_context = get_site_fallback_context(question_for_ai, max_chunks=3)
+    if site_context and site_context.strip():
+        return _save_assistant_reply("حسب معلومات الموقع:\n" + site_context)
 
     if light_intent == "branch_location" and not light_intent_meta.get("has_city_or_area"):
         return _save_assistant_reply(_branch_location_prompt())
