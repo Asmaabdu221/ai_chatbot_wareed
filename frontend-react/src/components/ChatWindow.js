@@ -64,9 +64,7 @@ const ChatWindow = ({
           aria-controls="app-sidebar"
           aria-expanded={isDrawerMode ? isSidebarOpen : undefined}
         >
-          <div className="chat-header-avatar">
-            {userEmail ? (userEmail.split('@')[0] || '?').slice(0, 2).toUpperCase() : '?'}
-          </div>
+          <span className="sidebar-toggle-icon" aria-hidden="true">☰</span>
         </button>
         <div className="chat-header-spacer" />
         <div className="chat-header-brand" onClick={handleNewChatClick} role="button" tabIndex={0}>
