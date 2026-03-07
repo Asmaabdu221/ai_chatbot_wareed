@@ -212,6 +212,7 @@ const LeftSidebar = ({
   onQuickAction,
   isLoading,
   showDashboardLink = false,
+  isDrawerMode = false,
 }) => {
   const location = useLocation();
   const isChat = location.pathname === '/' || location.pathname === '';
@@ -223,7 +224,6 @@ const LeftSidebar = ({
   const [renameConv, setRenameConv] = useState(null);
   const [quickActionError, setQuickActionError] = useState(null);
   const dotsAnchorRef = useRef(null);
-  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia?.('(max-width: 640px)')?.matches);
   const footerRef = useRef(null);
 
   useEffect(() => {
@@ -237,16 +237,7 @@ const LeftSidebar = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [userPanelExpanded]);
 
-  useEffect(() => {
-    const mq = window.matchMedia?.('(max-width: 640px)');
-    if (!mq) return;
-    const handler = () => setIsMobile(mq.matches);
-    mq.addEventListener('change', handler);
-    setIsMobile(mq.matches);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
-
-  const showCollapsed = sidebarCollapsed && !isMobile;
+  const showCollapsed = sidebarCollapsed && !isDrawerMode;
 
   const filteredConversations = searchQuery.trim()
     ? conversations.filter((c) =>
@@ -277,7 +268,7 @@ const LeftSidebar = ({
         console.info('[QuickAction] sending:', { message: text });
       }
       await onQuickAction(text);
-      if (isMobile) onCloseSidebar?.();
+      if (isDrawerMode) onCloseSidebar?.();
     } catch (err) {
       console.error('[QuickAction] send failed:', err);
       setQuickActionError(getErrorMessage(err, 'تعذر إرسال الرسالة. حاول مرة أخرى.'));
@@ -395,10 +386,10 @@ const LeftSidebar = ({
 
       {showDashboardLink && (
         <div className="sidebar-nav">
-          <Link className={`nav-link ${isChat ? 'active' : ''}`} to="/">
+          <Link className={`nav-link ${isChat ? 'active' : ''}`} to="/" onClick={() => isDrawerMode && onCloseSidebar?.()}>
             المحادثات
           </Link>
-          <Link className={`nav-link ${!isChat ? 'active' : ''}`} to="/admin/dashboard">
+          <Link className={`nav-link ${!isChat ? 'active' : ''}`} to="/admin/dashboard" onClick={() => isDrawerMode && onCloseSidebar?.()}>
             لوحة التحكم
           </Link>
         </div>

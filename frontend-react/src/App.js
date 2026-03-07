@@ -27,6 +27,8 @@ import { getAccessToken, clearAuth } from './services/auth';
 import './App.css';
 import './layouts/ChatLayout.css';
 
+const DRAWER_BREAKPOINT = 1024;
+
 function ChatView() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -39,6 +41,9 @@ function ChatView() {
   const [user, setUser] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isDrawerMode, setIsDrawerMode] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia?.(`(max-width: ${DRAWER_BREAKPOINT - 1}px)`)?.matches
+  );
   const [theme, setTheme] = useState(localStorage.getItem('wareed_theme') || 'system');
   const [uiNotice, setUiNotice] = useState(null);
   const [pinnedConversationIds, setPinnedConversationIds] = useState(() => {
@@ -106,6 +111,7 @@ function ChatView() {
     setCurrentConversationId(null);
     setCurrentMessages([]);
     setReplyingToMessage(null);
+    if (isDrawerMode) setSidebarOpen(false);
   };
 
   const handleDeleteConversation = async (conversationId) => {
@@ -249,6 +255,18 @@ function ChatView() {
   }, [theme]);
 
   useEffect(() => {
+    const mq = window.matchMedia?.(`(max-width: ${DRAWER_BREAKPOINT - 1}px)`);
+    if (!mq) return undefined;
+    const handler = () => {
+      setIsDrawerMode(mq.matches);
+      if (!mq.matches) setSidebarOpen(false);
+    };
+    handler();
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  useEffect(() => {
     const TIMEOUT_MS = 8000;
     const init = async () => {
       const healthy = await checkAPIHealth();
@@ -273,6 +291,7 @@ function ChatView() {
       onCloseSidebar={() => setSidebarOpen(false)}
       onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
       sidebarCollapsed={sidebarCollapsed}
+      isDrawerMode={isDrawerMode}
       user={user}
       userEmail={user?.email}
       theme={theme}
@@ -322,7 +341,9 @@ function ChatView() {
           onCancelReply={() => setReplyingToMessage(null)}
           userName={user?.display_name || user?.username}
           isFetchingMessages={isFetchingMessages}
-          onToggleSidebar={() => setSidebarOpen(true)}
+          onToggleSidebar={() => setSidebarOpen((v) => (isDrawerMode ? !v : v))}
+          isDrawerMode={isDrawerMode}
+          isSidebarOpen={sidebarOpen}
         />
       </ChatLayout>
     </div>

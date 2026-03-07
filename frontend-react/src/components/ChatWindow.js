@@ -26,6 +26,8 @@ const ChatWindow = ({
   onCancelReply,
   isFetchingMessages,
   onToggleSidebar,
+  isDrawerMode = false,
+  isSidebarOpen = false,
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -54,7 +56,14 @@ const ChatWindow = ({
   return (
     <div className="chat-window">
       <div className="chat-header">
-        <button type="button" className="chat-header-profile-btn" onClick={onToggleSidebar}>
+        <button
+          type="button"
+          className="chat-header-profile-btn"
+          onClick={onToggleSidebar}
+          aria-label={isDrawerMode ? (isSidebarOpen ? 'Close menu' : 'Open menu') : 'Open sidebar'}
+          aria-controls="app-sidebar"
+          aria-expanded={isDrawerMode ? isSidebarOpen : undefined}
+        >
           <div className="chat-header-avatar">
             {userEmail ? (userEmail.split('@')[0] || '?').slice(0, 2).toUpperCase() : '?'}
           </div>
