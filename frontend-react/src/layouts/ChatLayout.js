@@ -53,7 +53,7 @@ const ChatLayout = ({
           aria-label="Show sidebar"
           title="Show sidebar"
         >
-          Menu
+          ☰
         </button>
       )}
       <button
