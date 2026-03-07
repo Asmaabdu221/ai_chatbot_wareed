@@ -3,32 +3,18 @@
  * Sidebar on LEFT, main chat on right. Flexbox-based, responsive.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import './ChatLayout.css';
-
-const DRAWER_BREAKPOINT = 1024;
 
 const ChatLayout = ({
   sidebar,
   sidebarOpen,
   sidebarCollapsed,
+  isDrawerMode = false,
   onCloseSidebar,
   onToggleSidebarCollapse,
   children,
 }) => {
-  const [isDrawerMode, setIsDrawerMode] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia?.(`(max-width: ${DRAWER_BREAKPOINT - 1}px)`)?.matches
-  );
-
-  useEffect(() => {
-    const mq = window.matchMedia?.(`(max-width: ${DRAWER_BREAKPOINT - 1}px)`);
-    if (!mq) return undefined;
-    const handler = () => setIsDrawerMode(mq.matches);
-    handler();
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
-
   useEffect(() => {
     if (!isDrawerMode) return undefined;
     const prevOverflow = document.body.style.overflow;

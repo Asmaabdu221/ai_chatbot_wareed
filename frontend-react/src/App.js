@@ -28,6 +28,13 @@ import './App.css';
 import './layouts/ChatLayout.css';
 
 const DRAWER_BREAKPOINT = 1024;
+const getIsDrawerMode = () => {
+  if (typeof window === 'undefined') return false;
+  if (typeof window.matchMedia === 'function') {
+    return window.matchMedia(`(max-width: ${DRAWER_BREAKPOINT - 1}px)`).matches;
+  }
+  return window.innerWidth < DRAWER_BREAKPOINT;
+};
 
 function ChatView() {
   const navigate = useNavigate();
@@ -41,9 +48,7 @@ function ChatView() {
   const [user, setUser] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [isDrawerMode, setIsDrawerMode] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia?.(`(max-width: ${DRAWER_BREAKPOINT - 1}px)`)?.matches
-  );
+  const [isDrawerMode, setIsDrawerMode] = useState(getIsDrawerMode);
   const [theme, setTheme] = useState(localStorage.getItem('wareed_theme') || 'system');
   const [uiNotice, setUiNotice] = useState(null);
   const [pinnedConversationIds, setPinnedConversationIds] = useState(() => {
@@ -57,6 +62,13 @@ function ChatView() {
 
   const [pinnedMessageIds, setPinnedMessageIds] = useState([]);
   const [replyingToMessage, setReplyingToMessage] = useState(null);
+  const closeSidebar = useCallback(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('SIDEBAR_CLOSE_CLICKED');
+    }
+    setSidebarOpen(false);
+  }, []);
+  const openSidebar = useCallback(() => setSidebarOpen(true), []);
 
   const currentConversation = conversations.find((c) => c.id === currentConversationId);
 
@@ -84,6 +96,7 @@ function ChatView() {
 
   const selectConversation = async (conversationId) => {
     try {
+      if (isDrawerMode) closeSidebar();
       setIsFetchingMessages(true);
       setCurrentConversationId(conversationId);
       const data = await getConversationMessages(conversationId);
@@ -96,7 +109,7 @@ function ChatView() {
         token_count: m.token_count,
         replyTo: m.reply_to // Support if backend provides it
       })));
-      setSidebarOpen(false);
+      if (!isDrawerMode) setSidebarOpen(false);
       setUiNotice(null);
     } catch (err) {
       console.error('Failed to load messages:', err);
@@ -111,7 +124,7 @@ function ChatView() {
     setCurrentConversationId(null);
     setCurrentMessages([]);
     setReplyingToMessage(null);
-    if (isDrawerMode) setSidebarOpen(false);
+    if (isDrawerMode) closeSidebar();
   };
 
   const handleDeleteConversation = async (conversationId) => {
@@ -255,16 +268,36 @@ function ChatView() {
   }, [theme]);
 
   useEffect(() => {
-    const mq = window.matchMedia?.(`(max-width: ${DRAWER_BREAKPOINT - 1}px)`);
-    if (!mq) return undefined;
+    const mq = typeof window.matchMedia === 'function'
+      ? window.matchMedia(`(max-width: ${DRAWER_BREAKPOINT - 1}px)`)
+      : null;
     const handler = () => {
-      setIsDrawerMode(mq.matches);
-      if (!mq.matches) setSidebarOpen(false);
+      const nextIsDrawer = getIsDrawerMode();
+      setIsDrawerMode(nextIsDrawer);
+      if (!nextIsDrawer) setSidebarOpen(false);
     };
     handler();
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
+    if (mq?.addEventListener) {
+      mq.addEventListener('change', handler);
+    } else if (mq?.addListener) {
+      mq.addListener(handler);
+    }
+    window.addEventListener('resize', handler);
+    return () => {
+      if (mq?.removeEventListener) {
+        mq.removeEventListener('change', handler);
+      } else if (mq?.removeListener) {
+        mq.removeListener(handler);
+      }
+      window.removeEventListener('resize', handler);
+    };
   }, []);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('SIDEBAR_STATE', { isOpen: sidebarOpen, isDrawer: isDrawerMode });
+    }
+  }, [isDrawerMode, sidebarOpen]);
 
   useEffect(() => {
     const TIMEOUT_MS = 8000;
@@ -288,7 +321,7 @@ function ChatView() {
       onNewConversation={createNewConversation}
       onDeleteConversation={handleDeleteConversation}
       onLogout={handleLogout}
-      onCloseSidebar={() => setSidebarOpen(false)}
+      onCloseSidebar={closeSidebar}
       onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
       sidebarCollapsed={sidebarCollapsed}
       isDrawerMode={isDrawerMode}
@@ -327,7 +360,8 @@ function ChatView() {
         sidebar={sidebar}
         sidebarOpen={sidebarOpen}
         sidebarCollapsed={sidebarCollapsed}
-        onCloseSidebar={() => setSidebarOpen(false)}
+        isDrawerMode={isDrawerMode}
+        onCloseSidebar={closeSidebar}
         onToggleSidebarCollapse={() => setSidebarCollapsed((v) => !v)}
       >
         <ChatWindow
@@ -341,7 +375,7 @@ function ChatView() {
           onCancelReply={() => setReplyingToMessage(null)}
           userName={user?.display_name || user?.username}
           isFetchingMessages={isFetchingMessages}
-          onToggleSidebar={() => setSidebarOpen((v) => (isDrawerMode ? !v : v))}
+          onToggleSidebar={openSidebar}
           isDrawerMode={isDrawerMode}
           isSidebarOpen={sidebarOpen}
         />

@@ -253,6 +253,18 @@ const LeftSidebar = ({
     return 0;
   });
 
+  const handleCloseSidebarClick = () => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('SIDEBAR_CLOSE_CLICKED');
+    }
+    onCloseSidebar?.();
+  };
+
+  const handleConversationSelect = (conversationId) => {
+    if (isDrawerMode) onCloseSidebar?.();
+    onSelectConversation(conversationId);
+  };
+
 
   const handleQuickAction = async (message) => {
     if (!onQuickAction) return;
@@ -320,7 +332,7 @@ const LeftSidebar = ({
         <button
           type="button"
           className="left-sidebar-close-btn"
-          onClick={onCloseSidebar}
+          onClick={handleCloseSidebarClick}
           aria-label="إغلاق الشريط الجانبي"
           title="إغلاق الشريط الجانبي"
         >
@@ -417,13 +429,13 @@ const LeftSidebar = ({
               <div
                 key={conv.id}
                 className={`conversation-item ${conv.id === currentConversationId ? 'active' : ''}`}
-                onClick={() => onSelectConversation(conv.id)}
+                onClick={() => handleConversationSelect(conv.id)}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    onSelectConversation(conv.id);
+                    handleConversationSelect(conv.id);
                   }
                 }}
               >
