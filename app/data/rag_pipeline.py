@@ -1382,45 +1382,58 @@ def get_grounded_context(
     if not above_threshold:
         return "", False
     
-    parts = ["📊 **معلومات التحاليل ذات الصلة:**\n"]
-    for i, r in enumerate(above_threshold[:max_tests], 1):
-        test = r["test"]
-        chunk_text = (test.get("__chunk_text") or "").strip()
-        if chunk_text:
-            parts.append(f"\n{i}. {chunk_text}\n" + "-" * 50 + "\n")
-            continue
+    query_norm = _safe_normalize_for_matching(user_message)
+    asks_preparation = _is_preparation_query(user_message)
+    asks_symptoms = _is_symptom_query(user_message)
+    asks_price = include_prices and bool(
+        any(k in query_norm for k in ("سعر", "بكم", "تكلفة", "تكلفه", "price", "cost"))
+    )
 
-        lines = []
-        name_ar = test.get("analysis_name_ar", "غير متوفر")
-        name_en = test.get("analysis_name_en", "")
-        lines.append(f"🔬 **{name_ar}**")
-        if name_en:
-            lines.append(f"   ({name_en})")
-        desc = test.get("description")
-        if desc:
-            lines.append(f"\n📝 **الوصف:** {desc}")
-        if include_prices:
-            price = test.get("price")
+    max_context_results = min(2 if asks_symptoms else 1, max_tests)
+    compact_parts: List[str] = []
+
+    for r in above_threshold[:max_context_results]:
+        test = r["test"]
+        name_ar = str(test.get("analysis_name_ar") or "").strip()
+        name_en = str(test.get("analysis_name_en") or "").strip()
+        name = name_ar or name_en or "تحليل غير محدد"
+
+        desc = str(test.get("description") or "").strip()
+        prep = str(test.get("preparation") or "").strip()
+        symptoms = str(test.get("symptoms") or "").strip()
+        complementary = str(test.get("complementary_tests") or "").strip()
+        price = test.get("price")
+
+        lines: List[str] = [f"اسم التحليل: {name}"]
+
+        if asks_price:
             if price is not None:
-                lines.append(f"\n💰 **السعر:** {price} جنيه")
-        sample = test.get("sample_type")
-        if sample:
-            lines.append(f"\n🧪 **نوع العينة:** {sample}")
-        category = test.get("category")
-        if category:
-            lines.append(f"\n📂 **التصنيف:** {category}")
-        symptoms = test.get("symptoms")
-        if symptoms:
-            lines.append(f"\n⚕️ **الأعراض:** {symptoms}")
-        prep = test.get("preparation")
-        if prep:
-            lines.append(f"\n📋 **التحضير:** {prep}")
-        comp = test.get("complementary_tests")
-        if comp:
-            lines.append(f"\n🔗 **تحاليل مكملة:** {comp}")
-        parts.append(f"\n{i}. " + "\n".join(lines) + "\n" + "-" * 50 + "\n")
-    
-    context_str = "".join(parts)
+                lines.append(f"السعر: {price}")
+            else:
+                lines.append("السعر: غير متوفر حالياً")
+        elif asks_preparation:
+            if prep:
+                lines.append(f"التحضير: {prep}")
+            elif desc:
+                lines.append(f"الفائدة: {desc}")
+        elif asks_symptoms:
+            if symptoms:
+                lines.append(f"الأعراض المرتبطة: {symptoms}")
+            if complementary:
+                lines.append(f"تحاليل مكملة: {complementary}")
+            if not symptoms and desc:
+                lines.append(f"الفائدة: {desc}")
+        else:
+            if desc:
+                lines.append(f"الفائدة: {desc}")
+            if prep and any(k in query_norm for k in ("صيام", "تحضير", "قبل التحليل", "before test")):
+                lines.append(f"التحضير: {prep}")
+
+        compact_parts.append("\n".join(lines))
+
+    context_str = "\n\n".join([p for p in compact_parts if p.strip()])
+    if not context_str:
+        return "", False
     if use_cache:
         try:
             from app.services.context_cache import get_context_cache

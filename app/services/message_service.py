@@ -1,4 +1,4 @@
-﻿"""
+"""
 Message business logic and AI integration.
 Ownership enforced via conversation belonging to user.
 AI logic isolated here (OpenAI or other providers).
@@ -921,6 +921,84 @@ def is_test_related_question(text: str) -> bool:
         "فيتامين",
     )
     return any(marker in value or marker in lowered for marker in markers)
+
+
+def _format_compact_test_fallback_reply(question: str, rag_results: list[dict]) -> str | None:
+    if not rag_results:
+        return None
+    best = rag_results[0] if isinstance(rag_results[0], dict) else {}
+    test = (best.get("test") or {}) if isinstance(best, dict) else {}
+    name = (
+        str(test.get("analysis_name_ar") or "").strip()
+        or str(test.get("analysis_name_en") or "").strip()
+        or "التحليل"
+    )
+    desc = str(test.get("description") or "").strip()
+    prep = str(test.get("preparation") or "").strip()
+    symptoms = str(test.get("symptoms") or "").strip()
+    price = test.get("price")
+    qn = _normalize_light(question)
+
+    if any(k in qn for k in {"سعر", "بكم", "تكلفة", "تكلفه", "price", "cost"}):
+        if price is None:
+            return f"سعر {name} غير متوفر حالياً، وللاستفسار تقدر تتواصل معنا على {WAREED_CUSTOMER_SERVICE_PHONE}."
+        return f"سعر {name}: {price}."
+
+    if any(k in qn for k in {"صيام", "تحضير", "قبل التحليل", "preparation", "fasting"}):
+        if prep:
+            return f"بالنسبة إلى {name}: {prep}"
+        if desc:
+            return f"{name}: {desc}"
+        return f"حالياً ما عندنا تفاصيل كافية عن {name}."
+
+    if any(k in qn for k in {"اعراض", "أعراض", "عندي", "احس", "أحس", "دوخه", "دوخة", "خمول"}):
+        if symptoms:
+            return f"من التحاليل المرتبطة بـ {name}: {symptoms}"
+        if desc:
+            return f"{name}: {desc}"
+        return f"حالياً ما عندنا تفاصيل كافية عن {name}."
+
+    if desc:
+        return f"{name}: {desc}"
+    if prep:
+        return f"{name}: {prep}"
+    return f"حالياً ما عندنا تفاصيل كافية عن {name}."
+
+
+def _runtime_tests_rag_reply(question: str, expanded_query: str, history: list | None) -> str | None:
+    if not is_rag_ready():
+        return None
+    threshold = getattr(settings, "RAG_SIMILARITY_THRESHOLD", 0.58)
+    ctx, has_match = get_grounded_context(
+        expanded_query,
+        max_tests=2,
+        similarity_threshold=threshold,
+        include_prices=True,
+        use_cache=True,
+    )
+    if not has_match or not ctx or not ctx.strip():
+        return None
+
+    ai_result = openai_service.generate_response(
+        user_message=question,
+        knowledge_context=ctx,
+        conversation_history=history,
+    )
+    if isinstance(ai_result, dict) and ai_result.get("success") and (ai_result.get("response") or "").strip():
+        return str(ai_result.get("response")).strip()
+
+    rag_results, has_hit = retrieve(
+        expanded_query,
+        max_results=1,
+        similarity_threshold=threshold,
+    )
+    if has_hit and rag_results:
+        compact_reply = _format_compact_test_fallback_reply(question, rag_results)
+        if compact_reply:
+            return compact_reply
+
+    # Last fallback: compact context itself (already cleaned in rag_pipeline).
+    return ctx.strip()
 
 
 def _normalize_light(text: str) -> str:
@@ -2833,10 +2911,14 @@ def send_message_with_attachment(
         return _save_assistant_reply("للاستفسار عن الأسعار: 920003694")
 
     if is_test_related_question(question_for_ai):
-        ctx, has_match = get_grounded_context(expanded_query, max_tests=3)
-        if has_match and ctx and ctx.strip():
+        rag_reply = _runtime_tests_rag_reply(
+            question=question_for_ai,
+            expanded_query=expanded_query,
+            history=history,
+        )
+        if rag_reply:
             print("PATH=runtime_rag tests")
-            return _save_assistant_reply("حسب معلومات المختبر:\n" + ctx)
+            return _save_assistant_reply(rag_reply)
         print("PATH=runtime_rag no_match -> clarify")
         # Continue to other runtime primary paths before final clarification.
 
