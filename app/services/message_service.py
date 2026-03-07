@@ -29,6 +29,11 @@ from app.data.rag_pipeline import (
     get_grounded_context,
     RAG_KNOWLEDGE_PATH,
     RAG_EMBEDDINGS_PATH,
+    expand_test_query as rag_expand_test_query,
+    expand_query_with_concepts as rag_expand_query_with_concepts,
+    _collect_concept_matches as rag_collect_concept_matches,
+    _is_direct_entity_query as rag_is_direct_entity_query,
+    _collect_direct_test_matches as rag_collect_direct_test_matches,
 )
 from app.core.config import settings
 from app.core.runtime_paths import FAQ_INDEX_PATH, TESTS_PRICE_INDEX_PATH, path_exists
@@ -397,12 +402,158 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
     else:
         price_items = []
 
-    candidate_norm = extract_price_query_candidate(query)
+    def _cap_terms(text: str, max_terms: int, max_chars: int) -> str:
+        n = normalize_text_ar(text)
+        if not n:
+            return ""
+        kept: list[str] = []
+        seen: set[str] = set()
+        for tok in n.split():
+            if not tok or tok in seen:
+                continue
+            seen.add(tok)
+            kept.append(tok)
+            if len(kept) >= max_terms:
+                break
+        out = " ".join(kept).strip()
+        if len(out) > max_chars:
+            out = out[:max_chars].strip()
+        return out
+
+    def _cap_relative(base_text: str, expanded_text: str, max_extra_terms: int, max_chars: int) -> str:
+        base = _cap_terms(base_text, max_terms=14, max_chars=max_chars)
+        exp = _cap_terms(expanded_text, max_terms=40, max_chars=max_chars * 2)
+        base_set = set(base.split())
+        extras: list[str] = []
+        for tok in exp.split():
+            if tok in base_set or tok in extras:
+                continue
+            extras.append(tok)
+            if len(extras) >= max_extra_terms:
+                break
+        out = " ".join([base, *extras]).strip()
+        if len(out) > max_chars:
+            out = out[:max_chars].strip()
+        return out
+
+    candidate_raw = extract_price_query_candidate(query)
+    candidate_norm_seed = normalize_text_ar(candidate_raw)
+    candidate_tokens = candidate_norm_seed.split()
+    is_broad_ar_seed = bool(candidate_norm_seed) and not re.search(r"[a-z0-9]", candidate_norm_seed) and len(candidate_tokens) <= 3
+    use_candidate_seed = bool(candidate_norm_seed)
+    if (
+        use_candidate_seed
+        and len(candidate_tokens) <= 1
+        and len(candidate_norm_seed) <= 6
+        and not re.search(r"[a-zA-Z0-9]", candidate_norm_seed)
+    ):
+        use_candidate_seed = False
+    base_price_query = candidate_raw if use_candidate_seed else query
+    expansion_seed = candidate_norm_seed or normalize_text_ar(base_price_query)
+
+    syn_full = expand_query_with_synonyms(expansion_seed) or expansion_seed
+    expanded_syn_query = _cap_terms(syn_full, max_terms=14, max_chars=180)
+    if is_broad_ar_seed:
+        expanded_test_query = expanded_syn_query
+        expanded_query = expanded_syn_query
+    else:
+        test_full = rag_expand_test_query(expanded_syn_query) or expanded_syn_query
+        expanded_test_query = _cap_relative(expanded_syn_query, test_full, max_extra_terms=8, max_chars=220)
+        concept_full = rag_expand_query_with_concepts(expanded_test_query) or expanded_test_query
+        expanded_query = _cap_relative(expanded_test_query, concept_full, max_extra_terms=8, max_chars=260)
+
+    expanded_candidate_raw = extract_price_query_candidate(expanded_query)
+    candidate_norm = normalize_text_ar(candidate_raw)
+    expanded_candidate_norm = normalize_text_ar(expanded_candidate_raw)
     if not candidate_norm:
-        candidate_norm = query_norm
+        candidate_norm = expanded_candidate_norm or query_norm
+
+    concept_query_seed = candidate_norm_seed or normalize_text_ar(base_price_query)
+    concept_matches = rag_collect_concept_matches(concept_query_seed, max_matches=8)
+    concept_related_tests: list[str] = []
+    concept_related_norm: list[str] = []
+    seen_related: set[str] = set()
+    for m in concept_matches:
+        related = (m.get("related_tests") or []) if isinstance(m, dict) else []
+        for rt in related:
+            rt_s = str(rt or "").strip()
+            rt_n = normalize_text_ar(rt_s)
+            if not rt_n or rt_n in seen_related:
+                continue
+            seen_related.add(rt_n)
+            concept_related_tests.append(rt_s)
+            concept_related_norm.append(rt_n)
+            if len(concept_related_norm) >= 5:
+                break
+        if len(concept_related_norm) >= 5:
+            break
+
+    raw_candidate_token = re.sub(r"\s+", "", str(candidate_raw or "").strip())
+    is_short_lab_abbrev = bool(re.fullmatch(r"[A-Za-z]{2,6}\d{0,2}[A-Za-z]{0,2}", raw_candidate_token))
+    direct_seed = expanded_candidate_norm or candidate_norm
+    has_latin_or_digits = bool(re.search(r"[a-z0-9]", direct_seed or ""))
+    likely_direct_seed = has_latin_or_digits or is_short_lab_abbrev
+    direct_matches = rag_collect_direct_test_matches(direct_seed, max_matches=8) if likely_direct_seed else []
+    direct_alias_terms: set[str] = set()
+    direct_name_terms: set[str] = set()
+    top_direct_score = float(direct_matches[0].get("score") or 0.0) if direct_matches else 0.0
+    for m in direct_matches:
+        if not isinstance(m, dict):
+            continue
+        m_score = float(m.get("score") or 0.0)
+        if m_score + 0.02 < top_direct_score:
+            continue
+        m_type = str(m.get("match_type") or "")
+        display_n = normalize_text_ar(m.get("display_name") or "")
+        if display_n and m_score >= 0.9:
+            direct_name_terms.add(display_n)
+        key_n = normalize_text_ar(m.get("key") or "")
+        if key_n and m_score >= 0.9:
+            direct_name_terms.add(key_n)
+        for mt in (m.get("matched_terms") or [])[:4]:
+            mt_n = normalize_text_ar(str(mt))
+            if mt_n:
+                if m_type in {"exact_alias", "abbreviation_or_code"} and m_score >= 0.9:
+                    direct_alias_terms.add(mt_n)
+                if mt_n == direct_seed and m_score >= 0.88:
+                    direct_alias_terms.add(mt_n)
+    is_direct_entity = (rag_is_direct_entity_query(direct_seed) if likely_direct_seed else False) or is_short_lab_abbrev
+    is_broad_concept_query = bool(concept_related_norm) and not is_short_lab_abbrev and not has_latin_or_digits
+    mode_used = "direct_entity" if is_direct_entity else ("concept_related" if is_broad_concept_query else "hybrid")
+
+    print(
+        "PRICE_ENTITY_DEBUG",
+        {
+            "query": str(query or "").encode("unicode_escape").decode("ascii"),
+            "expanded": str(expanded_query[:200]).encode("unicode_escape").decode("ascii"),
+            "concept_tests": [
+                str(x).encode("unicode_escape").decode("ascii")
+                for x in concept_related_tests[:5]
+            ],
+        },
+    )
+    print(
+        "PRICE_RUNTIME_DEBUG",
+        {
+            "query": str(query or "").encode("unicode_escape").decode("ascii"),
+            "candidate": str(candidate_norm or "").encode("unicode_escape").decode("ascii"),
+            "expanded_len": len(expanded_query or ""),
+            "related_tests_count": len(concept_related_norm),
+            "mode": mode_used,
+        },
+    )
 
     is_numeric_candidate = bool(re.fullmatch(r"\d+", candidate_norm))
     candidate_len = len(candidate_norm)
+    query_code_tokens: set[str] = set()
+    for tok in re.findall(r"\b[A-Za-z]{2,10}\d{0,3}[A-Za-z]{0,3}\d{0,2}\b", query or ""):
+        t = normalize_text_ar(tok)
+        if t:
+            query_code_tokens.add(t)
+    for tok in re.findall(r"\b[A-Za-z]{2,10}\d{0,3}[A-Za-z]{0,3}\d{0,2}\b", expanded_query or ""):
+        t = normalize_text_ar(tok)
+        if t:
+            query_code_tokens.add(t)
 
     def _debug_payload(best_match: str | None, score: float) -> dict:
         safe_candidate = str(candidate_norm).encode("unicode_escape").decode("ascii")
@@ -443,22 +594,10 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
         return safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender)
 
     generic_alias_blacklist = {"vit", "test", "analysis", "serum", "lab", "blood"}
+    MAX_SCAN_ITEMS = 450
+    MAX_FUZZY_BUDGET = 450
 
-    best_item: dict | None = None
-    best_path = "no_match"
-    best_score = -1.0
-    second_score = -1.0
-    fuzzy_budget = 1200
-
-    try:
-        from difflib import SequenceMatcher
-    except Exception:
-        SequenceMatcher = None
-
-    for idx, item in enumerate(price_items):
-        if not isinstance(item, dict):
-            continue
-
+    def _item_norm_fields(item: dict) -> tuple[list[str], list[str], str]:
         aliases = build_price_aliases(item)
         alias_norms: list[str] = []
         for alias in aliases:
@@ -469,14 +608,12 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
 
         filtered_aliases: list[str] = []
         for alias_n in alias_norms:
-            if len(alias_n) < 4:
+            if len(alias_n) < 3:
                 continue
             tokens = alias_n.split()
             if len(tokens) == 1 and tokens[0] in generic_alias_blacklist:
                 continue
             filtered_aliases.append(alias_n)
-        if not filtered_aliases:
-            continue
 
         normalized_names: list[str] = []
         for key in ("name_ar", "canonical_name_clean", "name_en", "canonical_name"):
@@ -484,38 +621,177 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
             if val:
                 normalized_names.append(val)
         normalized_names = list(dict.fromkeys(normalized_names))
+        code_norm = normalize_text_ar(str(item.get("code") or ""))
+        return filtered_aliases, normalized_names, code_norm
+
+    # Fast direct abbreviation mode: prefer exact alias/name/code and return quickly.
+    if is_short_lab_abbrev:
+        scanned = 0
+        for item in price_items:
+            if not isinstance(item, dict):
+                continue
+            scanned += 1
+            if scanned > MAX_SCAN_ITEMS:
+                break
+            filtered_aliases, normalized_names, code_norm = _item_norm_fields(item)
+            if (
+                (code_norm and code_norm == candidate_norm)
+                or (candidate_norm in filtered_aliases)
+                or (candidate_norm in normalized_names)
+            ):
+                display_name = (
+                    (item.get("name_ar") or "").strip()
+                    or (item.get("canonical_name_clean") or "").strip()
+                    or (item.get("name_en") or "").strip()
+                    or "التحليل"
+                )
+                price_value = item.get("price")
+                path = "code" if code_norm and code_norm == candidate_norm else "exact"
+                print(f"PATH=runtime_price {path}")
+                print("PRICE_MATCH_DEBUG", _debug_payload(display_name, 950))
+                if price_value is None:
+                    return f"سعر {display_name}: غير متوفر حالياً"
+                return f"سعر {display_name}: {price_value}"
+        print("PATH=runtime_price no_match")
+        print("PRICE_MATCH_DEBUG", _debug_payload(None, 0))
+        return safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender)
+
+    # Broad concept mode: try related tests directly in ranked order, then exit quickly.
+    if is_broad_concept_query:
+        if not concept_related_norm:
+            print("PATH=runtime_price no_match")
+            print("PRICE_MATCH_DEBUG", _debug_payload(None, 0))
+            return safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender)
+        scanned = 0
+        max_concept_scan = 180
+        for rel in concept_related_norm[:5]:
+            for item in price_items:
+                if not isinstance(item, dict):
+                    continue
+                scanned += 1
+                if scanned > max_concept_scan:
+                    print("PATH=runtime_price no_match")
+                    print("PRICE_MATCH_DEBUG", _debug_payload(None, 0))
+                    return safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender)
+                code_norm = normalize_text_ar(str(item.get("code") or ""))
+                normalized_names = []
+                for key in ("name_ar", "canonical_name_clean", "name_en", "canonical_name"):
+                    val = normalize_text_ar(item.get(key) or "")
+                    if val:
+                        normalized_names.append(val)
+                for key_item in (item.get("keys") or []):
+                    kn = normalize_text_ar(str(key_item))
+                    if kn:
+                        normalized_names.append(kn)
+                normalized_names = list(dict.fromkeys(normalized_names))
+                if (
+                    rel in normalized_names
+                    or (code_norm and rel == code_norm)
+                    or any(len(rel) >= 3 and (rel in n or n in rel) for n in normalized_names[:12])
+                ):
+                    display_name = (
+                        (item.get("name_ar") or "").strip()
+                        or (item.get("canonical_name_clean") or "").strip()
+                        or (item.get("name_en") or "").strip()
+                        or "التحليل"
+                    )
+                    price_value = item.get("price")
+                    print("PATH=runtime_price alias")
+                    print("PRICE_MATCH_DEBUG", _debug_payload(display_name, 700))
+                    if price_value is None:
+                        return f"سعر {display_name}: غير متوفر حالياً"
+                    return f"سعر {display_name}: {price_value}"
+        print("PATH=runtime_price no_match")
+        print("PRICE_MATCH_DEBUG", _debug_payload(None, 0))
+        return safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender)
+
+    best_item: dict | None = None
+    best_path = "no_match"
+    best_score = -1.0
+    second_score = -1.0
+    fuzzy_budget = MAX_FUZZY_BUDGET
+    scanned_items = 0
+
+    try:
+        from difflib import SequenceMatcher
+    except Exception:
+        SequenceMatcher = None
+
+    for idx, item in enumerate(price_items):
+        if not isinstance(item, dict):
+            continue
+        scanned_items += 1
+        if scanned_items > MAX_SCAN_ITEMS:
+            break
+
+        filtered_aliases, normalized_names, code_norm = _item_norm_fields(item)
+        if not filtered_aliases:
+            continue
 
         local_path = "no_match"
         local_score = -1.0
 
-        # 2) exact alias match
-        if candidate_norm in filtered_aliases:
-            local_path = "exact"
-            local_score = 500 - (idx / 10000)
+        # 1) exact test code
+        if code_norm and (
+            candidate_norm == code_norm
+            or expanded_candidate_norm == code_norm
+            or code_norm in query_code_tokens
+        ):
+            local_path = "code"
+            local_score = 1000 - (idx / 10000)
 
-        # 3) exact normalized name match
-        if local_score < 490 and candidate_norm in normalized_names:
-            local_path = "name_exact"
-            local_score = 490 - (idx / 10000)
+        # 2) direct test alias
+        if local_score < 900:
+            if (
+                candidate_norm in filtered_aliases
+                or (expanded_candidate_norm and expanded_candidate_norm in filtered_aliases)
+                or (direct_alias_terms and any(a in direct_alias_terms for a in filtered_aliases))
+            ):
+                local_path = "exact"
+                local_score = 900 - (idx / 10000)
 
-        # 4) alias contains candidate (candidate length >= 5)
-        if local_score < 450 and candidate_len >= 5:
+        # 3) canonical/display name
+        if local_score < 800:
+            if (
+                candidate_norm in normalized_names
+                or (expanded_candidate_norm and expanded_candidate_norm in normalized_names)
+                or (direct_name_terms and any(n in direct_name_terms for n in normalized_names))
+            ):
+                local_path = "name_exact"
+                local_score = 800 - (idx / 10000)
+
+        # 4) concept related_tests
+        if local_score < 700 and concept_related_norm:
+            found_concept_rel = False
+            for crt in concept_related_norm:
+                if crt in filtered_aliases or crt in normalized_names:
+                    found_concept_rel = True
+                    break
+                if any(len(crt) >= 3 and (crt in a or a in crt) for a in filtered_aliases):
+                    found_concept_rel = True
+                    break
+            if found_concept_rel:
+                local_path = "concept"
+                local_score = 700 - (idx / 10000)
+
+        # 5) alias contains candidate (candidate length >= 5)
+        if local_score < 650 and candidate_len >= 5:
             for alias_n in filtered_aliases:
                 if candidate_norm in alias_n:
                     coverage = (candidate_len / max(len(alias_n), 1)) * 100.0
-                    score = 400 + min(coverage, 50) - (idx / 10000)
+                    score = 600 + min(coverage, 50) - (idx / 10000)
                     if score > local_score:
                         local_score = score
                         local_path = "alias"
 
-        # 5) candidate contains alias (alias length >= 5)
-        if local_score < 440:
+        # candidate contains alias (alias length >= 5)
+        if local_score < 560:
             for alias_n in filtered_aliases:
                 if len(alias_n) < 5:
                     continue
                 if alias_n in candidate_norm:
                     coverage = (len(alias_n) / max(candidate_len, 1)) * 100.0
-                    score = 350 + min(coverage, 50) - (idx / 10000)
+                    score = 560 + min(coverage, 40) - (idx / 10000)
                     if score > local_score:
                         local_score = score
                         local_path = "alias"
@@ -537,6 +813,13 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
                 local_path = "fuzzy"
                 local_score = 300 + max_ratio - (idx / 10000)
 
+        # Direct-entity tie-break preference.
+        if is_direct_entity and local_score >= 0:
+            if local_path in {"exact", "name_exact", "code"}:
+                local_score += 20
+            elif local_path == "concept":
+                local_score += 5
+
         if local_score > second_score:
             second_score = local_score
         if local_score > best_score:
@@ -544,6 +827,14 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
             best_score = local_score
             best_item = item
             best_path = local_path
+
+    if scanned_items > MAX_SCAN_ITEMS:
+        print("PATH=runtime_price no_match")
+        print(
+            "PRICE_MATCH_DEBUG",
+            _debug_payload(None, round(best_score, 2) if best_score >= 0 else 0),
+        )
+        return safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender)
 
     if not best_item or best_score < 300:
         print("PATH=runtime_price no_match")
@@ -582,6 +873,8 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
         print("PATH=runtime_price exact")
     elif best_path == "name_exact":
         print("PATH=runtime_price exact")
+    elif best_path == "concept":
+        print("PATH=runtime_price alias")
     elif best_path == "fuzzy":
         print("PATH=runtime_price fuzzy")
     elif best_path == "alias":
