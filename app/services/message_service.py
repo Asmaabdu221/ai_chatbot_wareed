@@ -1097,6 +1097,23 @@ def _is_general_price_query(text: str) -> bool:
     return any(t in n for t in {_normalize_light(x) for x in _GENERAL_PRICE_TRIGGERS})
 
 
+def _detect_preparation_priority(question: str, expanded_query: str = "") -> bool:
+    qn = _normalize_light(question)
+    if not qn:
+        return False
+    prep_tokens = {"صيام", "تحضير", "قبل التحليل", "preparation", "fasting"}
+    if not any(t in qn for t in prep_tokens):
+        return False
+    # Generic short prep prompts should keep button flow unless a concept match exists.
+    if len(qn.split()) <= 3 and not re.search(r"[a-z0-9]", qn):
+        seed = _normalize_light(expanded_query) or qn
+        return bool(rag_collect_concept_matches(seed, max_matches=1))
+    if is_test_related_question(question):
+        return True
+    seed = _normalize_light(expanded_query) or qn
+    return bool(rag_collect_concept_matches(seed, max_matches=2))
+
+
 def _is_symptoms_query(text: str) -> bool:
     n = _normalize_light(text)
     if not n:
@@ -1284,9 +1301,24 @@ def _branch_state_key(conversation_id: UUID) -> str:
     return f"branch_selection:{conversation_id}"
 
 
-def _to_western_digits(text: str) -> str:
-    trans = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
-    return (text or "").translate(trans)
+def _to_western_digits(text) -> str:
+    try:
+        if text is None:
+            return ""
+        if isinstance(text, (int, float)):
+            value = str(text)
+        elif isinstance(text, str):
+            value = text
+        else:
+            value = str(text)
+
+        trans = {ord(chr(0x0660 + i)): ord(str(i)) for i in range(10)}
+        return value.translate(trans)
+    except Exception:
+        try:
+            return "" if text is None else str(text)
+        except Exception:
+            return ""
 
 
 def _extract_number_choice(text: str) -> int | None:
@@ -2879,8 +2911,12 @@ def send_message_with_attachment(
     if services_start_reply:
         return _save_assistant_reply(services_start_reply)
 
+    preparation_priority = _detect_preparation_priority(question_for_ai, expanded_query)
+    test_related_for_rag = is_test_related_question(question_for_ai) or preparation_priority
+    pending_price_contact_fallback = False
+
     prep_button_reply = _resolve_preparation_button_reply(question_for_ai)
-    if prep_button_reply:
+    if prep_button_reply and not preparation_priority:
         return _save_assistant_reply(prep_button_reply)
 
     home_visit_booking_reply = _resolve_home_visit_booking_reply(db, conversation_id, question_for_ai)
@@ -2907,10 +2943,12 @@ def send_message_with_attachment(
         specific_pkg = match_single_package(expanded_query)
         if specific_pkg and (specific_pkg.get("price_raw") is not None):
             return _save_assistant_reply(_format_package_details_strict(specific_pkg))
+        if test_related_for_rag:
+            pending_price_contact_fallback = True
+        else:
+            return _save_assistant_reply("\u0644\u0644\u0627\u0633\u062a\u0641\u0633\u0627\u0631 \u0639\u0646 \u0627\u0644\u0623\u0633\u0639\u0627\u0631: 920003694")
 
-        return _save_assistant_reply("للاستفسار عن الأسعار: 920003694")
-
-    if is_test_related_question(question_for_ai):
+    if test_related_for_rag:
         rag_reply = _runtime_tests_rag_reply(
             question=question_for_ai,
             expanded_query=expanded_query,
@@ -2950,6 +2988,9 @@ def send_message_with_attachment(
     site_context = get_site_fallback_context(question_for_ai, max_chunks=3)
     if site_context and site_context.strip():
         return _save_assistant_reply("حسب معلومات الموقع:\n" + site_context)
+
+    if pending_price_contact_fallback:
+        return _save_assistant_reply("للاستفسار عن الأسعار: 920003694")
 
     if light_intent == "branch_location" and not light_intent_meta.get("has_city_or_area"):
         return _save_assistant_reply(_branch_location_prompt())
