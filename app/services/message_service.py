@@ -1,4 +1,4 @@
-"""
+﻿"""
 Message business logic and AI integration.
 Ownership enforced via conversation belonging to user.
 AI logic isolated here (OpenAI or other providers).
@@ -74,18 +74,18 @@ _ESCALATION_BLOCKED_PHRASES = (
     "we'll contact you",
     "someone will reach out",
     "we will forward your request",
-    "سوف نتواصل",
-    "سنقوم بالتواصل",
-    "سيتم التواصل",
-    "راح نتواصل",
-    "سنحول طلبك",
-    "راح نحول طلبك",
+    "Ø³ÙˆÙ Ù†ØªÙˆØ§ØµÙ„",
+    "Ø³Ù†Ù‚ÙˆÙ… Ø¨Ø§Ù„ØªÙˆØ§ØµÙ„",
+    "Ø³ÙŠØªÙ… Ø§Ù„ØªÙˆØ§ØµÙ„",
+    "Ø±Ø§Ø­ Ù†ØªÙˆØ§ØµÙ„",
+    "Ø³Ù†Ø­ÙˆÙ„ Ø·Ù„Ø¨Ùƒ",
+    "Ø±Ø§Ø­ Ù†Ø­ÙˆÙ„ Ø·Ù„Ø¨Ùƒ",
 )
 
 
 def _build_direct_support_message() -> str:
     return (
-        "للحصول على دعم مباشر، تقدر تتواصل مع خدمة العملاء على الرقم التالي: "
+        "Ù„Ù„Ø­ØµÙˆÙ„ Ø¹Ù„Ù‰ Ø¯Ø¹Ù… Ù…Ø¨Ø§Ø´Ø±ØŒ ØªÙ‚Ø¯Ø± ØªØªÙˆØ§ØµÙ„ Ù…Ø¹ Ø®Ø¯Ù…Ø© Ø§Ù„Ø¹Ù…Ù„Ø§Ø¡ Ø¹Ù„Ù‰ Ø§Ù„Ø±Ù‚Ù… Ø§Ù„ØªØ§Ù„ÙŠ: "
         f"{WAREED_CUSTOMER_SERVICE_PHONE}"
     )
 
@@ -99,58 +99,58 @@ def _enforce_escalation_policy(text: str) -> str:
 
 
 _LIGHT_INTENT_CITIES = {
-    "الرياض", "جدة", "مكة", "المدينه", "المدينة", "الدمام", "الخبر", "القصيم", "تبوك", "ابها", "أبها",
-    "حائل", "جازان", "الطايف", "الطائف", "الجبيل", "خميس مشيط", "نجران", "الاحساء", "الأحساء",
+    "Ø§Ù„Ø±ÙŠØ§Ø¶", "Ø¬Ø¯Ø©", "Ù…ÙƒØ©", "Ø§Ù„Ù…Ø¯ÙŠÙ†Ù‡", "Ø§Ù„Ù…Ø¯ÙŠÙ†Ø©", "Ø§Ù„Ø¯Ù…Ø§Ù…", "Ø§Ù„Ø®Ø¨Ø±", "Ø§Ù„Ù‚ØµÙŠÙ…", "ØªØ¨ÙˆÙƒ", "Ø§Ø¨Ù‡Ø§", "Ø£Ø¨Ù‡Ø§",
+    "Ø­Ø§Ø¦Ù„", "Ø¬Ø§Ø²Ø§Ù†", "Ø§Ù„Ø·Ø§ÙŠÙ", "Ø§Ù„Ø·Ø§Ø¦Ù", "Ø§Ù„Ø¬Ø¨ÙŠÙ„", "Ø®Ù…ÙŠØ³ Ù…Ø´ÙŠØ·", "Ù†Ø¬Ø±Ø§Ù†", "Ø§Ù„Ø§Ø­Ø³Ø§Ø¡", "Ø§Ù„Ø£Ø­Ø³Ø§Ø¡",
 }
 
 _SYMPTOM_QUERY_TOKENS = {
-    "اعراض",
-    "أعراض",
-    "عندي",
-    "احس",
-    "أحس",
-    "اشعر",
-    "أشعر",
-    "الم",
-    "ألم",
-    "ضيق",
-    "خفقان",
-    "كحه",
-    "كحة",
-    "حراره",
-    "حرارة",
-    "صداع",
-    "غثيان",
-    "اسهال",
-    "إسهال",
-    "دوخه",
-    "دوخة",
+    "Ø§Ø¹Ø±Ø§Ø¶",
+    "Ø£Ø¹Ø±Ø§Ø¶",
+    "Ø¹Ù†Ø¯ÙŠ",
+    "Ø§Ø­Ø³",
+    "Ø£Ø­Ø³",
+    "Ø§Ø´Ø¹Ø±",
+    "Ø£Ø´Ø¹Ø±",
+    "Ø§Ù„Ù…",
+    "Ø£Ù„Ù…",
+    "Ø¶ÙŠÙ‚",
+    "Ø®ÙÙ‚Ø§Ù†",
+    "ÙƒØ­Ù‡",
+    "ÙƒØ­Ø©",
+    "Ø­Ø±Ø§Ø±Ù‡",
+    "Ø­Ø±Ø§Ø±Ø©",
+    "ØµØ¯Ø§Ø¹",
+    "ØºØ«ÙŠØ§Ù†",
+    "Ø§Ø³Ù‡Ø§Ù„",
+    "Ø¥Ø³Ù‡Ø§Ù„",
+    "Ø¯ÙˆØ®Ù‡",
+    "Ø¯ÙˆØ®Ø©",
 }
 
 _WORKING_HOURS_TRIGGERS = {
-    "ساعات الدوام",
-    "دوامكم",
-    "متى تفتحون",
-    "متى تقفلون",
-    "وقت الدوام",
-    "ساعه",
-    "ساعات",
-    "وقت",
+    "Ø³Ø§Ø¹Ø§Øª Ø§Ù„Ø¯ÙˆØ§Ù…",
+    "Ø¯ÙˆØ§Ù…ÙƒÙ…",
+    "Ù…ØªÙ‰ ØªÙØªØ­ÙˆÙ†",
+    "Ù…ØªÙ‰ ØªÙ‚ÙÙ„ÙˆÙ†",
+    "ÙˆÙ‚Øª Ø§Ù„Ø¯ÙˆØ§Ù…",
+    "Ø³Ø§Ø¹Ù‡",
+    "Ø³Ø§Ø¹Ø§Øª",
+    "ÙˆÙ‚Øª",
 }
 
 _GENERAL_PRICE_TRIGGERS = {
-    "الاسعار",
-    "الأسعار",
-    "كم السعر",
-    "بكم",
-    "سعر التحليل",
-    "استعلام عن الاسعار",
-    "استعلام عن الأسعار",
-    "ابي سعر",
-    "أبي سعر",
+    "Ø§Ù„Ø§Ø³Ø¹Ø§Ø±",
+    "Ø§Ù„Ø£Ø³Ø¹Ø§Ø±",
+    "ÙƒÙ… Ø§Ù„Ø³Ø¹Ø±",
+    "Ø¨ÙƒÙ…",
+    "Ø³Ø¹Ø± Ø§Ù„ØªØ­Ù„ÙŠÙ„",
+    "Ø§Ø³ØªØ¹Ù„Ø§Ù… Ø¹Ù† Ø§Ù„Ø§Ø³Ø¹Ø§Ø±",
+    "Ø§Ø³ØªØ¹Ù„Ø§Ù… Ø¹Ù† Ø§Ù„Ø£Ø³Ø¹Ø§Ø±",
+    "Ø§Ø¨ÙŠ Ø³Ø¹Ø±",
+    "Ø£Ø¨ÙŠ Ø³Ø¹Ø±",
 }
 
-_PRICE_QUERY_KEYWORDS = ("سعر", "بكم", "كم سعر", "تكلفه", "تكلفة", "السعر")
+_PRICE_QUERY_KEYWORDS = ("Ø³Ø¹Ø±", "Ø¨ÙƒÙ…", "ÙƒÙ… Ø³Ø¹Ø±", "ØªÙƒÙ„ÙÙ‡", "ØªÙƒÙ„ÙØ©", "Ø§Ù„Ø³Ø¹Ø±")
 
 
 def load_runtime_faq():
@@ -195,11 +195,11 @@ def normalize_text_ar(s: str) -> str:
         return ""
     value = re.sub(r"[\u064B-\u065F\u0670\u0640]", "", value)
     value = (
-        value.replace("أ", "ا")
-        .replace("إ", "ا")
-        .replace("آ", "ا")
-        .replace("ى", "ي")
-        .replace("ة", "ه")
+        value.replace("Ø£", "Ø§")
+        .replace("Ø¥", "Ø§")
+        .replace("Ø¢", "Ø§")
+        .replace("Ù‰", "ÙŠ")
+        .replace("Ø©", "Ù‡")
     )
     value = re.sub(r"[^\w\s\u0600-\u06FF]", " ", value)
     value = re.sub(r"\s+", " ", value).strip()
@@ -316,18 +316,18 @@ def extract_price_query_candidate(text: str) -> str:
     if not normalized:
         return ""
     # Remove query fillers to keep only the core test phrase/code.
-    normalized = normalized.replace("كم سعر", " ")
+    normalized = normalized.replace("ÙƒÙ… Ø³Ø¹Ø±", " ")
     drop_words = {
-        "كم",
-        "سعر",
-        "بكم",
-        "تكلفه",
-        "تكلفة",
-        "السعر",
-        "التحليل",
-        "تحليل",
-        "فحص",
-        "اختبار",
+        "ÙƒÙ…",
+        "Ø³Ø¹Ø±",
+        "Ø¨ÙƒÙ…",
+        "ØªÙƒÙ„ÙÙ‡",
+        "ØªÙƒÙ„ÙØ©",
+        "Ø§Ù„Ø³Ø¹Ø±",
+        "Ø§Ù„ØªØ­Ù„ÙŠÙ„",
+        "ØªØ­Ù„ÙŠÙ„",
+        "ÙØ­Øµ",
+        "Ø§Ø®ØªØ¨Ø§Ø±",
     }
     tokens = [t for t in normalized.split() if t and t not in drop_words]
     return re.sub(r"\s+", " ", " ".join(tokens)).strip()
@@ -576,7 +576,7 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
                     (item.get("name_ar") or "").strip()
                     or (item.get("canonical_name_clean") or "").strip()
                     or (item.get("name_en") or "").strip()
-                    or "التحليل"
+                    or "Ø§Ù„ØªØ­Ù„ÙŠÙ„"
                 )
                 price_value = item.get("price")
                 print("PATH=runtime_price code")
@@ -585,8 +585,8 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
                     _debug_payload(display_name, 1000),
                 )
                 if price_value is None:
-                    return f"سعر {display_name}: غير متوفر حالياً"
-                return f"سعر {display_name}: {price_value}"
+                    return f"Ø³Ø¹Ø± {display_name}: ØºÙŠØ± Ù…ØªÙˆÙØ± Ø­Ø§Ù„ÙŠØ§Ù‹"
+                return f"Ø³Ø¹Ø± {display_name}: {price_value}"
         print("PATH=runtime_price no_match")
         print(
             "PRICE_MATCH_DEBUG",
@@ -644,15 +644,15 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
                     (item.get("name_ar") or "").strip()
                     or (item.get("canonical_name_clean") or "").strip()
                     or (item.get("name_en") or "").strip()
-                    or "التحليل"
+                    or "Ø§Ù„ØªØ­Ù„ÙŠÙ„"
                 )
                 price_value = item.get("price")
                 path = "code" if code_norm and code_norm == candidate_norm else "exact"
                 print(f"PATH=runtime_price {path}")
                 print("PRICE_MATCH_DEBUG", _debug_payload(display_name, 950))
                 if price_value is None:
-                    return f"سعر {display_name}: غير متوفر حالياً"
-                return f"سعر {display_name}: {price_value}"
+                    return f"Ø³Ø¹Ø± {display_name}: ØºÙŠØ± Ù…ØªÙˆÙØ± Ø­Ø§Ù„ÙŠØ§Ù‹"
+                return f"Ø³Ø¹Ø± {display_name}: {price_value}"
         print("PATH=runtime_price no_match")
         print("PRICE_MATCH_DEBUG", _debug_payload(None, 0))
         return None
@@ -694,14 +694,14 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
                         (item.get("name_ar") or "").strip()
                         or (item.get("canonical_name_clean") or "").strip()
                         or (item.get("name_en") or "").strip()
-                        or "التحليل"
+                        or "Ø§Ù„ØªØ­Ù„ÙŠÙ„"
                     )
                     price_value = item.get("price")
                     print("PATH=runtime_price alias")
                     print("PRICE_MATCH_DEBUG", _debug_payload(display_name, 700))
                     if price_value is None:
-                        return f"سعر {display_name}: غير متوفر حالياً"
-                    return f"سعر {display_name}: {price_value}"
+                        return f"Ø³Ø¹Ø± {display_name}: ØºÙŠØ± Ù…ØªÙˆÙØ± Ø­Ø§Ù„ÙŠØ§Ù‹"
+                    return f"Ø³Ø¹Ø± {display_name}: {price_value}"
         print("PATH=runtime_price no_match")
         print("PRICE_MATCH_DEBUG", _debug_payload(None, 0))
         return None
@@ -851,7 +851,7 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
             (best_item.get("name_ar") or "").strip()
             or (best_item.get("canonical_name_clean") or "").strip()
             or (best_item.get("name_en") or "").strip()
-            or "التحليل"
+            or "Ø§Ù„ØªØ­Ù„ÙŠÙ„"
         )
         print("PATH=runtime_price no_match")
         print(
@@ -864,7 +864,7 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
         (best_item.get("name_ar") or "").strip()
         or (best_item.get("canonical_name_clean") or "").strip()
         or (best_item.get("name_en") or "").strip()
-        or "التحليل"
+        or "Ø§Ù„ØªØ­Ù„ÙŠÙ„"
     )
     price_value = best_item.get("price")
 
@@ -893,8 +893,8 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
         _debug_payload(display_name, round(best_score, 2)),
     )
     if price_value is None:
-        return f"سعر {display_name}: غير متوفر حالياً"
-    return f"سعر {display_name}: {price_value}"
+        return f"Ø³Ø¹Ø± {display_name}: ØºÙŠØ± Ù…ØªÙˆÙØ± Ø­Ø§Ù„ÙŠØ§Ù‹"
+    return f"Ø³Ø¹Ø± {display_name}: {price_value}"
 
 
 def is_test_related_question(text: str) -> bool:
@@ -903,22 +903,22 @@ def is_test_related_question(text: str) -> bool:
         return False
     lowered = value.lower()
     markers = (
-        "تحليل",
-        "فحص",
-        "اختبار",
-        "اعراض",
-        "أعراض",
-        "صيام",
-        "تحضير",
-        "قبل التحليل",
+        "ØªØ­Ù„ÙŠÙ„",
+        "ÙØ­Øµ",
+        "Ø§Ø®ØªØ¨Ø§Ø±",
+        "Ø§Ø¹Ø±Ø§Ø¶",
+        "Ø£Ø¹Ø±Ø§Ø¶",
+        "ØµÙŠØ§Ù…",
+        "ØªØ­Ø¶ÙŠØ±",
+        "Ù‚Ø¨Ù„ Ø§Ù„ØªØ­Ù„ÙŠÙ„",
         "hba1c",
-        "سكر",
+        "Ø³ÙƒØ±",
         "cbc",
         "ferritin",
         "tsh",
         "vit",
         "vitamin",
-        "فيتامين",
+        "ÙÙŠØªØ§Ù…ÙŠÙ†",
     )
     return any(marker in value or marker in lowered for marker in markers)
 
@@ -928,12 +928,12 @@ def _is_simple_greeting(text: str) -> bool:
     if not n:
         return False
     greetings = {
-        "مرحبا",
-        "اهلا",
-        "أهلا",
-        "هلا",
-        "السلام عليكم",
-        "السلام",
+        "Ù…Ø±Ø­Ø¨Ø§",
+        "Ø§Ù‡Ù„Ø§",
+        "Ø£Ù‡Ù„Ø§",
+        "Ù‡Ù„Ø§",
+        "Ø§Ù„Ø³Ù„Ø§Ù… Ø¹Ù„ÙŠÙƒÙ…",
+        "Ø§Ù„Ø³Ù„Ø§Ù…",
         "hi",
         "hello",
         "hey",
@@ -946,7 +946,7 @@ def _is_simple_greeting(text: str) -> bool:
 
 
 def _greeting_reply() -> str:
-    return "أهلاً بك، كيف أقدر أساعدك اليوم؟"
+    return "Ø£Ù‡Ù„Ø§Ù‹ Ø¨ÙƒØŒ ÙƒÙŠÙ Ø£Ù‚Ø¯Ø± Ø£Ø³Ø§Ø¹Ø¯Ùƒ Ø§Ù„ÙŠÙˆÙ…ØŸ"
 
 
 def _select_top_rag_result(rag_results: list[dict]) -> dict | None:
@@ -968,7 +968,7 @@ def _format_compact_test_fallback_reply(question: str, rag_results: list[dict]) 
     name = (
         str(test.get("analysis_name_ar") or "").strip()
         or str(test.get("analysis_name_en") or "").strip()
-        or "التحليل"
+        or "Ø§Ù„ØªØ­Ù„ÙŠÙ„"
     )
     selected_test_id = str(test.get("test_id") or test.get("id") or "").strip() or None
     print(
@@ -986,30 +986,30 @@ def _format_compact_test_fallback_reply(question: str, rag_results: list[dict]) 
     price = test.get("price")
     qn = _normalize_light(question)
 
-    if any(k in qn for k in {"سعر", "بكم", "تكلفة", "تكلفه", "price", "cost"}):
+    if any(k in qn for k in {"Ø³Ø¹Ø±", "Ø¨ÙƒÙ…", "ØªÙƒÙ„ÙØ©", "ØªÙƒÙ„ÙÙ‡", "price", "cost"}):
         if price is None:
-            return f"سعر {name} غير متوفر حالياً، وللاستفسار تقدر تتواصل معنا على {WAREED_CUSTOMER_SERVICE_PHONE}."
-        return f"سعر {name}: {price}."
+            return f"Ø³Ø¹Ø± {name} ØºÙŠØ± Ù…ØªÙˆÙØ± Ø­Ø§Ù„ÙŠØ§Ù‹ØŒ ÙˆÙ„Ù„Ø§Ø³ØªÙØ³Ø§Ø± ØªÙ‚Ø¯Ø± ØªØªÙˆØ§ØµÙ„ Ù…Ø¹Ù†Ø§ Ø¹Ù„Ù‰ {WAREED_CUSTOMER_SERVICE_PHONE}."
+        return f"Ø³Ø¹Ø± {name}: {price}."
 
-    if any(k in qn for k in {"صيام", "تحضير", "قبل التحليل", "preparation", "fasting"}):
+    if any(k in qn for k in {"ØµÙŠØ§Ù…", "ØªØ­Ø¶ÙŠØ±", "Ù‚Ø¨Ù„ Ø§Ù„ØªØ­Ù„ÙŠÙ„", "preparation", "fasting"}):
         if prep:
-            return f"بالنسبة إلى {name}: {prep}"
+            return f"Ø¨Ø§Ù„Ù†Ø³Ø¨Ø© Ø¥Ù„Ù‰ {name}: {prep}"
         if desc:
             return f"{name}: {desc}"
-        return f"حالياً ما عندنا تفاصيل كافية عن {name}."
+        return f"Ø­Ø§Ù„ÙŠØ§Ù‹ Ù…Ø§ Ø¹Ù†Ø¯Ù†Ø§ ØªÙØ§ØµÙŠÙ„ ÙƒØ§ÙÙŠØ© Ø¹Ù† {name}."
 
-    if any(k in qn for k in {"اعراض", "أعراض", "عندي", "احس", "أحس", "دوخه", "دوخة", "خمول"}):
+    if any(k in qn for k in {"Ø§Ø¹Ø±Ø§Ø¶", "Ø£Ø¹Ø±Ø§Ø¶", "Ø¹Ù†Ø¯ÙŠ", "Ø§Ø­Ø³", "Ø£Ø­Ø³", "Ø¯ÙˆØ®Ù‡", "Ø¯ÙˆØ®Ø©", "Ø®Ù…ÙˆÙ„"}):
         if symptoms:
-            return f"من التحاليل المرتبطة بـ {name}: {symptoms}"
+            return f"Ù…Ù† Ø§Ù„ØªØ­Ø§Ù„ÙŠÙ„ Ø§Ù„Ù…Ø±ØªØ¨Ø·Ø© Ø¨Ù€ {name}: {symptoms}"
         if desc:
             return f"{name}: {desc}"
-        return f"حالياً ما عندنا تفاصيل كافية عن {name}."
+        return f"Ø­Ø§Ù„ÙŠØ§Ù‹ Ù…Ø§ Ø¹Ù†Ø¯Ù†Ø§ ØªÙØ§ØµÙŠÙ„ ÙƒØ§ÙÙŠØ© Ø¹Ù† {name}."
 
     if desc:
         return f"{name}: {desc}"
     if prep:
         return f"{name}: {prep}"
-    return f"حالياً ما عندنا تفاصيل كافية عن {name}."
+    return f"Ø­Ø§Ù„ÙŠØ§Ù‹ Ù…Ø§ Ø¹Ù†Ø¯Ù†Ø§ ØªÙØ§ØµÙŠÙ„ ÙƒØ§ÙÙŠØ© Ø¹Ù† {name}."
 
 
 def _runtime_tests_rag_reply(question: str, expanded_query: str, history: list | None) -> str | None:
@@ -1059,7 +1059,7 @@ def _runtime_tests_rag_reply(question: str, expanded_query: str, history: list |
         ai_success = bool(ai_result.get("success")) and bool(ai_response)
     ai_unusable = (
         not ai_success
-        or "لا تتوفر لدي معلومات" in ai_response
+        or "Ù„Ø§ ØªØªÙˆÙØ± Ù„Ø¯ÙŠ Ù…Ø¹Ù„ÙˆÙ…Ø§Øª" in ai_response
         or NO_INFO_MESSAGE in ai_response
     )
     if not ai_unusable:
@@ -1154,7 +1154,7 @@ def _detect_city_or_area(text: str) -> tuple[bool, str]:
     for city in _LIGHT_INTENT_CITIES:
         if _normalize_light(city) in n:
             return True, city
-    if any(w in n for w in {"حي", "الحي", "المنطقة", "منطقه", "المنطقه", "district", "area"}):
+    if any(w in n for w in {"Ø­ÙŠ", "Ø§Ù„Ø­ÙŠ", "Ø§Ù„Ù…Ù†Ø·Ù‚Ø©", "Ù…Ù†Ø·Ù‚Ù‡", "Ø§Ù„Ù…Ù†Ø·Ù‚Ù‡", "district", "area"}):
         return True, "area"
     return False, ""
 
@@ -1166,36 +1166,36 @@ def _classify_light_intent(text: str) -> tuple[str, dict]:
     has_city, city = _detect_city_or_area(text)
     meta = {"has_city_or_area": has_city, "city_or_area": city}
 
-    if _contains_any(merged, {"متى تطلع", "متى تجهز", "مدة النتيجة", "مده النتيجه", "وقت النتيجة", "وقت النتيجه", "كم يوم", "النتائج", "النتايج", "turnaround", "results time"}):
+    if _contains_any(merged, {"Ù…ØªÙ‰ ØªØ·Ù„Ø¹", "Ù…ØªÙ‰ ØªØ¬Ù‡Ø²", "Ù…Ø¯Ø© Ø§Ù„Ù†ØªÙŠØ¬Ø©", "Ù…Ø¯Ù‡ Ø§Ù„Ù†ØªÙŠØ¬Ù‡", "ÙˆÙ‚Øª Ø§Ù„Ù†ØªÙŠØ¬Ø©", "ÙˆÙ‚Øª Ø§Ù„Ù†ØªÙŠØ¬Ù‡", "ÙƒÙ… ÙŠÙˆÙ…", "Ø§Ù„Ù†ØªØ§Ø¦Ø¬", "Ø§Ù„Ù†ØªØ§ÙŠØ¬", "turnaround", "results time"}):
         return "result_time", meta
     if _contains_any(
         merged,
         {
-            "اقرب فرع",
-            "أقرب فرع",
-            "وين الفرع",
-            "مكان الفرع",
-            "موقع الفرع",
+            "Ø§Ù‚Ø±Ø¨ ÙØ±Ø¹",
+            "Ø£Ù‚Ø±Ø¨ ÙØ±Ø¹",
+            "ÙˆÙŠÙ† Ø§Ù„ÙØ±Ø¹",
+            "Ù…ÙƒØ§Ù† Ø§Ù„ÙØ±Ø¹",
+            "Ù…ÙˆÙ‚Ø¹ Ø§Ù„ÙØ±Ø¹",
             "branch",
             "location",
-            "وين اقرب",
-            "وين اقرب فرع",
-            "مكانكم",
-            "وين مكان",
-            "موقعكم",
-            "عنوانكم",
-            "وين موقع",
-            "لوكيشن",
-            "الموقع",
-            "مكانك",
+            "ÙˆÙŠÙ† Ø§Ù‚Ø±Ø¨",
+            "ÙˆÙŠÙ† Ø§Ù‚Ø±Ø¨ ÙØ±Ø¹",
+            "Ù…ÙƒØ§Ù†ÙƒÙ…",
+            "ÙˆÙŠÙ† Ù…ÙƒØ§Ù†",
+            "Ù…ÙˆÙ‚Ø¹ÙƒÙ…",
+            "Ø¹Ù†ÙˆØ§Ù†ÙƒÙ…",
+            "ÙˆÙŠÙ† Ù…ÙˆÙ‚Ø¹",
+            "Ù„ÙˆÙƒÙŠØ´Ù†",
+            "Ø§Ù„Ù…ÙˆÙ‚Ø¹",
+            "Ù…ÙƒØ§Ù†Ùƒ",
         },
     ):
         return "branch_location", meta
-    if _contains_any(merged, {"كم سعر", "السعر", "اسعار", "أسعار", "تكلفة", "تكلفه", "price", "cost"}):
+    if _contains_any(merged, {"ÙƒÙ… Ø³Ø¹Ø±", "Ø§Ù„Ø³Ø¹Ø±", "Ø§Ø³Ø¹Ø§Ø±", "Ø£Ø³Ø¹Ø§Ø±", "ØªÙƒÙ„ÙØ©", "ØªÙƒÙ„ÙÙ‡", "price", "cost"}):
         return "pricing", meta
-    if _contains_any(merged, {"استلام النتيجه", "استلام النتيجة", "كيف استلم", "كيف توصل النتيجه", "واتساب", "ايميل", "email", "تطبيق", "delivery"}):
+    if _contains_any(merged, {"Ø§Ø³ØªÙ„Ø§Ù… Ø§Ù„Ù†ØªÙŠØ¬Ù‡", "Ø§Ø³ØªÙ„Ø§Ù… Ø§Ù„Ù†ØªÙŠØ¬Ø©", "ÙƒÙŠÙ Ø§Ø³ØªÙ„Ù…", "ÙƒÙŠÙ ØªÙˆØµÙ„ Ø§Ù„Ù†ØªÙŠØ¬Ù‡", "ÙˆØ§ØªØ³Ø§Ø¨", "Ø§ÙŠÙ…ÙŠÙ„", "email", "ØªØ·Ø¨ÙŠÙ‚", "delivery"}):
         return "result_delivery", meta
-    if _contains_any(merged, {"شكوى", "شكوي", "مشكلة", "مشكله", "غير راضي", "مو راضي", "سيئة", "سيئه", "complaint"}):
+    if _contains_any(merged, {"Ø´ÙƒÙˆÙ‰", "Ø´ÙƒÙˆÙŠ", "Ù…Ø´ÙƒÙ„Ø©", "Ù…Ø´ÙƒÙ„Ù‡", "ØºÙŠØ± Ø±Ø§Ø¶ÙŠ", "Ù…Ùˆ Ø±Ø§Ø¶ÙŠ", "Ø³ÙŠØ¦Ø©", "Ø³ÙŠØ¦Ù‡", "complaint"}):
         return "complaint", meta
     return "other", meta
 
@@ -1207,14 +1207,14 @@ def _is_working_hours_query(text: str) -> bool:
 
     # Avoid clashing with results/turnaround timing questions.
     result_time_markers = {
-        "نتيجه",
-        "نتيجة",
-        "نتايج",
-        "متى تطلع",
-        "مدة النتيجة",
-        "مده النتيجه",
-        "وقت النتيجة",
-        "وقت النتيجه",
+        "Ù†ØªÙŠØ¬Ù‡",
+        "Ù†ØªÙŠØ¬Ø©",
+        "Ù†ØªØ§ÙŠØ¬",
+        "Ù…ØªÙ‰ ØªØ·Ù„Ø¹",
+        "Ù…Ø¯Ø© Ø§Ù„Ù†ØªÙŠØ¬Ø©",
+        "Ù…Ø¯Ù‡ Ø§Ù„Ù†ØªÙŠØ¬Ù‡",
+        "ÙˆÙ‚Øª Ø§Ù„Ù†ØªÙŠØ¬Ø©",
+        "ÙˆÙ‚Øª Ø§Ù„Ù†ØªÙŠØ¬Ù‡",
     }
     if any(m in n for m in result_time_markers):
         return False
@@ -1223,7 +1223,7 @@ def _is_working_hours_query(text: str) -> bool:
 
 
 def _working_hours_deterministic_reply() -> str:
-    return "ساعات الدوام: 24 ساعة يومياً.\nومتوفر أيضاً السحب المنزلي للحجز: 920003694"
+    return "Ø³Ø§Ø¹Ø§Øª Ø§Ù„Ø¯ÙˆØ§Ù…: 24 Ø³Ø§Ø¹Ø© ÙŠÙˆÙ…ÙŠØ§Ù‹.\nÙˆÙ…ØªÙˆÙØ± Ø£ÙŠØ¶Ø§Ù‹ Ø§Ù„Ø³Ø­Ø¨ Ø§Ù„Ù…Ù†Ø²Ù„ÙŠ Ù„Ù„Ø­Ø¬Ø²: 920003694"
 
 
 def _is_general_price_query(text: str) -> bool:
@@ -1237,7 +1237,7 @@ def _detect_preparation_priority(question: str, expanded_query: str = "") -> boo
     qn = _normalize_light(question)
     if not qn:
         return False
-    prep_tokens = {"صيام", "تحضير", "قبل التحليل", "preparation", "fasting"}
+    prep_tokens = {"ØµÙŠØ§Ù…", "ØªØ­Ø¶ÙŠØ±", "Ù‚Ø¨Ù„ Ø§Ù„ØªØ­Ù„ÙŠÙ„", "preparation", "fasting"}
     if not any(t in qn for t in prep_tokens):
         return False
     # Generic short prep prompts should keep button flow unless a concept match exists.
@@ -1269,17 +1269,17 @@ def _extract_tests_list_from_rag_test(test: dict) -> str:
         value = (test.get(key) or "").strip()
         if value:
             return value
-    return "المعلومة غير موجودة بشكل واضح في قاعدة المعرفة لهذه الأعراض."
+    return "Ø§Ù„Ù…Ø¹Ù„ÙˆÙ…Ø© ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯Ø© Ø¨Ø´ÙƒÙ„ ÙˆØ§Ø¶Ø­ ÙÙŠ Ù‚Ø§Ø¹Ø¯Ø© Ø§Ù„Ù…Ø¹Ø±ÙØ© Ù„Ù‡Ø°Ù‡ Ø§Ù„Ø£Ø¹Ø±Ø§Ø¶."
 
 
 def _format_symptoms_rag_reply(results: list[dict]) -> str:
-    lines = ["هذه أقرب 3 خيارات حسب الأعراض المذكورة:"]
+    lines = ["Ù‡Ø°Ù‡ Ø£Ù‚Ø±Ø¨ 3 Ø®ÙŠØ§Ø±Ø§Øª Ø­Ø³Ø¨ Ø§Ù„Ø£Ø¹Ø±Ø§Ø¶ Ø§Ù„Ù…Ø°ÙƒÙˆØ±Ø©:"]
     for i, row in enumerate((results or [])[:3], 1):
         test = row.get("test") or {}
-        title = (test.get("analysis_name_ar") or test.get("analysis_name_en") or "خيار غير محدد").strip()
+        title = (test.get("analysis_name_ar") or test.get("analysis_name_en") or "Ø®ÙŠØ§Ø± ØºÙŠØ± Ù…Ø­Ø¯Ø¯").strip()
         tests_list = _extract_tests_list_from_rag_test(test)
-        lines.append(f"{i}) {title} — {tests_list}")
-    lines.append("تنبيه: هذا محتوى تثقيفي من قاعدة المعرفة، وللتشخيص النهائي راجع الطبيب.")
+        lines.append(f"{i}) {title} â€” {tests_list}")
+    lines.append("ØªÙ†Ø¨ÙŠÙ‡: Ù‡Ø°Ø§ Ù…Ø­ØªÙˆÙ‰ ØªØ«Ù‚ÙŠÙÙŠ Ù…Ù† Ù‚Ø§Ø¹Ø¯Ø© Ø§Ù„Ù…Ø¹Ø±ÙØ©ØŒ ÙˆÙ„Ù„ØªØ´Ø®ÙŠØµ Ø§Ù„Ù†Ù‡Ø§Ø¦ÙŠ Ø±Ø§Ø¬Ø¹ Ø§Ù„Ø·Ø¨ÙŠØ¨.")
     return "\n".join(lines)
 
 
@@ -1304,11 +1304,11 @@ def _example_matches_intent(example: str, intent_label: str) -> bool:
         return True
     n = _normalize_light(example)
     keywords_map = {
-        "result_time": {"نتيجه", "نتيجة", "تطلع", "جاهزه", "جاهزة", "وقت"},
-        "branch_location": {"فرع", "عنوان", "موقع", "اقرب"},
-        "pricing": {"سعر", "تكلفه", "تكلفة", "price", "cost"},
-        "result_delivery": {"واتساب", "ايميل", "email", "تطبيق", "استلام"},
-        "complaint": {"شكوى", "شكوي", "اعتذار", "تعويض", "اسفين", "مشكلة", "مشكله"},
+        "result_time": {"Ù†ØªÙŠØ¬Ù‡", "Ù†ØªÙŠØ¬Ø©", "ØªØ·Ù„Ø¹", "Ø¬Ø§Ù‡Ø²Ù‡", "Ø¬Ø§Ù‡Ø²Ø©", "ÙˆÙ‚Øª"},
+        "branch_location": {"ÙØ±Ø¹", "Ø¹Ù†ÙˆØ§Ù†", "Ù…ÙˆÙ‚Ø¹", "Ø§Ù‚Ø±Ø¨"},
+        "pricing": {"Ø³Ø¹Ø±", "ØªÙƒÙ„ÙÙ‡", "ØªÙƒÙ„ÙØ©", "price", "cost"},
+        "result_delivery": {"ÙˆØ§ØªØ³Ø§Ø¨", "Ø§ÙŠÙ…ÙŠÙ„", "email", "ØªØ·Ø¨ÙŠÙ‚", "Ø§Ø³ØªÙ„Ø§Ù…"},
+        "complaint": {"Ø´ÙƒÙˆÙ‰", "Ø´ÙƒÙˆÙŠ", "Ø§Ø¹ØªØ°Ø§Ø±", "ØªØ¹ÙˆÙŠØ¶", "Ø§Ø³ÙÙŠÙ†", "Ù…Ø´ÙƒÙ„Ø©", "Ù…Ø´ÙƒÙ„Ù‡"},
     }
     return _contains_any(n, keywords_map.get(intent_label, set()))
 
@@ -1332,7 +1332,7 @@ def _build_style_guidance_block_for_intent(query: str, intent_label: str) -> str
     if not chosen:
         return ""
 
-    lines = ["🎯 **Style Guidance Examples (tone only):**"]
+    lines = ["ðŸŽ¯ **Style Guidance Examples (tone only):**"]
     for i, ex in enumerate(chosen, 1):
         lines.append(f"{i}. {ex}")
     lines.append("Use these examples for tone and phrasing only, not for medical facts.")
@@ -1355,18 +1355,18 @@ def _filter_rag_results_by_intent(rag_results: list[dict], intent_label: str) ->
 def _format_rag_results_context(rag_results: list[dict], include_prices: bool = True) -> str:
     if not rag_results:
         return ""
-    parts = ["📊 **معلومات التحاليل ذات الصلة:**\n"]
+    parts = ["ðŸ“Š **Ù…Ø¹Ù„ÙˆÙ…Ø§Øª Ø§Ù„ØªØ­Ø§Ù„ÙŠÙ„ Ø°Ø§Øª Ø§Ù„ØµÙ„Ø©:**\n"]
     for i, row in enumerate(rag_results[:3], 1):
         test = row.get("test") or {}
-        lines = [f"🔬 **{test.get('analysis_name_ar', 'غير متوفر')}**"]
+        lines = [f"ðŸ”¬ **{test.get('analysis_name_ar', 'ØºÙŠØ± Ù…ØªÙˆÙØ±')}**"]
         if test.get("analysis_name_en"):
             lines.append(f"   ({test.get('analysis_name_en')})")
         if test.get("description"):
-            lines.append(f"\n📝 **الوصف:** {test.get('description')}")
+            lines.append(f"\nðŸ“ **Ø§Ù„ÙˆØµÙ:** {test.get('description')}")
         if include_prices and test.get("price") is not None:
-            lines.append(f"\n💵 **السعر:** {test.get('price')}")
+            lines.append(f"\nðŸ’µ **Ø§Ù„Ø³Ø¹Ø±:** {test.get('price')}")
         if test.get("category"):
-            lines.append(f"\n📂 **التصنيف:** {test.get('category')}")
+            lines.append(f"\nðŸ“‚ **Ø§Ù„ØªØµÙ†ÙŠÙ:** {test.get('category')}")
         parts.append(f"\n{i}. " + "\n".join(lines) + "\n" + "-" * 50 + "\n")
     return "".join(parts)
 
@@ -1374,28 +1374,28 @@ def _format_rag_results_context(rag_results: list[dict], include_prices: bool = 
 def _branch_location_prompt(city_or_area: str = "") -> str:
     if city_or_area and city_or_area != "area":
         return (
-            f"لتحديد أقرب فرع في {city_or_area} بدقة، شاركنا اسم الحي/المنطقة. "
-            f"وللدعم المباشر تقدر تتواصل على {WAREED_CUSTOMER_SERVICE_PHONE}."
+            f"Ù„ØªØ­Ø¯ÙŠØ¯ Ø£Ù‚Ø±Ø¨ ÙØ±Ø¹ ÙÙŠ {city_or_area} Ø¨Ø¯Ù‚Ø©ØŒ Ø´Ø§Ø±ÙƒÙ†Ø§ Ø§Ø³Ù… Ø§Ù„Ø­ÙŠ/Ø§Ù„Ù…Ù†Ø·Ù‚Ø©. "
+            f"ÙˆÙ„Ù„Ø¯Ø¹Ù… Ø§Ù„Ù…Ø¨Ø§Ø´Ø± ØªÙ‚Ø¯Ø± ØªØªÙˆØ§ØµÙ„ Ø¹Ù„Ù‰ {WAREED_CUSTOMER_SERVICE_PHONE}."
         )
     return (
-        "عشان نحدد أقرب فرع لك بدقة، اكتب المدينة أو الحي. "
-        f"وللدعم المباشر تقدر تتواصل على {WAREED_CUSTOMER_SERVICE_PHONE}."
+        "Ø¹Ø´Ø§Ù† Ù†Ø­Ø¯Ø¯ Ø£Ù‚Ø±Ø¨ ÙØ±Ø¹ Ù„Ùƒ Ø¨Ø¯Ù‚Ø©ØŒ Ø§ÙƒØªØ¨ Ø§Ù„Ù…Ø¯ÙŠÙ†Ø© Ø£Ùˆ Ø§Ù„Ø­ÙŠ. "
+        f"ÙˆÙ„Ù„Ø¯Ø¹Ù… Ø§Ù„Ù…Ø¨Ø§Ø´Ø± ØªÙ‚Ø¯Ø± ØªØªÙˆØ§ØµÙ„ Ø¹Ù„Ù‰ {WAREED_CUSTOMER_SERVICE_PHONE}."
     )
 
 
 def _user_explicitly_asked_home_visit(text: str) -> bool:
     n = _normalize_light(text)
-    return any(k in n for k in {"زيارة منزلية", "سحب منزلي", "home visit", "منزلي"})
+    return any(k in n for k in {"Ø²ÙŠØ§Ø±Ø© Ù…Ù†Ø²Ù„ÙŠØ©", "Ø³Ø­Ø¨ Ù…Ù†Ø²Ù„ÙŠ", "home visit", "Ù…Ù†Ø²Ù„ÙŠ"})
 
 
 def _sanitize_branch_location_response(text: str, has_city_or_area: bool, allow_home_visit: bool = False) -> str:
     n = _normalize_light(text)
-    if not allow_home_visit and any(k in n for k in {"زيارة منزلية", "سحب منزلي", "home visit", "منزلي"}):
+    if not allow_home_visit and any(k in n for k in {"Ø²ÙŠØ§Ø±Ø© Ù…Ù†Ø²Ù„ÙŠØ©", "Ø³Ø­Ø¨ Ù…Ù†Ø²Ù„ÙŠ", "home visit", "Ù…Ù†Ø²Ù„ÙŠ"}):
         if not has_city_or_area:
             return _branch_location_prompt()
         return (
-            "لتحديد أقرب فرع بدقة داخل مدينتك، اكتب اسم الحي/المنطقة "
-            f"أو تواصل مع خدمة العملاء على {WAREED_CUSTOMER_SERVICE_PHONE}."
+            "Ù„ØªØ­Ø¯ÙŠØ¯ Ø£Ù‚Ø±Ø¨ ÙØ±Ø¹ Ø¨Ø¯Ù‚Ø© Ø¯Ø§Ø®Ù„ Ù…Ø¯ÙŠÙ†ØªÙƒØŒ Ø§ÙƒØªØ¨ Ø§Ø³Ù… Ø§Ù„Ø­ÙŠ/Ø§Ù„Ù…Ù†Ø·Ù‚Ø© "
+            f"Ø£Ùˆ ØªÙˆØ§ØµÙ„ Ù…Ø¹ Ø®Ø¯Ù…Ø© Ø§Ù„Ø¹Ù…Ù„Ø§Ø¡ Ø¹Ù„Ù‰ {WAREED_CUSTOMER_SERVICE_PHONE}."
         )
     return text
 
@@ -1405,26 +1405,26 @@ def _has_verified_branch_info(kb_context: str) -> bool:
     text = _normalize_light(kb_context or "")
     if not raw_text and not text:
         return False
-    raw_signals = ("العنوان", "ساعات العمل", "اوقات العمل", "مواعيد العمل", "أوقات العمل")
+    raw_signals = ("Ø§Ù„Ø¹Ù†ÙˆØ§Ù†", "Ø³Ø§Ø¹Ø§Øª Ø§Ù„Ø¹Ù…Ù„", "Ø§ÙˆÙ‚Ø§Øª Ø§Ù„Ø¹Ù…Ù„", "Ù…ÙˆØ§Ø¹ÙŠØ¯ Ø§Ù„Ø¹Ù…Ù„", "Ø£ÙˆÙ‚Ø§Øª Ø§Ù„Ø¹Ù…Ù„")
     if any(sig in raw_text for sig in raw_signals):
         return True
     strong_signals = (
-        "العنوان",
-        "ساعات العمل",
-        "اوقات العمل",
-        "مواعيد العمل",
+        "Ø§Ù„Ø¹Ù†ÙˆØ§Ù†",
+        "Ø³Ø§Ø¹Ø§Øª Ø§Ù„Ø¹Ù…Ù„",
+        "Ø§ÙˆÙ‚Ø§Øª Ø§Ù„Ø¹Ù…Ù„",
+        "Ù…ÙˆØ§Ø¹ÙŠØ¯ Ø§Ù„Ø¹Ù…Ù„",
     )
-    if "العنوان" in text and any(sig in text for sig in ("ساعات العمل", "اوقات العمل", "مواعيد العمل", "دوام")):
+    if "Ø§Ù„Ø¹Ù†ÙˆØ§Ù†" in text and any(sig in text for sig in ("Ø³Ø§Ø¹Ø§Øª Ø§Ù„Ø¹Ù…Ù„", "Ø§ÙˆÙ‚Ø§Øª Ø§Ù„Ø¹Ù…Ù„", "Ù…ÙˆØ§Ø¹ÙŠØ¯ Ø§Ù„Ø¹Ù…Ù„", "Ø¯ÙˆØ§Ù…")):
         return True
     if any(sig in text for sig in strong_signals):
         return True
-    return bool(re.search(r"(فرع|branch).{0,40}(العنوان|ساعات|دوام|مواعيد)", text))
+    return bool(re.search(r"(ÙØ±Ø¹|branch).{0,40}(Ø§Ù„Ø¹Ù†ÙˆØ§Ù†|Ø³Ø§Ø¹Ø§Øª|Ø¯ÙˆØ§Ù…|Ù…ÙˆØ§Ø¹ÙŠØ¯)", text))
 
 
 def _ensure_result_time_clause(text: str, light_intent: str) -> str:
     if light_intent != "result_time":
         return text
-    required_clause = "بعض الفحوصات قد تحتاج وقت أطول حسب نوعها"
+    required_clause = "Ø¨Ø¹Ø¶ Ø§Ù„ÙØ­ÙˆØµØ§Øª Ù‚Ø¯ ØªØ­ØªØ§Ø¬ ÙˆÙ‚Øª Ø£Ø·ÙˆÙ„ Ø­Ø³Ø¨ Ù†ÙˆØ¹Ù‡Ø§"
     if required_clause in (text or ""):
         return text
     clean = (text or "").strip()
@@ -1535,14 +1535,14 @@ def _is_package_number_selection(text: str, options_len: int) -> int | None:
 
 
 _PACKAGE_QUERY_KEYWORDS = {
-    "باقة",
-    "باقه",
-    "تحاليل",
-    "تحالیل",
-    "تحليل",
-    "فحص",
-    "بكم",
-    "سعر",
+    "Ø¨Ø§Ù‚Ø©",
+    "Ø¨Ø§Ù‚Ù‡",
+    "ØªØ­Ø§Ù„ÙŠÙ„",
+    "ØªØ­Ø§Ù„ÛŒÙ„",
+    "ØªØ­Ù„ÙŠÙ„",
+    "ÙØ­Øµ",
+    "Ø¨ÙƒÙ…",
+    "Ø³Ø¹Ø±",
 }
 
 
@@ -1587,12 +1587,12 @@ def _extract_short_description_bullets(record: dict, min_items: int = 3, max_ite
     turn = str(record.get("turnaround_text") or "").strip()
     sample = str(record.get("sample_type_text") or "").strip()
 
-    banned = ("فرع", "خدمة العملاء", "maps", "رابط الموقع", "customer service")
-    preferred = ("تشمل", "يُستخدم", "يستخدم", "يساعد", "يفيد", "مناسب", "مدة النتائج", "نوع العينة")
+    banned = ("ÙØ±Ø¹", "Ø®Ø¯Ù…Ø© Ø§Ù„Ø¹Ù…Ù„Ø§Ø¡", "maps", "Ø±Ø§Ø¨Ø· Ø§Ù„Ù…ÙˆÙ‚Ø¹", "customer service")
+    preferred = ("ØªØ´Ù…Ù„", "ÙŠÙØ³ØªØ®Ø¯Ù…", "ÙŠØ³ØªØ®Ø¯Ù…", "ÙŠØ³Ø§Ø¹Ø¯", "ÙŠÙÙŠØ¯", "Ù…Ù†Ø§Ø³Ø¨", "Ù…Ø¯Ø© Ø§Ù„Ù†ØªØ§Ø¦Ø¬", "Ù†ÙˆØ¹ Ø§Ù„Ø¹ÙŠÙ†Ø©")
 
     lines: list[str] = []
     for ln in desc.splitlines():
-        clean = re.sub(r"\s+", " ", ln).strip(" -\t•")
+        clean = re.sub(r"\s+", " ", ln).strip(" -\tâ€¢")
         if clean:
             lines.append(clean)
 
@@ -1628,7 +1628,7 @@ def _extract_short_description_bullets(record: dict, min_items: int = 3, max_ite
     if len(bullets) < min_items:
         chunks = []
         for ln in lines:
-            chunks.extend(re.split(r"[.!؟]+", ln))
+            chunks.extend(re.split(r"[.!ØŸ]+", ln))
         for ch in chunks:
             if len(bullets) >= min_items:
                 break
@@ -1644,9 +1644,9 @@ def _format_package_details_strict(record: dict) -> str:
 
     lines = [name]
     if price_raw:
-        lines.append(f"السعر: {price_raw}")
+        lines.append(f"Ø§Ù„Ø³Ø¹Ø±: {price_raw}")
     else:
-        lines.append("السعر: غير متوفر حالياً")
+        lines.append("Ø§Ù„Ø³Ø¹Ø±: ØºÙŠØ± Ù…ØªÙˆÙØ± Ø­Ø§Ù„ÙŠØ§Ù‹")
 
     # Prefer service formatter output structure, but enforce 3-5 bullets strictly.
     _ = format_package_details(record)
@@ -1701,16 +1701,16 @@ def _save_package_selection_state(conversation_id: UUID, query: str, records: li
             "step": "awaiting_choice",
             "slots": {"last_query": query},
             "last_options": options,
-            "last_prompt": "اختر رقم الخيار المناسب لأرسل لك التفاصيل والسعر.",
+            "last_prompt": "Ø§Ø®ØªØ± Ø±Ù‚Ù… Ø§Ù„Ø®ÙŠØ§Ø± Ø§Ù„Ù…Ù†Ø§Ø³Ø¨ Ù„Ø£Ø±Ø³Ù„ Ù„Ùƒ Ø§Ù„ØªÙØ§ØµÙŠÙ„ ÙˆØ§Ù„Ø³Ø¹Ø±.",
         },
     )
 
 
 def _format_package_options_from_state(options: list[dict]) -> str:
-    lines = ["هذه الخيارات المتاحة:"]
+    lines = ["Ù‡Ø°Ù‡ Ø§Ù„Ø®ÙŠØ§Ø±Ø§Øª Ø§Ù„Ù…ØªØ§Ø­Ø©:"]
     for i, option in enumerate(options or [], 1):
         lines.append(f"{i}) {(option.get('name_raw') or '').strip()}")
-    lines.append("اختر رقم الخيار المناسب لأرسل لك التفاصيل والسعر.")
+    lines.append("Ø§Ø®ØªØ± Ø±Ù‚Ù… Ø§Ù„Ø®ÙŠØ§Ø± Ø§Ù„Ù…Ù†Ø§Ø³Ø¨ Ù„Ø£Ø±Ø³Ù„ Ù„Ùƒ Ø§Ù„ØªÙØ§ØµÙŠÙ„ ÙˆØ§Ù„Ø³Ø¹Ø±.")
     return "\n".join(lines)
 
 
@@ -1729,11 +1729,11 @@ def _handle_package_flow_active(conversation_id: UUID, message: str) -> str | No
         _save_state(conversation_id, _complete_flow(_default_flow_state()))
         if rec:
             return _format_package_details_strict(rec)
-        return "ما قدرت أحدد الباقة/التحليل من القائمة الحالية. اكتب الاسم بشكل أقرب أو اذكر الهدف (مثال: فيتامين د / حساسية / هرمونات)."
+        return "Ù…Ø§ Ù‚Ø¯Ø±Øª Ø£Ø­Ø¯Ø¯ Ø§Ù„Ø¨Ø§Ù‚Ø©/Ø§Ù„ØªØ­Ù„ÙŠÙ„ Ù…Ù† Ø§Ù„Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ø­Ø§Ù„ÙŠØ©. Ø§ÙƒØªØ¨ Ø§Ù„Ø§Ø³Ù… Ø¨Ø´ÙƒÙ„ Ø£Ù‚Ø±Ø¨ Ø£Ùˆ Ø§Ø°ÙƒØ± Ø§Ù„Ù‡Ø¯Ù (Ù…Ø«Ø§Ù„: ÙÙŠØªØ§Ù…ÙŠÙ† Ø¯ / Ø­Ø³Ø§Ø³ÙŠØ© / Ù‡Ø±Ù…ÙˆÙ†Ø§Øª)."
 
     numeric = _extract_number_choice(message)
     if numeric is not None:
-        return "اختار رقم صحيح من القائمة:\n" + _format_package_options_from_state(options)
+        return "Ø§Ø®ØªØ§Ø± Ø±Ù‚Ù… ØµØ­ÙŠØ­ Ù…Ù† Ø§Ù„Ù‚Ø§Ø¦Ù…Ø©:\n" + _format_package_options_from_state(options)
 
     # In active package flow, allow refining with a new package/test query.
     if _is_package_query_candidate(message):
@@ -1748,9 +1748,9 @@ def _handle_package_flow_active(conversation_id: UUID, message: str) -> str | No
             _save_package_selection_state(conversation_id, message, new_options)
             return _format_package_list_strict(new_options)
 
-        return "ما قدرت أحدد الباقة/التحليل من القائمة الحالية. اكتب الاسم بشكل أقرب أو اذكر الهدف (مثال: فيتامين د / حساسية / هرمونات)."
+        return "Ù…Ø§ Ù‚Ø¯Ø±Øª Ø£Ø­Ø¯Ø¯ Ø§Ù„Ø¨Ø§Ù‚Ø©/Ø§Ù„ØªØ­Ù„ÙŠÙ„ Ù…Ù† Ø§Ù„Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ø­Ø§Ù„ÙŠØ©. Ø§ÙƒØªØ¨ Ø§Ù„Ø§Ø³Ù… Ø¨Ø´ÙƒÙ„ Ø£Ù‚Ø±Ø¨ Ø£Ùˆ Ø§Ø°ÙƒØ± Ø§Ù„Ù‡Ø¯Ù (Ù…Ø«Ø§Ù„: ÙÙŠØªØ§Ù…ÙŠÙ† Ø¯ / Ø­Ø³Ø§Ø³ÙŠØ© / Ù‡Ø±Ù…ÙˆÙ†Ø§Øª)."
 
-    return "اختار رقم صحيح من القائمة:\n" + _format_package_options_from_state(options)
+    return "Ø§Ø®ØªØ§Ø± Ø±Ù‚Ù… ØµØ­ÙŠØ­ Ù…Ù† Ø§Ù„Ù‚Ø§Ø¦Ù…Ø©:\n" + _format_package_options_from_state(options)
 
 
 def _package_lookup_bypass_reply(question: str, conversation_id: UUID) -> str | None:
@@ -1789,19 +1789,19 @@ def _package_lookup_bypass_reply(question: str, conversation_id: UUID) -> str | 
                         "sample_type_text": None,
                     }
                 details = _format_package_details_strict(rec)
-                return "حسب الوصف الأقرب في النظام:\n" + details
+                return "Ø­Ø³Ø¨ Ø§Ù„ÙˆØµÙ Ø§Ù„Ø£Ù‚Ø±Ø¨ ÙÙŠ Ø§Ù„Ù†Ø¸Ø§Ù…:\n" + details
 
     if trigger:
-        return "ما قدرت أحدد الباقة/التحليل من القائمة الحالية. اكتب الاسم بشكل أقرب أو اذكر الهدف (مثال: فيتامين د / حساسية / هرمونات)."
+        return "Ù…Ø§ Ù‚Ø¯Ø±Øª Ø£Ø­Ø¯Ø¯ Ø§Ù„Ø¨Ø§Ù‚Ø©/Ø§Ù„ØªØ­Ù„ÙŠÙ„ Ù…Ù† Ø§Ù„Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ø­Ø§Ù„ÙŠØ©. Ø§ÙƒØªØ¨ Ø§Ù„Ø§Ø³Ù… Ø¨Ø´ÙƒÙ„ Ø£Ù‚Ø±Ø¨ Ø£Ùˆ Ø§Ø°ÙƒØ± Ø§Ù„Ù‡Ø¯Ù (Ù…Ø«Ø§Ù„: ÙÙŠØªØ§Ù…ÙŠÙ† Ø¯ / Ø­Ø³Ø§Ø³ÙŠØ© / Ù‡Ø±Ù…ÙˆÙ†Ø§Øª)."
     return None
 
 
 # Manual test plan (Phase 5):
 # 1) "Well DNA Silver" -> details (no branch mention)
-# 2) "باقات الحساسية" -> names-only list -> choose 1 -> details -> state cleared
-# 3) "كم سعر تحاليل الكبد؟" -> list or details deterministically
+# 2) "Ø¨Ø§Ù‚Ø§Øª Ø§Ù„Ø­Ø³Ø§Ø³ÙŠØ©" -> names-only list -> choose 1 -> details -> state cleared
+# 3) "ÙƒÙ… Ø³Ø¹Ø± ØªØ­Ø§Ù„ÙŠÙ„ Ø§Ù„ÙƒØ¨Ø¯ØŸ" -> list or details deterministically
 # 4) Send "99" after list -> invalid -> correction + same list
-# 5) While package_flow active: user says "وين اقرب فرع" -> package reset -> branch logic handles
+# 5) While package_flow active: user says "ÙˆÙŠÙ† Ø§Ù‚Ø±Ø¨ ÙØ±Ø¹" -> package reset -> branch logic handles
 # 6) User sends "2" without any list active -> should NOT select package
 
 
@@ -1844,37 +1844,37 @@ def _is_phone_followup_query(text: str, previous_assistant_text: str = "") -> bo
         return False
 
     explicit = {
-        "كم رقم الهاتف",
-        "رقم الهاتف",
-        "رقمكم",
-        "ابي الرقم",
-        "أبي الرقم",
+        "ÙƒÙ… Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ",
+        "Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ",
+        "Ø±Ù‚Ù…ÙƒÙ…",
+        "Ø§Ø¨ÙŠ Ø§Ù„Ø±Ù‚Ù…",
+        "Ø£Ø¨ÙŠ Ø§Ù„Ø±Ù‚Ù…",
     }
     if any(k in n for k in explicit):
         return True
 
-    if n in {"الرقم", "رقم"}:
+    if n in {"Ø§Ù„Ø±Ù‚Ù…", "Ø±Ù‚Ù…"}:
         return True
 
-    # Ambiguous "الرقم" should be treated as a follow-up only if prior assistant context supports it.
-    if "الرقم" in n or n == "رقم":
+    # Ambiguous "Ø§Ù„Ø±Ù‚Ù…" should be treated as a follow-up only if prior assistant context supports it.
+    if "Ø§Ù„Ø±Ù‚Ù…" in n or n == "Ø±Ù‚Ù…":
         pn = _normalize_light(previous_assistant_text)
         context_keywords = {
-            "حجز",
-            "موعد",
-            "زياره منزليه",
-            "زيارة منزلية",
-            "سحب منزلي",
-            "خدمات",
-            "سعر",
-            "اسعار",
-            "تكلفه",
-            "تكلفة",
-            "فرع",
-            "فروع",
-            "موقع",
-            "لوكيشن",
-            "خدمة العملاء",
+            "Ø­Ø¬Ø²",
+            "Ù…ÙˆØ¹Ø¯",
+            "Ø²ÙŠØ§Ø±Ù‡ Ù…Ù†Ø²Ù„ÙŠÙ‡",
+            "Ø²ÙŠØ§Ø±Ø© Ù…Ù†Ø²Ù„ÙŠØ©",
+            "Ø³Ø­Ø¨ Ù…Ù†Ø²Ù„ÙŠ",
+            "Ø®Ø¯Ù…Ø§Øª",
+            "Ø³Ø¹Ø±",
+            "Ø§Ø³Ø¹Ø§Ø±",
+            "ØªÙƒÙ„ÙÙ‡",
+            "ØªÙƒÙ„ÙØ©",
+            "ÙØ±Ø¹",
+            "ÙØ±ÙˆØ¹",
+            "Ù…ÙˆÙ‚Ø¹",
+            "Ù„ÙˆÙƒÙŠØ´Ù†",
+            "Ø®Ø¯Ù…Ø© Ø§Ù„Ø¹Ù…Ù„Ø§Ø¡",
         }
         return bool(pn and any(k in pn for k in context_keywords))
 
@@ -1888,7 +1888,7 @@ def _resolve_customer_phone_followup(
 ) -> str | None:
     previous_assistant_text = _last_assistant_message_within(db, conversation_id, minutes=15)
     if _is_phone_followup_query(user_message, previous_assistant_text):
-        return f"رقم خدمة العملاء: {WAREED_CUSTOMER_SERVICE_PHONE}"
+        return f"Ø±Ù‚Ù… Ø®Ø¯Ù…Ø© Ø§Ù„Ø¹Ù…Ù„Ø§Ø¡: {WAREED_CUSTOMER_SERVICE_PHONE}"
     return None
 
 
@@ -1896,9 +1896,9 @@ def _is_home_visit_button_request(text: str) -> bool:
     n = _normalize_light(text)
     if not n:
         return False
-    if "وريد كير" in n and "سحب منزلي" in n:
+    if "ÙˆØ±ÙŠØ¯ ÙƒÙŠØ±" in n and "Ø³Ø­Ø¨ Ù…Ù†Ø²Ù„ÙŠ" in n:
         return True
-    if "ابغى خدمة سحب منزلي" in n or "أبغى خدمة سحب منزلي" in n:
+    if "Ø§Ø¨ØºÙ‰ Ø®Ø¯Ù…Ø© Ø³Ø­Ø¨ Ù…Ù†Ø²Ù„ÙŠ" in n or "Ø£Ø¨ØºÙ‰ Ø®Ø¯Ù…Ø© Ø³Ø­Ø¨ Ù…Ù†Ø²Ù„ÙŠ" in n:
         return True
     return False
 
@@ -1910,11 +1910,11 @@ def _is_booking_howto_query(text: str) -> bool:
     return any(
         k in n
         for k in {
-            "كيف احجز موعد",
-            "كيف أحجز موعد",
-            "كيف احجز",
-            "كيف أحجز",
-            "حجز موعد",
+            "ÙƒÙŠÙ Ø§Ø­Ø¬Ø² Ù…ÙˆØ¹Ø¯",
+            "ÙƒÙŠÙ Ø£Ø­Ø¬Ø² Ù…ÙˆØ¹Ø¯",
+            "ÙƒÙŠÙ Ø§Ø­Ø¬Ø²",
+            "ÙƒÙŠÙ Ø£Ø­Ø¬Ø²",
+            "Ø­Ø¬Ø² Ù…ÙˆØ¹Ø¯",
         }
     )
 
@@ -1927,15 +1927,15 @@ def _resolve_home_visit_booking_reply(
     # Deterministic button/intent response.
     if _is_home_visit_button_request(user_message):
         return (
-            "متوفر لدينا خدمة سحب العينات من المنزل أو مقر العمل مع الالتزام بمعايير التعقيم، "
-            f"وضمان سرعة ظهور النتائج. للحجز: {WAREED_CUSTOMER_SERVICE_PHONE}"
+            "Ù…ØªÙˆÙØ± Ù„Ø¯ÙŠÙ†Ø§ Ø®Ø¯Ù…Ø© Ø³Ø­Ø¨ Ø§Ù„Ø¹ÙŠÙ†Ø§Øª Ù…Ù† Ø§Ù„Ù…Ù†Ø²Ù„ Ø£Ùˆ Ù…Ù‚Ø± Ø§Ù„Ø¹Ù…Ù„ Ù…Ø¹ Ø§Ù„Ø§Ù„ØªØ²Ø§Ù… Ø¨Ù…Ø¹Ø§ÙŠÙŠØ± Ø§Ù„ØªØ¹Ù‚ÙŠÙ…ØŒ "
+            f"ÙˆØ¶Ù…Ø§Ù† Ø³Ø±Ø¹Ø© Ø¸Ù‡ÙˆØ± Ø§Ù„Ù†ØªØ§Ø¦Ø¬. Ù„Ù„Ø­Ø¬Ø²: {WAREED_CUSTOMER_SERVICE_PHONE}"
         )
 
     # Deterministic short follow-up after the dedicated home-visit reply.
     if _is_booking_howto_query(user_message):
         previous_assistant_text = _last_assistant_message_within(db, conversation_id, minutes=15)
-        if previous_assistant_text.startswith("متوفر لدينا خدمة سحب العينات من المنزل أو مقر العمل"):
-            return f"للحجز: {WAREED_CUSTOMER_SERVICE_PHONE}"
+        if previous_assistant_text.startswith("Ù…ØªÙˆÙØ± Ù„Ø¯ÙŠÙ†Ø§ Ø®Ø¯Ù…Ø© Ø³Ø­Ø¨ Ø§Ù„Ø¹ÙŠÙ†Ø§Øª Ù…Ù† Ø§Ù„Ù…Ù†Ø²Ù„ Ø£Ùˆ Ù…Ù‚Ø± Ø§Ù„Ø¹Ù…Ù„"):
+            return f"Ù„Ù„Ø­Ø¬Ø²: {WAREED_CUSTOMER_SERVICE_PHONE}"
     return None
 
 
@@ -1943,12 +1943,12 @@ def _is_preparation_button_trigger(text: str) -> bool:
     n = _normalize_light(text)
     if not n:
         return False
-    return n == _normalize_light("التحضير قبل التحليل")
+    return n == _normalize_light("Ø§Ù„ØªØ­Ø¶ÙŠØ± Ù‚Ø¨Ù„ Ø§Ù„ØªØ­Ù„ÙŠÙ„")
 
 
 def _resolve_preparation_button_reply(user_message: str) -> str | None:
     if _is_preparation_button_trigger(user_message):
-        return "أكيد. اكتب اسم التحليل اللي تبي تعرف التحضير له (مثال: فيتامين د / CBC / ألدوستيرون)."
+        return "Ø£ÙƒÙŠØ¯. Ø§ÙƒØªØ¨ Ø§Ø³Ù… Ø§Ù„ØªØ­Ù„ÙŠÙ„ Ø§Ù„Ù„ÙŠ ØªØ¨ÙŠ ØªØ¹Ø±Ù Ø§Ù„ØªØ­Ø¶ÙŠØ± Ù„Ù‡ (Ù…Ø«Ø§Ù„: ÙÙŠØªØ§Ù…ÙŠÙ† Ø¯ / CBC / Ø£Ù„Ø¯ÙˆØ³ØªÙŠØ±ÙˆÙ†)."
     return None
 
 
@@ -1957,9 +1957,9 @@ def _is_services_branches_home_visit_start_trigger(text: str) -> bool:
     if not n:
         return False
     triggers = {
-        "الخدمات والفروع والسحب المنزلي",
-        "ابدأ الطلب",
-        "ابدا الطلب",
+        "Ø§Ù„Ø®Ø¯Ù…Ø§Øª ÙˆØ§Ù„ÙØ±ÙˆØ¹ ÙˆØ§Ù„Ø³Ø­Ø¨ Ø§Ù„Ù…Ù†Ø²Ù„ÙŠ",
+        "Ø§Ø¨Ø¯Ø£ Ø§Ù„Ø·Ù„Ø¨",
+        "Ø§Ø¨Ø¯Ø§ Ø§Ù„Ø·Ù„Ø¨",
     }
     return n in {_normalize_light(t) for t in triggers}
 
@@ -1973,9 +1973,9 @@ def _resolve_services_branches_home_visit_start_reply(
     # Prime existing branch flow so the next city message is handled by current branch matcher.
     _save_state(conversation_id, _start_flow("branch_flow"))
     return (
-        "يقدم مختبر وريد خدمات التحاليل المخبرية، وباقات الفحوصات، وخدمة السحب المنزلي.\n"
-        "للاستفسار أو الحجز: 920003694\n"
-        "وإذا حاب تعرف الفرع الأقرب لك، اكتب اسم المدينة (مثال: الرياض / جدة) أو المدينة + الحي."
+        "ÙŠÙ‚Ø¯Ù… Ù…Ø®ØªØ¨Ø± ÙˆØ±ÙŠØ¯ Ø®Ø¯Ù…Ø§Øª Ø§Ù„ØªØ­Ø§Ù„ÙŠÙ„ Ø§Ù„Ù…Ø®Ø¨Ø±ÙŠØ©ØŒ ÙˆØ¨Ø§Ù‚Ø§Øª Ø§Ù„ÙØ­ÙˆØµØ§ØªØŒ ÙˆØ®Ø¯Ù…Ø© Ø§Ù„Ø³Ø­Ø¨ Ø§Ù„Ù…Ù†Ø²Ù„ÙŠ.\n"
+        "Ù„Ù„Ø§Ø³ØªÙØ³Ø§Ø± Ø£Ùˆ Ø§Ù„Ø­Ø¬Ø²: 920003694\n"
+        "ÙˆØ¥Ø°Ø§ Ø­Ø§Ø¨ ØªØ¹Ø±Ù Ø§Ù„ÙØ±Ø¹ Ø§Ù„Ø£Ù‚Ø±Ø¨ Ù„ÙƒØŒ Ø§ÙƒØªØ¨ Ø§Ø³Ù… Ø§Ù„Ù…Ø¯ÙŠÙ†Ø© (Ù…Ø«Ø§Ù„: Ø§Ù„Ø±ÙŠØ§Ø¶ / Ø¬Ø¯Ø©) Ø£Ùˆ Ø§Ù„Ù…Ø¯ÙŠÙ†Ø© + Ø§Ù„Ø­ÙŠ."
     )
 
 
@@ -2050,12 +2050,12 @@ def _is_cancel_message(text: str) -> bool:
     return any(
         token in n
         for token in {
-            "إلغاء",
-            "الغاء",
+            "Ø¥Ù„ØºØ§Ø¡",
+            "Ø§Ù„ØºØ§Ø¡",
             "cancel",
             "restart",
-            "ابدا من جديد",
-            "ابدأ من جديد",
+            "Ø§Ø¨Ø¯Ø§ Ù…Ù† Ø¬Ø¯ÙŠØ¯",
+            "Ø§Ø¨Ø¯Ø£ Ù…Ù† Ø¬Ø¯ÙŠØ¯",
         }
     )
 
@@ -2073,50 +2073,50 @@ _FLOW_KEYWORDS_ORDER: list[tuple[str, set[str]]] = [
     (
         "branch_flow",
         {
-            "اقرب فرع",
-            "وين الفرع",
-            "موقع الفرع",
-            "الفرع القريب",
-            "فروع",
+            "Ø§Ù‚Ø±Ø¨ ÙØ±Ø¹",
+            "ÙˆÙŠÙ† Ø§Ù„ÙØ±Ø¹",
+            "Ù…ÙˆÙ‚Ø¹ Ø§Ù„ÙØ±Ø¹",
+            "Ø§Ù„ÙØ±Ø¹ Ø§Ù„Ù‚Ø±ÙŠØ¨",
+            "ÙØ±ÙˆØ¹",
             "branch",
             "location",
-            "مكان الفرع",
-            "مكانكم",
-            "وين مكان",
-            "موقعكم",
-            "عنوانكم",
-            "وين موقع",
-            "لوكيشن",
-            "الموقع",
-            "مكانك",
+            "Ù…ÙƒØ§Ù† Ø§Ù„ÙØ±Ø¹",
+            "Ù…ÙƒØ§Ù†ÙƒÙ…",
+            "ÙˆÙŠÙ† Ù…ÙƒØ§Ù†",
+            "Ù…ÙˆÙ‚Ø¹ÙƒÙ…",
+            "Ø¹Ù†ÙˆØ§Ù†ÙƒÙ…",
+            "ÙˆÙŠÙ† Ù…ÙˆÙ‚Ø¹",
+            "Ù„ÙˆÙƒÙŠØ´Ù†",
+            "Ø§Ù„Ù…ÙˆÙ‚Ø¹",
+            "Ù…ÙƒØ§Ù†Ùƒ",
         },
     ),
     (
         "package_flow",
         {
-            "باقة",
-            "باقه",
-            "تحاليل",
-            "تحالیل",
-            "تحليل",
-            "فحص",
+            "Ø¨Ø§Ù‚Ø©",
+            "Ø¨Ø§Ù‚Ù‡",
+            "ØªØ­Ø§Ù„ÙŠÙ„",
+            "ØªØ­Ø§Ù„ÛŒÙ„",
+            "ØªØ­Ù„ÙŠÙ„",
+            "ÙØ­Øµ",
         },
     ),
     (
         "pricing_flow",
-        {"كم سعر", "سعر", "اسعار", "تكلفه", "تكلفة", "price", "pricing", "cost"},
+        {"ÙƒÙ… Ø³Ø¹Ø±", "Ø³Ø¹Ø±", "Ø§Ø³Ø¹Ø§Ø±", "ØªÙƒÙ„ÙÙ‡", "ØªÙƒÙ„ÙØ©", "price", "pricing", "cost"},
     ),
     (
         "result_flow",
-        {"نتيجه", "نتيجة", "نتايج", "متى تطلع", "رقم الطلب", "order", "result"},
+        {"Ù†ØªÙŠØ¬Ù‡", "Ù†ØªÙŠØ¬Ø©", "Ù†ØªØ§ÙŠØ¬", "Ù…ØªÙ‰ ØªØ·Ù„Ø¹", "Ø±Ù‚Ù… Ø§Ù„Ø·Ù„Ø¨", "order", "result"},
     ),
     (
         "complaint_flow",
-        {"شكوى", "شكوي", "مشكلة", "مشكله", "complaint", "اعتراض"},
+        {"Ø´ÙƒÙˆÙ‰", "Ø´ÙƒÙˆÙŠ", "Ù…Ø´ÙƒÙ„Ø©", "Ù…Ø´ÙƒÙ„Ù‡", "complaint", "Ø§Ø¹ØªØ±Ø§Ø¶"},
     ),
 ]
 
-_RESULT_FLOW_PROMPT = "زوّدني برقم الطلب أو رقم الجوال و تاريخ الزيارة، أو ارفق صورة/ملف للنتائج عشان أشرحها لك."
+_RESULT_FLOW_PROMPT = "Ø²ÙˆÙ‘Ø¯Ù†ÙŠ Ø¨Ø±Ù‚Ù… Ø§Ù„Ø·Ù„Ø¨ Ø£Ùˆ Ø±Ù‚Ù… Ø§Ù„Ø¬ÙˆØ§Ù„ Ùˆ ØªØ§Ø±ÙŠØ® Ø§Ù„Ø²ÙŠØ§Ø±Ø©ØŒ Ø£Ùˆ Ø§Ø±ÙÙ‚ ØµÙˆØ±Ø©/Ù…Ù„Ù Ù„Ù„Ù†ØªØ§Ø¦Ø¬ Ø¹Ø´Ø§Ù† Ø£Ø´Ø±Ø­Ù‡Ø§ Ù„Ùƒ."
 
 
 def _detect_bypass_flow(text: str) -> str | None:
@@ -2140,19 +2140,19 @@ def _is_result_flow_related_message(text: str) -> bool:
     if _extract_identifier(text):
         return True
     result_markers = {
-        "نتيجة",
-        "نتيجه",
-        "نتايج",
-        "شرح النتائج",
-        "شرح نتايج",
-        "تفسير النتائج",
-        "نتائج التحليل",
-        "رقم الطلب",
-        "تاريخ الزيارة",
-        "ارفق",
-        "أرفق",
-        "صورة",
-        "ملف",
+        "Ù†ØªÙŠØ¬Ø©",
+        "Ù†ØªÙŠØ¬Ù‡",
+        "Ù†ØªØ§ÙŠØ¬",
+        "Ø´Ø±Ø­ Ø§Ù„Ù†ØªØ§Ø¦Ø¬",
+        "Ø´Ø±Ø­ Ù†ØªØ§ÙŠØ¬",
+        "ØªÙØ³ÙŠØ± Ø§Ù„Ù†ØªØ§Ø¦Ø¬",
+        "Ù†ØªØ§Ø¦Ø¬ Ø§Ù„ØªØ­Ù„ÙŠÙ„",
+        "Ø±Ù‚Ù… Ø§Ù„Ø·Ù„Ø¨",
+        "ØªØ§Ø±ÙŠØ® Ø§Ù„Ø²ÙŠØ§Ø±Ø©",
+        "Ø§Ø±ÙÙ‚",
+        "Ø£Ø±ÙÙ‚",
+        "ØµÙˆØ±Ø©",
+        "Ù…Ù„Ù",
         "report",
     }
     return any(m in n for m in result_markers)
@@ -2162,8 +2162,8 @@ def _extract_test_name_for_pricing(text: str) -> str:
     n = _normalize_light(text)
     if not n:
         return ""
-    cleaned = re.sub(r"[؟?]", " ", n)
-    cleaned = re.sub(r"\b(كم|سعر|تكلفه|في|الرياض|جده|price|pricing)\b", " ", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"[ØŸ?]", " ", n)
+    cleaned = re.sub(r"\b(ÙƒÙ…|Ø³Ø¹Ø±|ØªÙƒÙ„ÙÙ‡|ÙÙŠ|Ø§Ù„Ø±ÙŠØ§Ø¶|Ø¬Ø¯Ù‡|price|pricing)\b", " ", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     return cleaned
 
@@ -2184,12 +2184,12 @@ def _format_branch_item(idx: int, branch: dict) -> str:
 
 
 def _format_city_branches_reply(city: str, branches: list[dict]) -> str:
-    lines = [f"هذه فروعنا المتوفرة في {city}:"]
+    lines = [f"Ù‡Ø°Ù‡ ÙØ±ÙˆØ¹Ù†Ø§ Ø§Ù„Ù…ØªÙˆÙØ±Ø© ÙÙŠ {city}:"]
     for i, b in enumerate(branches, 1):
         lines.append("")
         lines.append(_format_branch_item(i, b))
     lines.append("")
-    lines.append("اكتب اسم الحي أو رقم الفرع إذا تحب أحدد لك الأنسب.")
+    lines.append("Ø§ÙƒØªØ¨ Ø§Ø³Ù… Ø§Ù„Ø­ÙŠ Ø£Ùˆ Ø±Ù‚Ù… Ø§Ù„ÙØ±Ø¹ Ø¥Ø°Ø§ ØªØ­Ø¨ Ø£Ø­Ø¯Ø¯ Ù„Ùƒ Ø§Ù„Ø£Ù†Ø³Ø¨.")
     return "\n".join(lines)
 
 
@@ -2204,18 +2204,18 @@ def _extract_city_from_query(query: str) -> str:
 
 
 _BRANCH_LIKE_KEYWORDS = {
-    "فرع",
-    "الفرع",
-    "فروع",
-    "موقع",
-    "الموقع",
-    "عنوان",
-    "لوكيشن",
-    "مكان",
-    "مكانكم",
-    "مكانك",
-    "موقعكم",
-    "عنوانكم",
+    "ÙØ±Ø¹",
+    "Ø§Ù„ÙØ±Ø¹",
+    "ÙØ±ÙˆØ¹",
+    "Ù…ÙˆÙ‚Ø¹",
+    "Ø§Ù„Ù…ÙˆÙ‚Ø¹",
+    "Ø¹Ù†ÙˆØ§Ù†",
+    "Ù„ÙˆÙƒÙŠØ´Ù†",
+    "Ù…ÙƒØ§Ù†",
+    "Ù…ÙƒØ§Ù†ÙƒÙ…",
+    "Ù…ÙƒØ§Ù†Ùƒ",
+    "Ù…ÙˆÙ‚Ø¹ÙƒÙ…",
+    "Ø¹Ù†ÙˆØ§Ù†ÙƒÙ…",
     "branch",
     "location",
 }
@@ -2244,11 +2244,11 @@ def _match_branch_by_name_in_query(query: str) -> dict | None:
             continue
 
         variants = {branch_name_n}
-        if branch_name_n.startswith("فرع "):
+        if branch_name_n.startswith("ÙØ±Ø¹ "):
             short_name = branch_name_n[4:].strip()
             if short_name:
                 variants.add(short_name)
-        if branch_name_n.startswith("الفرع "):
+        if branch_name_n.startswith("Ø§Ù„ÙØ±Ø¹ "):
             short_name = branch_name_n[6:].strip()
             if short_name:
                 variants.add(short_name)
@@ -2264,50 +2264,50 @@ def _match_branch_by_name_in_query(query: str) -> dict | None:
 
 
 _BRANCH_FILLER_WORDS = {
-    "فروعكم",
-    "الفروع",
-    "فروع",
-    "المتوفره",
-    "المتوفرة",
-    "عندكم",
-    "معاكم",
-    "في",
-    "وين",
-    "اقرب",
-    "فرع",
-    "الفرع",
-    "موجوده",
-    "موجودة",
-    "ماهي",
-    "ما",
-    "هي",
-    "وش",
-    "ايش",
-    "ابي",
-    "ابغى",
-    "لو",
-    "سمحت",
-    "لوسمحت",
-    "حدد",
-    "لي",
-    "مدينه",
-    "مدينة",
+    "ÙØ±ÙˆØ¹ÙƒÙ…",
+    "Ø§Ù„ÙØ±ÙˆØ¹",
+    "ÙØ±ÙˆØ¹",
+    "Ø§Ù„Ù…ØªÙˆÙØ±Ù‡",
+    "Ø§Ù„Ù…ØªÙˆÙØ±Ø©",
+    "Ø¹Ù†Ø¯ÙƒÙ…",
+    "Ù…Ø¹Ø§ÙƒÙ…",
+    "ÙÙŠ",
+    "ÙˆÙŠÙ†",
+    "Ø§Ù‚Ø±Ø¨",
+    "ÙØ±Ø¹",
+    "Ø§Ù„ÙØ±Ø¹",
+    "Ù…ÙˆØ¬ÙˆØ¯Ù‡",
+    "Ù…ÙˆØ¬ÙˆØ¯Ø©",
+    "Ù…Ø§Ù‡ÙŠ",
+    "Ù…Ø§",
+    "Ù‡ÙŠ",
+    "ÙˆØ´",
+    "Ø§ÙŠØ´",
+    "Ø§Ø¨ÙŠ",
+    "Ø§Ø¨ØºÙ‰",
+    "Ù„Ùˆ",
+    "Ø³Ù…Ø­Øª",
+    "Ù„ÙˆØ³Ù…Ø­Øª",
+    "Ø­Ø¯Ø¯",
+    "Ù„ÙŠ",
+    "Ù…Ø¯ÙŠÙ†Ù‡",
+    "Ù…Ø¯ÙŠÙ†Ø©",
 }
 
 _BRANCH_DISTRICT_IGNORE_TOKENS = {
-    "فروعكم",
-    "الفروع",
-    "المتوفره",
-    "المتوفرة",
-    "عندكم",
-    "معاكم",
-    "في",
-    "وين",
-    "اقرب",
-    "فرع",
-    "الفرع",
-    "موجوده",
-    "موجودة",
+    "ÙØ±ÙˆØ¹ÙƒÙ…",
+    "Ø§Ù„ÙØ±ÙˆØ¹",
+    "Ø§Ù„Ù…ØªÙˆÙØ±Ù‡",
+    "Ø§Ù„Ù…ØªÙˆÙØ±Ø©",
+    "Ø¹Ù†Ø¯ÙƒÙ…",
+    "Ù…Ø¹Ø§ÙƒÙ…",
+    "ÙÙŠ",
+    "ÙˆÙŠÙ†",
+    "Ø§Ù‚Ø±Ø¨",
+    "ÙØ±Ø¹",
+    "Ø§Ù„ÙØ±Ø¹",
+    "Ù…ÙˆØ¬ÙˆØ¯Ù‡",
+    "Ù…ÙˆØ¬ÙˆØ¯Ø©",
 }
 
 
@@ -2363,10 +2363,10 @@ def _is_real_phone_number(value: str) -> bool:
 
 
 def _format_branch_names_only(city: str, branches: list[dict]) -> str:
-    lines = [f"هذه الفروع المتوفرة في {city}:"]
+    lines = [f"Ù‡Ø°Ù‡ Ø§Ù„ÙØ±ÙˆØ¹ Ø§Ù„Ù…ØªÙˆÙØ±Ø© ÙÙŠ {city}:"]
     for i, b in enumerate(branches, 1):
         lines.append(f"{i}) {b.get('branch_name', '').strip()}")
-    lines.append("حددي رقم الفرع الأقرب لك لأزوّدك برابط الموقع.")
+    lines.append("Ø­Ø¯Ø¯ÙŠ Ø±Ù‚Ù… Ø§Ù„ÙØ±Ø¹ Ø§Ù„Ø£Ù‚Ø±Ø¨ Ù„Ùƒ Ù„Ø£Ø²ÙˆÙ‘Ø¯Ùƒ Ø¨Ø±Ø§Ø¨Ø· Ø§Ù„Ù…ÙˆÙ‚Ø¹.")
     return "\n".join(lines)
 
 
@@ -2375,27 +2375,27 @@ def _format_selected_branch(choice: int, branch: dict) -> str:
     maps_url = (branch.get("maps_url") or "").strip()
     hours = (branch.get("hours") or "").strip()
     phone = (branch.get("phone") or "").strip()
-    lines = [f"الفرع رقم {choice}: {branch_name}", ""]
+    lines = [f"Ø§Ù„ÙØ±Ø¹ Ø±Ù‚Ù… {choice}: {branch_name}", ""]
     if maps_url:
-        lines.append("رابط الموقع:")
+        lines.append("Ø±Ø§Ø¨Ø· Ø§Ù„Ù…ÙˆÙ‚Ø¹:")
         lines.append(maps_url)
     if _is_real_phone_number(phone):
         lines.append("")
-        lines.append(f"هاتف الفرع: {phone}")
+        lines.append(f"Ù‡Ø§ØªÙ Ø§Ù„ÙØ±Ø¹: {phone}")
     if hours:
         if not _is_real_phone_number(phone):
             lines.append("")
-        lines.append(f"ساعات العمل: {hours}")
+        lines.append(f"Ø³Ø§Ø¹Ø§Øª Ø§Ù„Ø¹Ù…Ù„: {hours}")
     return "\n".join(lines)
 
 
 def _format_city_not_found_reply(city: str) -> str:
     cities = get_available_cities()
-    cities_text = "، ".join(cities) if cities else "-"
+    cities_text = "ØŒ ".join(cities) if cities else "-"
     return (
-        f"حالياً لا يوجد لدينا فروع في {city}.\n"
-        f"المدن المتوفرة لدينا حالياً في: {cities_text}\n"
-        f"ولأي مساعدة إضافية: {_branch_phone()}"
+        f"Ø­Ø§Ù„ÙŠØ§Ù‹ Ù„Ø§ ÙŠÙˆØ¬Ø¯ Ù„Ø¯ÙŠÙ†Ø§ ÙØ±ÙˆØ¹ ÙÙŠ {city}.\n"
+        f"Ø§Ù„Ù…Ø¯Ù† Ø§Ù„Ù…ØªÙˆÙØ±Ø© Ù„Ø¯ÙŠÙ†Ø§ Ø­Ø§Ù„ÙŠØ§Ù‹ ÙÙŠ: {cities_text}\n"
+        f"ÙˆÙ„Ø£ÙŠ Ù…Ø³Ø§Ø¹Ø¯Ø© Ø¥Ø¶Ø§ÙÙŠØ©: {_branch_phone()}"
     )
 
 
@@ -2408,7 +2408,7 @@ def _save_branch_selection_state(conversation_id: UUID, city: str, branches: lis
             "slots": {"city": city},
             "last_city": city,
             "last_options": branches,
-            "last_prompt": "حددي رقم الفرع الأقرب لك لأزوّدك برابط الموقع.",
+            "last_prompt": "Ø­Ø¯Ø¯ÙŠ Ø±Ù‚Ù… Ø§Ù„ÙØ±Ø¹ Ø§Ù„Ø£Ù‚Ø±Ø¨ Ù„Ùƒ Ù„Ø£Ø²ÙˆÙ‘Ø¯Ùƒ Ø¨Ø±Ø§Ø¨Ø· Ø§Ù„Ù…ÙˆÙ‚Ø¹.",
         },
     )
 
@@ -2453,12 +2453,12 @@ def _branch_lookup_bypass_reply(question: str, conversation_id: UUID, light_inte
     if _has_branch_like_word(question):
         city_probe, _ = _extract_city_and_district(question)
         if not city_probe:
-            return "عشان أتحقق لك من الموقع بالضبط، خبرني عن المدينة اللي أنت فيها وبعرض لك الفروع المتوفرة وتختار الأقرب لك."
+            return "Ø¹Ø´Ø§Ù† Ø£ØªØ­Ù‚Ù‚ Ù„Ùƒ Ù…Ù† Ø§Ù„Ù…ÙˆÙ‚Ø¹ Ø¨Ø§Ù„Ø¶Ø¨Ø·ØŒ Ø®Ø¨Ø±Ù†ÙŠ Ø¹Ù† Ø§Ù„Ù…Ø¯ÙŠÙ†Ø© Ø§Ù„Ù„ÙŠ Ø£Ù†Øª ÙÙŠÙ‡Ø§ ÙˆØ¨Ø¹Ø±Ø¶ Ù„Ùƒ Ø§Ù„ÙØ±ÙˆØ¹ Ø§Ù„Ù…ØªÙˆÙØ±Ø© ÙˆØªØ®ØªØ§Ø± Ø§Ù„Ø£Ù‚Ø±Ø¨ Ù„Ùƒ."
 
     # Case A: no city
     city_raw, district = _extract_city_and_district(question)
     if not city_raw:
-        return "عشان أحدد أقرب فرع، اكتب اسم المدينة (مثال: الرياض / جدة) أو المدينة + الحي."
+        return "Ø¹Ø´Ø§Ù† Ø£Ø­Ø¯Ø¯ Ø£Ù‚Ø±Ø¨ ÙØ±Ø¹ØŒ Ø§ÙƒØªØ¨ Ø§Ø³Ù… Ø§Ù„Ù…Ø¯ÙŠÙ†Ø© (Ù…Ø«Ø§Ù„: Ø§Ù„Ø±ÙŠØ§Ø¶ / Ø¬Ø¯Ø©) Ø£Ùˆ Ø§Ù„Ù…Ø¯ÙŠÙ†Ø© + Ø§Ù„Ø­ÙŠ."
 
     city = _match_city_in_catalog(city_raw)
     if not city:
@@ -2480,7 +2480,7 @@ def _branch_lookup_bypass_reply(question: str, conversation_id: UUID, light_inte
             return _format_branch_names_only(city, district_hits)
         _save_branch_selection_state(conversation_id, city, city_branches)
         return (
-            f"ما لقينا الحي المذكور بالاسم داخل قائمتنا، لكن هذه فروع {city} المتوفرة:\n"
+            f"Ù…Ø§ Ù„Ù‚ÙŠÙ†Ø§ Ø§Ù„Ø­ÙŠ Ø§Ù„Ù…Ø°ÙƒÙˆØ± Ø¨Ø§Ù„Ø§Ø³Ù… Ø¯Ø§Ø®Ù„ Ù‚Ø§Ø¦Ù…ØªÙ†Ø§ØŒ Ù„ÙƒÙ† Ù‡Ø°Ù‡ ÙØ±ÙˆØ¹ {city} Ø§Ù„Ù…ØªÙˆÙØ±Ø©:\n"
             + "\n"
             + _format_branch_names_only(city, city_branches)
         )
@@ -2497,19 +2497,19 @@ def _start_flow(flow_name: str) -> dict:
     if flow_name in {"branch_flow", "branch_location"}:
         state["active_flow"] = "branch_flow"
         state["step"] = "awaiting_city"
-        state["last_prompt"] = "عشان أحدد أقرب فرع، اكتب اسم المدينة (مثال: الرياض / جدة) أو المدينة + الحي."
+        state["last_prompt"] = "Ø¹Ø´Ø§Ù† Ø£Ø­Ø¯Ø¯ Ø£Ù‚Ø±Ø¨ ÙØ±Ø¹ØŒ Ø§ÙƒØªØ¨ Ø§Ø³Ù… Ø§Ù„Ù…Ø¯ÙŠÙ†Ø© (Ù…Ø«Ø§Ù„: Ø§Ù„Ø±ÙŠØ§Ø¶ / Ø¬Ø¯Ø©) Ø£Ùˆ Ø§Ù„Ù…Ø¯ÙŠÙ†Ø© + Ø§Ù„Ø­ÙŠ."
     elif flow_name == "pricing_flow":
         state["step"] = "awaiting_test_name"
-        state["last_prompt"] = "وش اسم التحليل اللي تبغى سعره؟"
+        state["last_prompt"] = "ÙˆØ´ Ø§Ø³Ù… Ø§Ù„ØªØ­Ù„ÙŠÙ„ Ø§Ù„Ù„ÙŠ ØªØ¨ØºÙ‰ Ø³Ø¹Ø±Ù‡ØŸ"
     elif flow_name == "package_flow":
         state["step"] = "awaiting_choice"
-        state["last_prompt"] = "اكتب اسم الباقة/التحليل أو اختر رقم من الخيارات إذا ظهرت لك قائمة."
+        state["last_prompt"] = "Ø§ÙƒØªØ¨ Ø§Ø³Ù… Ø§Ù„Ø¨Ø§Ù‚Ø©/Ø§Ù„ØªØ­Ù„ÙŠÙ„ Ø£Ùˆ Ø§Ø®ØªØ± Ø±Ù‚Ù… Ù…Ù† Ø§Ù„Ø®ÙŠØ§Ø±Ø§Øª Ø¥Ø°Ø§ Ø¸Ù‡Ø±Øª Ù„Ùƒ Ù‚Ø§Ø¦Ù…Ø©."
     elif flow_name == "result_flow":
         state["step"] = "awaiting_identifier"
         state["last_prompt"] = _RESULT_FLOW_PROMPT
     elif flow_name == "complaint_flow":
         state["step"] = "awaiting_identifier"
-        state["last_prompt"] = "لفتح شكوى بشكل صحيح، زوّدني برقم الطلب أو تاريخ الزيارة."
+        state["last_prompt"] = "Ù„ÙØªØ­ Ø´ÙƒÙˆÙ‰ Ø¨Ø´ÙƒÙ„ ØµØ­ÙŠØ­ØŒ Ø²ÙˆÙ‘Ø¯Ù†ÙŠ Ø¨Ø±Ù‚Ù… Ø§Ù„Ø·Ù„Ø¨ Ø£Ùˆ ØªØ§Ø±ÙŠØ® Ø§Ù„Ø²ÙŠØ§Ø±Ø©."
     else:
         state["step"] = None
         state["last_prompt"] = None
@@ -2549,10 +2549,10 @@ def _run_branch_flow(message: str, state: dict) -> tuple[str, dict, bool]:
     if not city_raw:
         if _has_branch_like_word(message):
             state["step"] = "awaiting_city"
-            state["last_prompt"] = "عشان أتحقق لك من الموقع بالضبط، خبرني عن المدينة اللي أنت فيها وبعرض لك الفروع المتوفرة وتختار الأقرب لك."
+            state["last_prompt"] = "Ø¹Ø´Ø§Ù† Ø£ØªØ­Ù‚Ù‚ Ù„Ùƒ Ù…Ù† Ø§Ù„Ù…ÙˆÙ‚Ø¹ Ø¨Ø§Ù„Ø¶Ø¨Ø·ØŒ Ø®Ø¨Ø±Ù†ÙŠ Ø¹Ù† Ø§Ù„Ù…Ø¯ÙŠÙ†Ø© Ø§Ù„Ù„ÙŠ Ø£Ù†Øª ÙÙŠÙ‡Ø§ ÙˆØ¨Ø¹Ø±Ø¶ Ù„Ùƒ Ø§Ù„ÙØ±ÙˆØ¹ Ø§Ù„Ù…ØªÙˆÙØ±Ø© ÙˆØªØ®ØªØ§Ø± Ø§Ù„Ø£Ù‚Ø±Ø¨ Ù„Ùƒ."
             return state["last_prompt"], state, False
         state["step"] = "awaiting_city"
-        state["last_prompt"] = "عشان أحدد أقرب فرع، اكتب اسم المدينة (مثال: الرياض / جدة) أو المدينة + الحي."
+        state["last_prompt"] = "Ø¹Ø´Ø§Ù† Ø£Ø­Ø¯Ø¯ Ø£Ù‚Ø±Ø¨ ÙØ±Ø¹ØŒ Ø§ÙƒØªØ¨ Ø§Ø³Ù… Ø§Ù„Ù…Ø¯ÙŠÙ†Ø© (Ù…Ø«Ø§Ù„: Ø§Ù„Ø±ÙŠØ§Ø¶ / Ø¬Ø¯Ø©) Ø£Ùˆ Ø§Ù„Ù…Ø¯ÙŠÙ†Ø© + Ø§Ù„Ø­ÙŠ."
         return state["last_prompt"], state, False
 
     city = _match_city_in_catalog(city_raw)
@@ -2576,16 +2576,16 @@ def _run_branch_flow(message: str, state: dict) -> tuple[str, dict, bool]:
             state["active_flow"] = "branch_flow"
             state["last_city"] = city
             state["last_options"] = district_hits
-            state["last_prompt"] = "حددي رقم الفرع الأقرب لك لأزوّدك برابط الموقع."
+            state["last_prompt"] = "Ø­Ø¯Ø¯ÙŠ Ø±Ù‚Ù… Ø§Ù„ÙØ±Ø¹ Ø§Ù„Ø£Ù‚Ø±Ø¨ Ù„Ùƒ Ù„Ø£Ø²ÙˆÙ‘Ø¯Ùƒ Ø¨Ø±Ø§Ø¨Ø· Ø§Ù„Ù…ÙˆÙ‚Ø¹."
             return _format_branch_names_only(city, district_hits), state, False
         state["slots"] = {"city": city, "district": district}
         state["step"] = "awaiting_branch_number"
         state["active_flow"] = "branch_flow"
         state["last_city"] = city
         state["last_options"] = city_branches
-        state["last_prompt"] = "حددي رقم الفرع الأقرب لك لأزوّدك برابط الموقع."
+        state["last_prompt"] = "Ø­Ø¯Ø¯ÙŠ Ø±Ù‚Ù… Ø§Ù„ÙØ±Ø¹ Ø§Ù„Ø£Ù‚Ø±Ø¨ Ù„Ùƒ Ù„Ø£Ø²ÙˆÙ‘Ø¯Ùƒ Ø¨Ø±Ø§Ø¨Ø· Ø§Ù„Ù…ÙˆÙ‚Ø¹."
         msg = (
-            f"ما لقينا الحي المذكور بالاسم داخل قائمتنا، لكن هذه فروع {city} المتوفرة:\n"
+            f"Ù…Ø§ Ù„Ù‚ÙŠÙ†Ø§ Ø§Ù„Ø­ÙŠ Ø§Ù„Ù…Ø°ÙƒÙˆØ± Ø¨Ø§Ù„Ø§Ø³Ù… Ø¯Ø§Ø®Ù„ Ù‚Ø§Ø¦Ù…ØªÙ†Ø§ØŒ Ù„ÙƒÙ† Ù‡Ø°Ù‡ ÙØ±ÙˆØ¹ {city} Ø§Ù„Ù…ØªÙˆÙØ±Ø©:\n"
             + "\n"
             + _format_branch_names_only(city, city_branches)
         )
@@ -2596,7 +2596,7 @@ def _run_branch_flow(message: str, state: dict) -> tuple[str, dict, bool]:
     state["active_flow"] = "branch_flow"
     state["last_city"] = city
     state["last_options"] = city_branches
-    state["last_prompt"] = "حددي رقم الفرع الأقرب لك لأزوّدك برابط الموقع."
+    state["last_prompt"] = "Ø­Ø¯Ø¯ÙŠ Ø±Ù‚Ù… Ø§Ù„ÙØ±Ø¹ Ø§Ù„Ø£Ù‚Ø±Ø¨ Ù„Ùƒ Ù„Ø£Ø²ÙˆÙ‘Ø¯Ùƒ Ø¨Ø±Ø§Ø¨Ø· Ø§Ù„Ù…ÙˆÙ‚Ø¹."
     return _format_branch_names_only(city, city_branches), state, False
 
 
@@ -2607,12 +2607,12 @@ def _run_pricing_flow(message: str, state: dict) -> tuple[str, dict, bool]:
     if step == "awaiting_test_name":
         test_name = _extract_test_name_for_pricing(message)
         if not test_name:
-            state["last_prompt"] = "وش اسم التحليل اللي تبغى سعره؟"
+            state["last_prompt"] = "ÙˆØ´ Ø§Ø³Ù… Ø§Ù„ØªØ­Ù„ÙŠÙ„ Ø§Ù„Ù„ÙŠ ØªØ¨ØºÙ‰ Ø³Ø¹Ø±Ù‡ØŸ"
             return state["last_prompt"], state, False
         slots["test_name"] = test_name
         state["slots"] = slots
         state["step"] = "awaiting_city"
-        state["last_prompt"] = "اكتب المدينة إذا تحب (مثال: الرياض)، أو اكتب: بدون مدينة."
+        state["last_prompt"] = "Ø§ÙƒØªØ¨ Ø§Ù„Ù…Ø¯ÙŠÙ†Ø© Ø¥Ø°Ø§ ØªØ­Ø¨ (Ù…Ø«Ø§Ù„: Ø§Ù„Ø±ÙŠØ§Ø¶)ØŒ Ø£Ùˆ Ø§ÙƒØªØ¨: Ø¨Ø¯ÙˆÙ† Ù…Ø¯ÙŠÙ†Ø©."
         return state["last_prompt"], state, False
 
     if step == "awaiting_city":
@@ -2620,13 +2620,13 @@ def _run_pricing_flow(message: str, state: dict) -> tuple[str, dict, bool]:
         if city and _match_city_in_catalog(city):
             slots["city"] = _match_city_in_catalog(city)
         reply = (
-            f"بالنسبة لسعر {slots.get('test_name', 'التحليل المطلوب')}"
-            + (f" في {slots['city']}" if slots.get("city") else "")
-            + f"، للاستفسار الدقيق تقدر تتواصل مع خدمة العملاء على {_branch_phone()}."
+            f"Ø¨Ø§Ù„Ù†Ø³Ø¨Ø© Ù„Ø³Ø¹Ø± {slots.get('test_name', 'Ø§Ù„ØªØ­Ù„ÙŠÙ„ Ø§Ù„Ù…Ø·Ù„ÙˆØ¨')}"
+            + (f" ÙÙŠ {slots['city']}" if slots.get("city") else "")
+            + f"ØŒ Ù„Ù„Ø§Ø³ØªÙØ³Ø§Ø± Ø§Ù„Ø¯Ù‚ÙŠÙ‚ ØªÙ‚Ø¯Ø± ØªØªÙˆØ§ØµÙ„ Ù…Ø¹ Ø®Ø¯Ù…Ø© Ø§Ù„Ø¹Ù…Ù„Ø§Ø¡ Ø¹Ù„Ù‰ {_branch_phone()}."
         )
         return reply, _complete_flow(state), True
 
-    state["last_prompt"] = "وش اسم التحليل اللي تبغى سعره؟"
+    state["last_prompt"] = "ÙˆØ´ Ø§Ø³Ù… Ø§Ù„ØªØ­Ù„ÙŠÙ„ Ø§Ù„Ù„ÙŠ ØªØ¨ØºÙ‰ Ø³Ø¹Ø±Ù‡ØŸ"
     state["step"] = "awaiting_test_name"
     return state["last_prompt"], state, False
 
@@ -2637,7 +2637,7 @@ def _run_result_flow(message: str, state: dict) -> tuple[str, dict, bool]:
         state["step"] = "awaiting_identifier"
         state["last_prompt"] = _RESULT_FLOW_PROMPT
         return state["last_prompt"], state, False
-    reply = f"لخدمة النتائج بشكل مباشر، تقدر تتواصل مع خدمة العملاء على {_branch_phone()}."
+    reply = f"Ù„Ø®Ø¯Ù…Ø© Ø§Ù„Ù†ØªØ§Ø¦Ø¬ Ø¨Ø´ÙƒÙ„ Ù…Ø¨Ø§Ø´Ø±ØŒ ØªÙ‚Ø¯Ø± ØªØªÙˆØ§ØµÙ„ Ù…Ø¹ Ø®Ø¯Ù…Ø© Ø§Ù„Ø¹Ù…Ù„Ø§Ø¡ Ø¹Ù„Ù‰ {_branch_phone()}."
     return reply, _complete_flow(state), True
 
 
@@ -2645,9 +2645,9 @@ def _run_complaint_flow(message: str, state: dict) -> tuple[str, dict, bool]:
     ident = _extract_identifier(message)
     if not ident:
         state["step"] = "awaiting_identifier"
-        state["last_prompt"] = "لفتح شكوى بشكل صحيح، زوّدني برقم الطلب أو تاريخ الزيارة."
+        state["last_prompt"] = "Ù„ÙØªØ­ Ø´ÙƒÙˆÙ‰ Ø¨Ø´ÙƒÙ„ ØµØ­ÙŠØ­ØŒ Ø²ÙˆÙ‘Ø¯Ù†ÙŠ Ø¨Ø±Ù‚Ù… Ø§Ù„Ø·Ù„Ø¨ Ø£Ùˆ ØªØ§Ø±ÙŠØ® Ø§Ù„Ø²ÙŠØ§Ø±Ø©."
         return state["last_prompt"], state, False
-    reply = f"تم استلام طلبك. لإكمال معالجة الشكوى بسرعة، تواصل مع خدمة العملاء على {_branch_phone()}."
+    reply = f"ØªÙ… Ø§Ø³ØªÙ„Ø§Ù… Ø·Ù„Ø¨Ùƒ. Ù„Ø¥ÙƒÙ…Ø§Ù„ Ù…Ø¹Ø§Ù„Ø¬Ø© Ø§Ù„Ø´ÙƒÙˆÙ‰ Ø¨Ø³Ø±Ø¹Ø©ØŒ ØªÙˆØ§ØµÙ„ Ù…Ø¹ Ø®Ø¯Ù…Ø© Ø§Ù„Ø¹Ù…Ù„Ø§Ø¡ Ø¹Ù„Ù‰ {_branch_phone()}."
     return reply, _complete_flow(state), True
 
 
@@ -2689,7 +2689,7 @@ def _handle_stateful_conversation(conversation_id: UUID, message: str) -> str | 
     if _is_cancel_message(message):
         _reset_state(conversation_id)
         _reset_package_state(conversation_id)
-        return "تم إلغاء العملية. نقدر نبدأ من جديد، كيف أقدر أخدمك؟"
+        return "ØªÙ… Ø¥Ù„ØºØ§Ø¡ Ø§Ù„Ø¹Ù…Ù„ÙŠØ©. Ù†Ù‚Ø¯Ø± Ù†Ø¨Ø¯Ø£ Ù…Ù† Ø¬Ø¯ÙŠØ¯ØŒ ÙƒÙŠÙ Ø£Ù‚Ø¯Ø± Ø£Ø®Ø¯Ù…ÙƒØŸ"
 
     state = _get_state(conversation_id)
     active_flow = state.get("active_flow") or None
@@ -2750,15 +2750,15 @@ def _direct_kb_faq_answer(question: str, intent: str) -> str | None:
         kb = get_knowledge_base()
         query_seed = question
         if intent == "working_hours":
-            query_seed = "ساعات الدوام وقت الدوام متى تفتحون متى تقفلون " + question
+            query_seed = "Ø³Ø§Ø¹Ø§Øª Ø§Ù„Ø¯ÙˆØ§Ù… ÙˆÙ‚Øª Ø§Ù„Ø¯ÙˆØ§Ù… Ù…ØªÙ‰ ØªÙØªØ­ÙˆÙ† Ù…ØªÙ‰ ØªÙ‚ÙÙ„ÙˆÙ† " + question
         elif intent == "contact_support":
-            query_seed = "رقم التواصل خدمة العملاء واتساب ايميل " + question
+            query_seed = "Ø±Ù‚Ù… Ø§Ù„ØªÙˆØ§ØµÙ„ Ø®Ø¯Ù…Ø© Ø§Ù„Ø¹Ù…Ù„Ø§Ø¡ ÙˆØ§ØªØ³Ø§Ø¨ Ø§ÙŠÙ…ÙŠÙ„ " + question
         elif intent == "branches_locations":
-            query_seed = "فروع الموقع العنوان المدينة " + question
+            query_seed = "ÙØ±ÙˆØ¹ Ø§Ù„Ù…ÙˆÙ‚Ø¹ Ø§Ù„Ø¹Ù†ÙˆØ§Ù† Ø§Ù„Ù…Ø¯ÙŠÙ†Ø© " + question
         elif intent == "home_visit":
-            query_seed = "زيارة منزلية سحب منزلي " + question
+            query_seed = "Ø²ÙŠØ§Ø±Ø© Ù…Ù†Ø²Ù„ÙŠØ© Ø³Ø­Ø¨ Ù…Ù†Ø²Ù„ÙŠ " + question
         elif intent == "payment_insurance_privacy":
-            query_seed = "الدفع التأمين الخصوصية البيانات " + question
+            query_seed = "Ø§Ù„Ø¯ÙØ¹ Ø§Ù„ØªØ£Ù…ÙŠÙ† Ø§Ù„Ø®ØµÙˆØµÙŠØ© Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª " + question
         results = kb.search_faqs(query_seed, min_score=45, max_results=1)
         if results:
             return sanitize_for_ui(results[0]["faq"].get("answer") or "")
@@ -2770,16 +2770,16 @@ def _direct_kb_faq_answer(question: str, intent: str) -> str | None:
 def _symptom_guidance(question: str) -> str:
     n = normalize_for_matching(question or "")
     picks = ["CBC", "Ferritin", "TSH", "Vitamin D (25 OH-Vit D -Total)"]
-    if "سكر" in n or "دوخه" in n:
+    if "Ø³ÙƒØ±" in n or "Ø¯ÙˆØ®Ù‡" in n:
         picks.append("HbA1c")
     unique = []
     for p in picks:
         if p not in unique:
             unique.append(p)
     return (
-        "حسب الأعراض المذكورة غالباً يبدأ الطبيب بفحوصات:\n"
+        "Ø­Ø³Ø¨ Ø§Ù„Ø£Ø¹Ø±Ø§Ø¶ Ø§Ù„Ù…Ø°ÙƒÙˆØ±Ø© ØºØ§Ù„Ø¨Ø§Ù‹ ÙŠØ¨Ø¯Ø£ Ø§Ù„Ø·Ø¨ÙŠØ¨ Ø¨ÙØ­ÙˆØµØ§Øª:\n"
         + "\n".join([f"- {p}" for p in unique[:5]])
-        + "\n\nهذا توجيه تثقيفي فقط، والتشخيص النهائي يكون عند الطبيب."
+        + "\n\nÙ‡Ø°Ø§ ØªÙˆØ¬ÙŠÙ‡ ØªØ«Ù‚ÙŠÙÙŠ ÙÙ‚Ø·ØŒ ÙˆØ§Ù„ØªØ´Ø®ÙŠØµ Ø§Ù„Ù†Ù‡Ø§Ø¦ÙŠ ÙŠÙƒÙˆÙ† Ø¹Ù†Ø¯ Ø§Ù„Ø·Ø¨ÙŠØ¨."
     )
 
 
@@ -2957,16 +2957,16 @@ def send_message_with_attachment(
         content = str(text or "")
         if not content:
             return content
-        tafaddal = tone("تفضل", "تفضلين", "تفضل")
-        tawasal = tone("تواصل", "تواصلي", "تواصل")
-        arsil = tone("ارسل", "ارسلي", "ارسل")
+        tafaddal = tone("ØªÙØ¶Ù„", "ØªÙØ¶Ù„ÙŠÙ†", "ØªÙØ¶Ù„")
+        tawasal = tone("ØªÙˆØ§ØµÙ„", "ØªÙˆØ§ØµÙ„ÙŠ", "ØªÙˆØ§ØµÙ„")
+        arsil = tone("Ø§Ø±Ø³Ù„", "Ø§Ø±Ø³Ù„ÙŠ", "Ø§Ø±Ø³Ù„")
         token_map = (
-            ("تفضلين", tafaddal),
-            ("تفضل", tafaddal),
-            ("تواصلي", tawasal),
-            ("تواصل", tawasal),
-            ("ارسلي", arsil),
-            ("ارسل", arsil),
+            ("ØªÙØ¶Ù„ÙŠÙ†", tafaddal),
+            ("ØªÙØ¶Ù„", tafaddal),
+            ("ØªÙˆØ§ØµÙ„ÙŠ", tawasal),
+            ("ØªÙˆØ§ØµÙ„", tawasal),
+            ("Ø§Ø±Ø³Ù„ÙŠ", arsil),
+            ("Ø§Ø±Ø³Ù„", arsil),
         )
         for src, dst in token_map:
             content = re.sub(rf"(?<![\u0600-\u06FF]){re.escape(src)}(?![\u0600-\u06FF])", dst, content)
@@ -3022,9 +3022,9 @@ def send_message_with_attachment(
     ai_prompt = question_for_ai
     if attachment_content:
         ai_prompt = (
-            f"سياق من المرفق ({attachment_filename or 'ملف'}):\n"
+            f"Ø³ÙŠØ§Ù‚ Ù…Ù† Ø§Ù„Ù…Ø±ÙÙ‚ ({attachment_filename or 'Ù…Ù„Ù'}):\n"
             f"{extracted_context}\n\n"
-            f"سؤال المستخدم: {question_for_ai}"
+            f"Ø³Ø¤Ø§Ù„ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…: {question_for_ai}"
         )
 
     first_msg_count = db.execute(
@@ -3043,7 +3043,9 @@ def send_message_with_attachment(
 
     history = get_conversation_history_for_ai(db, conv, max_messages=20)
 
+    # 1. GREETING
     if _is_simple_greeting(question_for_ai):
+        print("PATH=greeting")
         return _save_assistant_reply(_greeting_reply())
 
     services_start_reply = _resolve_services_branches_home_visit_start_reply(conversation_id, question_for_ai)
@@ -3053,10 +3055,6 @@ def send_message_with_attachment(
     preparation_priority = _detect_preparation_priority(question_for_ai, expanded_query)
     test_related_for_rag = is_test_related_question(question_for_ai) or preparation_priority
     pending_price_contact_fallback = False
-
-    prep_button_reply = _resolve_preparation_button_reply(question_for_ai)
-    if prep_button_reply and not preparation_priority:
-        return _save_assistant_reply(prep_button_reply)
 
     home_visit_booking_reply = _resolve_home_visit_booking_reply(db, conversation_id, question_for_ai)
     if home_visit_booking_reply:
@@ -3069,42 +3067,35 @@ def send_message_with_attachment(
     if _is_working_hours_query(question_for_ai):
         return _save_assistant_reply(_working_hours_deterministic_reply())
 
+    stateful_reply = _handle_stateful_conversation(conversation_id, question_for_ai)
+    if stateful_reply:
+        return _save_assistant_reply(stateful_reply)
+
+    # 2. FAQ
     runtime_faq_match = _runtime_faq_lookup(expanded_query)
     if runtime_faq_match and runtime_faq_match.get("a"):
-        print("PATH=runtime_lookup faq", runtime_faq_match.get("id"))
+        print("PATH=faq", runtime_faq_match.get("id"))
         return _save_assistant_reply(str(runtime_faq_match.get("a")).strip())
 
+    # 3. PRICE
     runtime_price_reply = _runtime_price_lookup_reply(expanded_query, gender)
     if runtime_price_reply:
+        print("PATH=price")
         return _save_assistant_reply(runtime_price_reply)
 
     if _is_general_price_query(question_for_ai):
         specific_pkg = match_single_package(expanded_query)
         if specific_pkg and (specific_pkg.get("price_raw") is not None):
+            print("PATH=price")
             return _save_assistant_reply(_format_package_details_strict(specific_pkg))
         if test_related_for_rag:
             pending_price_contact_fallback = True
         else:
+            print("PATH=price")
             return _save_assistant_reply("\u0644\u0644\u0627\u0633\u062a\u0641\u0633\u0627\u0631 \u0639\u0646 \u0627\u0644\u0623\u0633\u0639\u0627\u0631: 920003694")
 
-    if test_related_for_rag:
-        rag_reply = _runtime_tests_rag_reply(
-            question=question_for_ai,
-            expanded_query=expanded_query,
-            history=history,
-        )
-        if rag_reply:
-            print("PATH=runtime_rag tests")
-            return _save_assistant_reply(rag_reply)
-        print("PATH=runtime_rag no_match -> clarify")
-        # Continue to other runtime primary paths before final clarification.
-
-    stateful_reply = _handle_stateful_conversation(conversation_id, question_for_ai)
-    if stateful_reply:
-        return _save_assistant_reply(stateful_reply)
-
+    # Light-intent classification needed before branch routing.
     user_asked_home_visit = _user_explicitly_asked_home_visit(question_for_ai)
-
     light_intent, light_intent_meta = _classify_light_intent(expanded_query)
     logger.info(
         "light intent classification | intent=%s | meta=%s",
@@ -3112,24 +3103,59 @@ def send_message_with_attachment(
         light_intent_meta,
     )
 
+    # 4. BRANCHES
     branch_bypass_reply = _branch_lookup_bypass_reply(expanded_query, conversation_id, light_intent)
     if branch_bypass_reply:
+        print("PATH=branches")
         return _save_assistant_reply(branch_bypass_reply)
 
-    symptoms_bypass_reply = _symptoms_rag_bypass_reply(question_for_ai)
-    if symptoms_bypass_reply:
-        return _save_assistant_reply(symptoms_bypass_reply)
-
+    # 5. PACKAGES
     package_bypass_reply = _package_lookup_bypass_reply(expanded_query, conversation_id)
     if package_bypass_reply:
+        print("PATH=packages")
         return _save_assistant_reply(package_bypass_reply)
 
+    # 6. TEST_DEFINITION
+    if test_related_for_rag and not preparation_priority:
+        rag_reply = _runtime_tests_rag_reply(
+            question=question_for_ai,
+            expanded_query=expanded_query,
+            history=history,
+        )
+        if rag_reply:
+            print("PATH=test_definition")
+            return _save_assistant_reply(rag_reply)
+
+    # 7. TEST_PREPARATION
+    if preparation_priority:
+        prep_button_reply = _resolve_preparation_button_reply(question_for_ai)
+        if prep_button_reply:
+            print("PATH=test_preparation")
+            return _save_assistant_reply(prep_button_reply)
+        prep_rag_reply = _runtime_tests_rag_reply(
+            question=question_for_ai,
+            expanded_query=expanded_query,
+            history=history,
+        )
+        if prep_rag_reply:
+            print("PATH=test_preparation")
+            return _save_assistant_reply(prep_rag_reply)
+
+    # 8. TEST_SYMPTOMS
+    symptoms_bypass_reply = _symptoms_rag_bypass_reply(question_for_ai)
+    if symptoms_bypass_reply:
+        print("PATH=test_symptoms")
+        return _save_assistant_reply(symptoms_bypass_reply)
+
+
+    # 9. SITE_FALLBACK
     site_context = get_site_fallback_context(question_for_ai, max_chunks=3)
     if site_context and site_context.strip():
-        return _save_assistant_reply("حسب معلومات الموقع:\n" + site_context)
+        print("PATH=site_fallback")
+        return _save_assistant_reply("Ø­Ø³Ø¨ Ù…Ø¹Ù„ÙˆÙ…Ø§Øª Ø§Ù„Ù…ÙˆÙ‚Ø¹:\n" + site_context)
 
     if pending_price_contact_fallback:
-        return _save_assistant_reply("للاستفسار عن الأسعار: 920003694")
+        return _save_assistant_reply("Ù„Ù„Ø§Ø³ØªÙØ³Ø§Ø± Ø¹Ù† Ø§Ù„Ø£Ø³Ø¹Ø§Ø±: 920003694")
 
     if light_intent == "branch_location" and not light_intent_meta.get("has_city_or_area"):
         return _save_assistant_reply(_branch_location_prompt())
@@ -3153,7 +3179,9 @@ def send_message_with_attachment(
         logger.info("Question routed to fixed response (route=%s)", route_type)
         return _save_assistant_reply(fixed_reply)
 
+    # 10. CLARIFY
     if intent_payload.get("needs_clarification") and intent_payload.get("clarifying_question"):
+        print("PATH=clarify")
         clarify_reply = safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender)
         return _save_assistant_reply(clarify_reply)
 
@@ -3250,7 +3278,7 @@ def send_message_with_attachment(
             max_faqs=2,
             include_prices=True,
         )
-        has_kb_hit = bool(kb_context and "لم يتم العثور على معلومات محددة" not in kb_context)
+        has_kb_hit = bool(kb_context and "Ù„Ù… ÙŠØªÙ… Ø§Ù„Ø¹Ø«ÙˆØ± Ø¹Ù„Ù‰ Ù…Ø¹Ù„ÙˆÙ…Ø§Øª Ù…Ø­Ø¯Ø¯Ø©" not in kb_context)
         logger.info(
             "retrieval kb | called=yes | has_hit=%s | context_len=%s",
             has_kb_hit,
@@ -3294,7 +3322,7 @@ def send_message_with_attachment(
         conversation_history=history,
     )
     llm_success = bool(ai_result.get("success"))
-    assistant_content = ai_result.get("response") or "عذرًا، حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى."
+    assistant_content = ai_result.get("response") or "Ø¹Ø°Ø±Ù‹Ø§ØŒ Ø­Ø¯Ø« Ø®Ø·Ø£ ØºÙŠØ± Ù…ØªÙˆÙ‚Ø¹. ÙŠØ±Ø¬Ù‰ Ø§Ù„Ù…Ø­Ø§ÙˆÙ„Ø© Ù…Ø±Ø© Ø£Ø®Ø±Ù‰."
     tokens = ai_result.get("tokens_used") or 0
     logger.info(
         "response generation | intent=%s | route=%s | llm_success=%s | fallback_used=%s | kb_hit=%s | rag_chunks=%s | rag_top_score=%.3f | context_len=%s",
@@ -3330,10 +3358,10 @@ def send_message_with_attachment(
         )
 
     # If KB hit exists but model produced generic miss, retry once with explicit grounding instruction.
-    if knowledge_context and ("لا تتوفر لدي معلومات" in assistant_content or NO_INFO_MESSAGE in assistant_content):
+    if knowledge_context and ("Ù„Ø§ ØªØªÙˆÙØ± Ù„Ø¯ÙŠ Ù…Ø¹Ù„ÙˆÙ…Ø§Øª" in assistant_content or NO_INFO_MESSAGE in assistant_content):
         logger.info("model returned generic miss despite retrieval hit; retrying grounded answer")
         retry_result = openai_service.generate_response(
-            user_message=f"استخدم المعلومات المسترجعة للإجابة بدقة على: {question_for_ai}",
+            user_message=f"Ø§Ø³ØªØ®Ø¯Ù… Ø§Ù„Ù…Ø¹Ù„ÙˆÙ…Ø§Øª Ø§Ù„Ù…Ø³ØªØ±Ø¬Ø¹Ø© Ù„Ù„Ø¥Ø¬Ø§Ø¨Ø© Ø¨Ø¯Ù‚Ø© Ø¹Ù„Ù‰: {question_for_ai}",
             knowledge_context=combined_context,
             conversation_history=history,
         )
@@ -3352,3 +3380,4 @@ def send_message_with_attachment(
     assistant_content = _enforce_escalation_policy(assistant_content)
 
     return _save_assistant_reply(assistant_content, token_count=tokens)
+
