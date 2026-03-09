@@ -3043,18 +3043,27 @@ def send_message_with_attachment(
 
     history = get_conversation_history_for_ai(db, conv, max_messages=20)
 
-    # 1. GREETING
+    # ══════════════════════════════════════════════════════════════════════
+    # ROUTING LADDER  A → B → C → D → E → F → G → H → I → J
+    # Each path returns immediately on match.
+    # Legacy route_question() / intent routing / LLM pipeline are bypassed
+    # for plain text chat (emergency routing lockdown).
+    # ══════════════════════════════════════════════════════════════════════
+
+    # A. GREETING
     if _is_simple_greeting(question_for_ai):
         print("PATH=greeting")
-        return _save_assistant_reply(_greeting_reply())
+        return _save_assistant_reply(
+            "مرحبا، معاكم مختبر وريد الطبية، كيف ممكن أخدمك اليوم؟"
+        )
 
+    # Pre-routing guards (booking flows, stateful multi-turn – not topic routing).
     services_start_reply = _resolve_services_branches_home_visit_start_reply(conversation_id, question_for_ai)
     if services_start_reply:
         return _save_assistant_reply(services_start_reply)
 
     preparation_priority = _detect_preparation_priority(question_for_ai, expanded_query)
     test_related_for_rag = is_test_related_question(question_for_ai) or preparation_priority
-    pending_price_contact_fallback = False
 
     home_visit_booking_reply = _resolve_home_visit_booking_reply(db, conversation_id, question_for_ai)
     if home_visit_booking_reply:
@@ -3071,30 +3080,21 @@ def send_message_with_attachment(
     if stateful_reply:
         return _save_assistant_reply(stateful_reply)
 
-    # 2. FAQ
+    # B. FAQ – runtime lookup from faq_index.json wins unconditionally.
     runtime_faq_match = _runtime_faq_lookup(expanded_query)
     if runtime_faq_match and runtime_faq_match.get("a"):
         print("PATH=faq", runtime_faq_match.get("id"))
         return _save_assistant_reply(str(runtime_faq_match.get("a")).strip())
 
-    # 3. PRICE
-    runtime_price_reply = _runtime_price_lookup_reply(expanded_query, gender)
-    if runtime_price_reply:
+    # C. PRICE – fixed contact message (emergency lockdown, all price intents unified).
+    _price_hit = _runtime_price_lookup_reply(expanded_query, gender)
+    if _price_hit or _is_general_price_query(question_for_ai):
         print("PATH=price")
-        return _save_assistant_reply(runtime_price_reply)
+        return _save_assistant_reply(
+            "للاستفسار عن الأسعار يرجى التواصل مع الفريق على الرقم: 920003694"
+        )
 
-    if _is_general_price_query(question_for_ai):
-        specific_pkg = match_single_package(expanded_query)
-        if specific_pkg and (specific_pkg.get("price_raw") is not None):
-            print("PATH=price")
-            return _save_assistant_reply(_format_package_details_strict(specific_pkg))
-        if test_related_for_rag:
-            pending_price_contact_fallback = True
-        else:
-            print("PATH=price")
-            return _save_assistant_reply("\u0644\u0644\u0627\u0633\u062a\u0641\u0633\u0627\u0631 \u0639\u0646 \u0627\u0644\u0623\u0633\u0639\u0627\u0631: 920003694")
-
-    # Light-intent classification needed before branch routing.
+    # Light-intent classification needed before D. BRANCHES.
     user_asked_home_visit = _user_explicitly_asked_home_visit(question_for_ai)
     light_intent, light_intent_meta = _classify_light_intent(expanded_query)
     logger.info(
@@ -3103,19 +3103,19 @@ def send_message_with_attachment(
         light_intent_meta,
     )
 
-    # 4. BRANCHES
+    # D. BRANCHES
     branch_bypass_reply = _branch_lookup_bypass_reply(expanded_query, conversation_id, light_intent)
     if branch_bypass_reply:
         print("PATH=branches")
         return _save_assistant_reply(branch_bypass_reply)
 
-    # 5. PACKAGES
+    # E. PACKAGES
     package_bypass_reply = _package_lookup_bypass_reply(expanded_query, conversation_id)
     if package_bypass_reply:
         print("PATH=packages")
         return _save_assistant_reply(package_bypass_reply)
 
-    # 6. TEST_DEFINITION
+    # F. TEST_DEFINITION
     if test_related_for_rag and not preparation_priority:
         rag_reply = _runtime_tests_rag_reply(
             question=question_for_ai,
@@ -3126,7 +3126,7 @@ def send_message_with_attachment(
             print("PATH=test_definition")
             return _save_assistant_reply(rag_reply)
 
-    # 7. TEST_PREPARATION
+    # G. TEST_PREPARATION
     if preparation_priority:
         prep_button_reply = _resolve_preparation_button_reply(question_for_ai)
         if prep_button_reply:
@@ -3141,25 +3141,19 @@ def send_message_with_attachment(
             print("PATH=test_preparation")
             return _save_assistant_reply(prep_rag_reply)
 
-    # 8. TEST_SYMPTOMS
+    # H. TEST_SYMPTOMS
     symptoms_bypass_reply = _symptoms_rag_bypass_reply(question_for_ai)
     if symptoms_bypass_reply:
         print("PATH=test_symptoms")
         return _save_assistant_reply(symptoms_bypass_reply)
 
-
-    # 9. SITE_FALLBACK
+    # I. SITE_FALLBACK – general website info only (site_knowledge_chunks_hard.jsonl).
     site_context = get_site_fallback_context(question_for_ai, max_chunks=3)
     if site_context and site_context.strip():
         print("PATH=site_fallback")
-        return _save_assistant_reply("Ø­Ø³Ø¨ Ù…Ø¹Ù„ÙˆÙ…Ø§Øª Ø§Ù„Ù…ÙˆÙ‚Ø¹:\n" + site_context)
+        return _save_assistant_reply("حسب معلومات الموقع:\n" + site_context)
 
-    if pending_price_contact_fallback:
-        return _save_assistant_reply("Ù„Ù„Ø§Ø³ØªÙØ³Ø§Ø± Ø¹Ù† Ø§Ù„Ø£Ø³Ø¹Ø§Ø±: 920003694")
-
-    if light_intent == "branch_location" and not light_intent_meta.get("has_city_or_area"):
-        return _save_assistant_reply(_branch_location_prompt())
-
+    # J. CLARIFY – classify intent to detect explicit clarification need.
     intent_payload = classify_intent(question_for_ai)
     intent = intent_payload.get("intent", "services_overview")
     slots = intent_payload.get("slots", {}) or {}
@@ -3172,58 +3166,36 @@ def send_message_with_attachment(
         detected_tokens,
         intent_payload.get("needs_clarification"),
     )
-
-    # Deterministic router shortcuts.
-    route_type, fixed_reply = route_question(question_for_ai)
-    if fixed_reply:
-        logger.info("Question routed to fixed response (route=%s)", route_type)
-        return _save_assistant_reply(fixed_reply)
-
-    # 10. CLARIFY
     if intent_payload.get("needs_clarification") and intent_payload.get("clarifying_question"):
         print("PATH=clarify")
-        clarify_reply = safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender)
-        return _save_assistant_reply(clarify_reply)
+        return _save_assistant_reply(safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender))
 
-    if light_intent == "branch_location":
-        verified_branch_answer = _direct_kb_faq_answer(question_for_ai, "branches_locations")
-        if verified_branch_answer and _has_verified_branch_info(verified_branch_answer):
-            verified_branch_answer = _sanitize_branch_location_response(
-                verified_branch_answer,
-                bool(light_intent_meta.get("has_city_or_area")),
-                allow_home_visit=user_asked_home_visit,
-            )
-            return _save_assistant_reply(verified_branch_answer)
-        return _save_assistant_reply(_branch_location_prompt(light_intent_meta.get("city_or_area") or ""))
+    # ── ROUTING LOCKDOWN ────────────────────────────────────────────────────
+    # Nothing in A-J matched.  For plain text / voice, stop here and clarify.
+    # Bypassed:  route_question(), legacy intent routing (branches_locations /
+    #            working_hours / symptom_based_suggestion etc.), and the generic
+    #            RAG+LLM pipeline.  These were the source of repeated wrong answers.
+    is_pdf_attachment = bool(
+        attachment_content and (attachment_filename or "").lower().endswith(".pdf")
+    )
+    if not is_pdf_attachment:
+        logger.warning(
+            "ROUTING_LOCKDOWN | no route A-J matched | bypassing legacy routing | q='%s'",
+            question_for_ai[:120],
+        )
+        print("PATH=clarify")
+        return _save_assistant_reply(safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender))
 
-    if intent in {
-        "branches_locations",
-        "working_hours",
-        "contact_support",
-        "home_visit",
-        "payment_insurance_privacy",
-    }:
-        faq_answer = _direct_kb_faq_answer(question_for_ai, intent)
-        if light_intent == "branch_location" or intent == "working_hours":
-            if not faq_answer or not _has_verified_branch_info(faq_answer):
-                return _save_assistant_reply(_branch_location_prompt(light_intent_meta.get("city_or_area") or ""))
-            faq_answer = _sanitize_branch_location_response(
-                faq_answer,
-                bool(light_intent_meta.get("has_city_or_area")),
-                allow_home_visit=user_asked_home_visit,
-            )
-            return _save_assistant_reply(faq_answer)
-        if faq_answer:
-            return _save_assistant_reply(faq_answer)
-
-    if intent == "symptom_based_suggestion":
-        suggestion = _symptom_guidance(question_for_ai)
-        return _save_assistant_reply(suggestion)
+    # ── PDF attachment path only beyond this point ──────────────────────────
+    # route_question() and legacy intent routing are NOT called.
+    route_type = "pdf_attachment"
 
     # PDF report summarizer (works even if LLM is unavailable).
-    is_pdf_attachment = bool(attachment_content and (attachment_filename or "").lower().endswith(".pdf"))
-    wants_report_explain = intent in {"report_explanation", "test_definition"} or is_report_explanation_request(question_for_ai)
-    if is_pdf_attachment and wants_report_explain and extracted_context:
+    wants_report_explain = (
+        intent in {"report_explanation", "test_definition"}
+        or is_report_explanation_request(question_for_ai)
+    )
+    if wants_report_explain and extracted_context:
         parsed_rows = parse_lab_report_text(extracted_context)
         report_reply = compose_report_summary(parsed_rows)
         return _save_assistant_reply(report_reply)
@@ -3278,7 +3250,7 @@ def send_message_with_attachment(
             max_faqs=2,
             include_prices=True,
         )
-        has_kb_hit = bool(kb_context and "Ù„Ù… ÙŠØªÙ… Ø§Ù„Ø¹Ø«ÙˆØ± Ø¹Ù„Ù‰ Ù…Ø¹Ù„ÙˆÙ…Ø§Øª Ù…Ø­Ø¯Ø¯Ø©" not in kb_context)
+        has_kb_hit = bool(kb_context and "لم يتم العثور على معلومات محددة" not in kb_context)
         logger.info(
             "retrieval kb | called=yes | has_hit=%s | context_len=%s",
             has_kb_hit,
@@ -3303,7 +3275,6 @@ def send_message_with_attachment(
 
     style_guidance_block = _build_style_guidance_block_for_intent(question_for_ai, light_intent)
     intent_guidance_block = f"Intent: {light_intent}"
-    combined_context = knowledge_context
     combined_context = "\n\n".join(
         [part for part in [knowledge_context, intent_guidance_block, style_guidance_block] if part]
     ) or None
@@ -3322,7 +3293,7 @@ def send_message_with_attachment(
         conversation_history=history,
     )
     llm_success = bool(ai_result.get("success"))
-    assistant_content = ai_result.get("response") or "Ø¹Ø°Ø±Ù‹Ø§ØŒ Ø­Ø¯Ø« Ø®Ø·Ø£ ØºÙŠØ± Ù…ØªÙˆÙ‚Ø¹. ÙŠØ±Ø¬Ù‰ Ø§Ù„Ù…Ø­Ø§ÙˆÙ„Ø© Ù…Ø±Ø© Ø£Ø®Ø±Ù‰."
+    assistant_content = ai_result.get("response") or "عذرًا، حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى."
     tokens = ai_result.get("tokens_used") or 0
     logger.info(
         "response generation | intent=%s | route=%s | llm_success=%s | fallback_used=%s | kb_hit=%s | rag_chunks=%s | rag_top_score=%.3f | context_len=%s",
@@ -3357,11 +3328,11 @@ def send_message_with_attachment(
             fallback_used,
         )
 
-    # If KB hit exists but model produced generic miss, retry once with explicit grounding instruction.
-    if knowledge_context and ("Ù„Ø§ ØªØªÙˆÙØ± Ù„Ø¯ÙŠ Ù…Ø¹Ù„ÙˆÙ…Ø§Øª" in assistant_content or NO_INFO_MESSAGE in assistant_content):
+    # If KB hit exists but model produced generic miss, retry with explicit grounding.
+    if knowledge_context and ("لا تتوفر لدي معلومات" in assistant_content or NO_INFO_MESSAGE in assistant_content):
         logger.info("model returned generic miss despite retrieval hit; retrying grounded answer")
         retry_result = openai_service.generate_response(
-            user_message=f"Ø§Ø³ØªØ®Ø¯Ù… Ø§Ù„Ù…Ø¹Ù„ÙˆÙ…Ø§Øª Ø§Ù„Ù…Ø³ØªØ±Ø¬Ø¹Ø© Ù„Ù„Ø¥Ø¬Ø§Ø¨Ø© Ø¨Ø¯Ù‚Ø© Ø¹Ù„Ù‰: {question_for_ai}",
+            user_message=f"استخدم المعلومات المسترجعة للإجابة بدقة على: {question_for_ai}",
             knowledge_context=combined_context,
             conversation_history=history,
         )
@@ -3380,4 +3351,3 @@ def send_message_with_attachment(
     assistant_content = _enforce_escalation_policy(assistant_content)
 
     return _save_assistant_reply(assistant_content, token_count=tokens)
-
