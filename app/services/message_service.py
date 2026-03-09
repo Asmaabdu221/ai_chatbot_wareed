@@ -3057,45 +3057,30 @@ def send_message_with_attachment(
             "مرحبا، معاكم مختبر وريد الطبية، كيف ممكن أخدمك اليوم؟"
         )
 
-    # Pre-routing guards (booking flows, stateful multi-turn – not topic routing).
-    services_start_reply = _resolve_services_branches_home_visit_start_reply(conversation_id, question_for_ai)
-    if services_start_reply:
-        return _save_assistant_reply(services_start_reply)
-
-    preparation_priority = _detect_preparation_priority(question_for_ai, expanded_query)
-    test_related_for_rag = is_test_related_question(question_for_ai) or preparation_priority
-
-    home_visit_booking_reply = _resolve_home_visit_booking_reply(db, conversation_id, question_for_ai)
-    if home_visit_booking_reply:
-        return _save_assistant_reply(home_visit_booking_reply)
-
-    phone_followup_reply = _resolve_customer_phone_followup(db, conversation_id, question_for_ai)
-    if phone_followup_reply:
-        return _save_assistant_reply(phone_followup_reply)
-
-    if _is_working_hours_query(question_for_ai):
-        return _save_assistant_reply(_working_hours_deterministic_reply())
-
-    stateful_reply = _handle_stateful_conversation(conversation_id, question_for_ai)
-    if stateful_reply:
-        return _save_assistant_reply(stateful_reply)
-
     # B. FAQ – runtime lookup from faq_index.json wins unconditionally.
-    runtime_faq_match = _runtime_faq_lookup(expanded_query)
+    runtime_faq_match = _runtime_faq_lookup(question_for_ai)
     if runtime_faq_match and runtime_faq_match.get("a"):
-        print("PATH=faq", runtime_faq_match.get("id"))
+        print("PATH=faq")
         return _save_assistant_reply(str(runtime_faq_match.get("a")).strip())
 
     # C. PRICE – fixed contact message (emergency lockdown, all price intents unified).
-    _price_hit = _runtime_price_lookup_reply(expanded_query, gender)
-    if _price_hit or _is_general_price_query(question_for_ai):
+    price_query_norm = normalize_text_ar(question_for_ai)
+    is_price_query = _is_general_price_query(question_for_ai) or any(
+        token in price_query_norm for token in ("سعر", "اسعار", "أسعار", "price", "cost")
+    )
+    if is_price_query:
         print("PATH=price")
         return _save_assistant_reply(
             "للاستفسار عن الأسعار يرجى التواصل مع الفريق على الرقم: 920003694"
         )
 
-    # Light-intent classification needed before D. BRANCHES.
+    # Lightweight flags for strict routing steps D-H.
+    preparation_priority = _detect_preparation_priority(question_for_ai, expanded_query)
+    test_related_for_rag = is_test_related_question(question_for_ai) or preparation_priority
+    symptoms_query = _is_symptoms_query(question_for_ai)
     user_asked_home_visit = _user_explicitly_asked_home_visit(question_for_ai)
+
+    # Light-intent classification used only to gate deterministic branch routing.
     light_intent, light_intent_meta = _classify_light_intent(expanded_query)
     logger.info(
         "light intent classification | intent=%s | meta=%s",
@@ -3116,7 +3101,7 @@ def send_message_with_attachment(
         return _save_assistant_reply(package_bypass_reply)
 
     # F. TEST_DEFINITION
-    if test_related_for_rag and not preparation_priority:
+    if test_related_for_rag and not preparation_priority and not symptoms_query:
         rag_reply = _runtime_tests_rag_reply(
             question=question_for_ai,
             expanded_query=expanded_query,
@@ -3153,25 +3138,8 @@ def send_message_with_attachment(
         print("PATH=site_fallback")
         return _save_assistant_reply("حسب معلومات الموقع:\n" + site_context)
 
-    # J. CLARIFY – classify intent to detect explicit clarification need.
-    intent_payload = classify_intent(question_for_ai)
-    intent = intent_payload.get("intent", "services_overview")
-    slots = intent_payload.get("slots", {}) or {}
-    detected_tokens = slots.get("detected_tokens") or []
-    logger.info(
-        "intent classification | intent=%s | confidence=%s | slots=%s | detected_tokens=%s | needs_clarification=%s",
-        intent,
-        intent_payload.get("confidence"),
-        slots,
-        detected_tokens,
-        intent_payload.get("needs_clarification"),
-    )
-    if intent_payload.get("needs_clarification") and intent_payload.get("clarifying_question"):
-        print("PATH=clarify")
-        return _save_assistant_reply(safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, gender))
-
-    # ── ROUTING LOCKDOWN ────────────────────────────────────────────────────
-    # Nothing in A-J matched.  For plain text / voice, stop here and clarify.
+    # J. CLARIFY
+    # Nothing in A-I matched. For plain text / voice, stop here and clarify.
     # Bypassed:  route_question(), legacy intent routing (branches_locations /
     #            working_hours / symptom_based_suggestion etc.), and the generic
     #            RAG+LLM pipeline.  These were the source of repeated wrong answers.
@@ -3189,6 +3157,10 @@ def send_message_with_attachment(
     # ── PDF attachment path only beyond this point ──────────────────────────
     # route_question() and legacy intent routing are NOT called.
     route_type = "pdf_attachment"
+    intent_payload = classify_intent(question_for_ai)
+    intent = intent_payload.get("intent", "services_overview")
+    slots = intent_payload.get("slots", {}) or {}
+    detected_tokens = slots.get("detected_tokens") or []
 
     # PDF report summarizer (works even if LLM is unavailable).
     wants_report_explain = (
