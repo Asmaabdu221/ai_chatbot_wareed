@@ -923,15 +923,62 @@ def is_test_related_question(text: str) -> bool:
     return any(marker in value or marker in lowered for marker in markers)
 
 
+def _is_simple_greeting(text: str) -> bool:
+    n = _normalize_light(text)
+    if not n:
+        return False
+    greetings = {
+        "مرحبا",
+        "اهلا",
+        "أهلا",
+        "هلا",
+        "السلام عليكم",
+        "السلام",
+        "hi",
+        "hello",
+        "hey",
+    }
+    if n in greetings:
+        return True
+    if len(n.split()) <= 2 and any(g in n for g in greetings):
+        return True
+    return False
+
+
+def _greeting_reply() -> str:
+    return "أهلاً بك، كيف أقدر أساعدك اليوم؟"
+
+
+def _select_top_rag_result(rag_results: list[dict]) -> dict | None:
+    candidates = [
+        r for r in (rag_results or [])
+        if isinstance(r, dict) and isinstance(r.get("test"), dict)
+    ]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda r: float(r.get("score") or 0.0), reverse=True)
+    return candidates[0]
+
+
 def _format_compact_test_fallback_reply(question: str, rag_results: list[dict]) -> str | None:
     if not rag_results:
         return None
-    best = rag_results[0] if isinstance(rag_results[0], dict) else {}
+    best = _select_top_rag_result(rag_results) or {}
     test = (best.get("test") or {}) if isinstance(best, dict) else {}
     name = (
         str(test.get("analysis_name_ar") or "").strip()
         or str(test.get("analysis_name_en") or "").strip()
         or "التحليل"
+    )
+    selected_test_id = str(test.get("test_id") or test.get("id") or "").strip() or None
+    print(
+        "COMPACT_FALLBACK_DEBUG",
+        {
+            "query": question,
+            "selected_test_name": name,
+            "selected_test_id": selected_test_id,
+            "source_of_selection": "format_compact_top_rag_result",
+        },
     )
     desc = str(test.get("description") or "").strip()
     prep = str(test.get("preparation") or "").strip()
@@ -970,12 +1017,20 @@ def _runtime_tests_rag_reply(question: str, expanded_query: str, history: list |
         return None
     threshold = getattr(settings, "RAG_SIMILARITY_THRESHOLD", 0.58)
     ctx, has_match = get_grounded_context(
-        expanded_query,
+        question,
         max_tests=2,
         similarity_threshold=threshold,
         include_prices=True,
         use_cache=True,
     )
+    if (not has_match or not ctx or not ctx.strip()) and expanded_query and expanded_query != question:
+        ctx, has_match = get_grounded_context(
+            expanded_query,
+            max_tests=2,
+            similarity_threshold=threshold,
+            include_prices=True,
+            use_cache=True,
+        )
     if not has_match or not ctx or not ctx.strip():
         print(
             "TEST_ANSWER_PATH",
@@ -1021,12 +1076,39 @@ def _runtime_tests_rag_reply(question: str, expanded_query: str, history: list |
         return ai_response
 
     rag_results, has_hit = retrieve(
-        expanded_query,
-        max_results=1,
+        question,
+        max_results=3,
         similarity_threshold=threshold,
     )
+    source_of_selection = "retrieve(question)"
+    if (not has_hit or not rag_results) and expanded_query and expanded_query != question:
+        rag_results, has_hit = retrieve(
+            expanded_query,
+            max_results=3,
+            similarity_threshold=threshold,
+        )
+        source_of_selection = "retrieve(expanded_query)"
+
     if has_hit and rag_results:
-        compact_reply = _format_compact_test_fallback_reply(question, rag_results)
+        selected = _select_top_rag_result(rag_results)
+        selected_test = (selected or {}).get("test") if isinstance(selected, dict) else {}
+        print(
+            "COMPACT_FALLBACK_DEBUG",
+            {
+                "query": question,
+                "selected_test_name": (
+                    str((selected_test or {}).get("analysis_name_ar") or "").strip()
+                    or str((selected_test or {}).get("analysis_name_en") or "").strip()
+                    or None
+                ),
+                "selected_test_id": str((selected_test or {}).get("test_id") or (selected_test or {}).get("id") or "").strip() or None,
+                "source_of_selection": source_of_selection,
+            },
+        )
+        compact_reply = _format_compact_test_fallback_reply(
+            question,
+            [selected] if selected else rag_results,
+        )
         if compact_reply:
             used_compact_fallback = True
             print(
@@ -2960,6 +3042,9 @@ def send_message_with_attachment(
     db.refresh(user_msg)
 
     history = get_conversation_history_for_ai(db, conv, max_messages=20)
+
+    if _is_simple_greeting(question_for_ai):
+        return _save_assistant_reply(_greeting_reply())
 
     services_start_reply = _resolve_services_branches_home_visit_start_reply(conversation_id, question_for_ai)
     if services_start_reply:

@@ -486,6 +486,64 @@ def _candidate_display(labels: list[str]) -> str:
     return labels[0]
 
 
+def _resolve_direct_test_anchor(
+    display_name: str,
+    aliases_set: set[str],
+    tests: dict[str, dict[str, Any]],
+) -> str:
+    """
+    Return a single anchored test key when a concept clearly maps to one direct test identity.
+    """
+    disp_n = normalize(display_name)
+    probe_terms: set[str] = set()
+    if disp_n:
+        probe_terms.add(disp_n)
+    for a in aliases_set:
+        an = normalize(a)
+        if is_strong_test_alias(an):
+            probe_terms.add(an)
+
+    if not probe_terms:
+        return ""
+
+    scores: dict[str, int] = {}
+    for t_key, t_obj in tests.items():
+        t_aliases = {normalize(x) for x in (t_obj.get("aliases") or []) if normalize(x)}
+        t_display = normalize(t_obj.get("display_name") or "")
+        if t_display:
+            t_aliases.add(t_display)
+        if not t_aliases:
+            continue
+
+        s = 0
+        for term in probe_terms:
+            if not term:
+                continue
+            # Strong exact identity match.
+            if term in t_aliases:
+                s += 4
+                continue
+            # Keep contains checks conservative to avoid broad/noisy contamination.
+            if len(term) >= 5 and any((term in ta) or (ta in term and len(ta) >= 5) for ta in t_aliases):
+                s += 1
+        if s > 0:
+            scores[t_key] = s
+
+    if not scores:
+        return ""
+
+    ranked = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
+    best_key, best_score = ranked[0]
+    second_score = ranked[1][1] if len(ranked) > 1 else 0
+
+    # Clear winner only.
+    if best_score < 4:
+        return ""
+    if best_score - second_score < 2:
+        return ""
+    return best_key
+
+
 def build_general_concepts(
     tests: dict[str, dict[str, Any]],
     packages: dict[str, dict[str, Any]],
@@ -641,6 +699,13 @@ def build_general_concepts(
             an = normalize(a)
             related_packages.update(package_alias_map.get(an, set()))
             related_branches.update(branch_alias_map.get(an, set()))
+
+        # Direct named test concepts must stay anchored to one test identity.
+        # This prevents broad concept contamination (e.g., glucose-family terms)
+        # from injecting unrelated related_tests.
+        direct_anchor_test = _resolve_direct_test_anchor(display_name, aliases_set, tests)
+        if direct_anchor_test:
+            related_tests = {direct_anchor_test}
 
         related_test_names = []
         for t in sorted(related_tests):
