@@ -34,10 +34,12 @@ NO_INFO_MESSAGE = "عذراً، حالياً ما عندنا معلومات كا
 
 SYNONYMS_PATH = Path("app/data/runtime/synonyms/synonyms_ar.json")
 SITE_KNOWLEDGE_CHUNKS_PATH = Path("app/data/sources/web/site_knowledge_chunks_hard.jsonl")
+TESTS_CLEAN_PATH = Path("app/data/runtime/rag/tests_clean.jsonl")
 _RAG_SYNONYMS_CACHE = None
 _RAG_CONCEPT_INDEX_CACHE = None
 _RAG_DIRECT_TEST_INDEX_CACHE = None
 _SITE_KNOWLEDGE_CACHE = None
+_TESTS_CLEAN_INDEX_CACHE = None
 
 
 def _load_json_robust(path: str) -> Optional[Dict]:
@@ -89,6 +91,21 @@ def load_site_knowledge_chunks() -> List[Dict[str, Any]]:
         logger.warning("Could not load site knowledge chunks: %s", exc)
         _SITE_KNOWLEDGE_CACHE = []
     return _SITE_KNOWLEDGE_CACHE
+
+
+def load_tests_clean_index() -> List[Dict[str, Any]]:
+    global _TESTS_CLEAN_INDEX_CACHE
+    if _TESTS_CLEAN_INDEX_CACHE is not None:
+        return _TESTS_CLEAN_INDEX_CACHE
+    if not path_exists(TESTS_CLEAN_PATH):
+        _TESTS_CLEAN_INDEX_CACHE = []
+        return _TESTS_CLEAN_INDEX_CACHE
+    try:
+        _TESTS_CLEAN_INDEX_CACHE = load_runtime_chunks_jsonl(TESTS_CLEAN_PATH)
+    except Exception as exc:
+        logger.warning("Could not load tests_clean index: %s", exc)
+        _TESTS_CLEAN_INDEX_CACHE = []
+    return _TESTS_CLEAN_INDEX_CACHE
 
 
 def load_rag_synonyms():
@@ -712,6 +729,9 @@ def load_rag_knowledge() -> Tuple[List[Dict], Dict]:
         tests: List[Dict[str, Any]] = []
         for chunk in chunks:
             metadata = chunk.get("metadata") or {}
+            test_id = (
+                str(metadata.get("test_id") or metadata.get("id") or chunk.get("id") or "").strip() or None
+            )
             chunk_text = str(chunk.get("text") or "").strip()
             line_map: Dict[str, str] = {}
             for raw_line in chunk_text.splitlines():
@@ -723,6 +743,7 @@ def load_rag_knowledge() -> Tuple[List[Dict], Dict]:
             tests.append(
                 {
                     "id": chunk.get("id"),
+                    "test_id": test_id,
                     "analysis_name_ar": metadata.get("canonical_ar"),
                     "analysis_name_en": metadata.get("canonical_en"),
                     "canonical_name_clean": metadata.get("canonical_name_clean"),
@@ -846,6 +867,205 @@ def _safe_normalize_for_matching(text: str) -> str:
     t = re.sub(r"[^\w\s\u0600-\u06FF]", " ", t)
     t = re.sub(r"\s+", " ", t)
     return t.strip()
+
+
+def identify_test_concept(query_norm: str) -> Dict[str, Any]:
+    q = _safe_normalize_for_matching(query_norm or "")
+    if not q:
+        return {"matched": False, "test_id": None, "canonical_name": None, "confidence": 0.0}
+
+    tests_clean = load_tests_clean_index()
+    if not tests_clean:
+        return {"matched": False, "test_id": None, "canonical_name": None, "confidence": 0.0}
+
+    q_tokens = set(q.split())
+    best: Dict[str, Any] = {"matched": False, "test_id": None, "canonical_name": None, "confidence": 0.0}
+
+    # Primary linker maps for tests_clean index.
+    by_id: Dict[str, Dict[str, Any]] = {}
+    by_code: Dict[str, Dict[str, Any]] = {}
+    by_name: Dict[str, Dict[str, Any]] = {}
+
+    def _index_name(name_value: Any, rec: Dict[str, Any]) -> None:
+        n = _safe_normalize_for_matching(str(name_value or ""))
+        if n:
+            by_name[n] = rec
+
+    for rec in tests_clean:
+        if not isinstance(rec, dict):
+            continue
+        rec_id = str(rec.get("id") or "").strip()
+        if rec_id:
+            by_id[rec_id] = rec
+        rec_code = str(rec.get("code") or "").strip()
+        if rec_code:
+            by_code[rec_code] = rec
+
+        fields = [
+            rec.get("canonical_name"),
+            rec.get("canonical_name_clean"),
+            rec.get("canonical_ar"),
+            rec.get("canonical_en"),
+        ]
+        for f in fields:
+            _index_name(f, rec)
+        aliases_raw = rec.get("aliases")
+        aliases: List[str]
+        if isinstance(aliases_raw, list):
+            aliases = [str(a) for a in aliases_raw if a is not None]
+        elif isinstance(aliases_raw, str) and aliases_raw.strip():
+            aliases = [aliases_raw]
+        else:
+            aliases = []
+
+        candidates = [c for c in [_safe_normalize_for_matching(str(x or "")) for x in [*fields, *aliases]] if c]
+        if not candidates:
+            continue
+
+        score = 0.0
+        for cand in candidates:
+            if cand == q:
+                score = max(score, 0.99)
+                continue
+            if len(q) >= 3 and q in cand:
+                score = max(score, 0.92)
+            if len(cand) >= 3 and cand in q:
+                score = max(score, 0.90)
+            c_tokens = set(cand.split())
+            if q_tokens and c_tokens:
+                overlap = len(q_tokens & c_tokens) / max(1, len(q_tokens))
+                if overlap >= 0.66:
+                    score = max(score, 0.72 + min(0.2, overlap * 0.2))
+
+        if score <= best["confidence"]:
+            continue
+
+        best_name = (
+            str(rec.get("canonical_ar") or "").strip()
+            or str(rec.get("canonical_name_clean") or "").strip()
+            or str(rec.get("canonical_name") or "").strip()
+            or None
+        )
+        best = {
+            "matched": True,
+            "test_id": str(rec.get("id") or "").strip() or None,
+            "canonical_name": best_name,
+            "confidence": float(score),
+        }
+
+    # Secondary linking via runtime test synonyms (aliases/codes/display names).
+    # This improves direct entity detection for short test names and abbreviations.
+    # For Arabic concept-like names (e.g., "السكر التراكمي"), bridge to tests via concept related_tests.
+    q_tokens = {t for t in q.split() if len(t) >= 2}
+    if _contains_arabic(q) and len(q.split()) >= 2 and q_tokens:
+        concept_matches = _collect_concept_matches(q, max_matches=4)
+        candidate_rt: Optional[str] = None
+        candidate_rt_score = 0.0
+        for cm in concept_matches:
+            cm_score = float(cm.get("score") or 0.0)
+            if cm_score < 0.8:
+                continue
+            for rt in cm.get("related_tests", []):
+                rt_n = _safe_normalize_for_matching(rt)
+                if not rt_n:
+                    continue
+                rt_tokens = {t for t in rt_n.split() if len(t) >= 2}
+                if not rt_tokens:
+                    continue
+                overlap = len(q_tokens & rt_tokens) / max(1, len(q_tokens))
+                combined = (overlap * 0.7) + (cm_score * 0.3)
+                if combined > candidate_rt_score:
+                    candidate_rt_score = combined
+                    candidate_rt = rt_n
+
+        if candidate_rt and candidate_rt_score >= 0.45:
+            for rec in tests_clean:
+                fields = [
+                    _safe_normalize_for_matching(rec.get("canonical_name") or ""),
+                    _safe_normalize_for_matching(rec.get("canonical_name_clean") or ""),
+                    _safe_normalize_for_matching(rec.get("canonical_ar") or ""),
+                    _safe_normalize_for_matching(rec.get("canonical_en") or ""),
+                ]
+                if not any(
+                    f and ((candidate_rt == f) or (len(candidate_rt) >= 3 and candidate_rt in f) or (len(f) >= 3 and f in candidate_rt))
+                    for f in fields
+                ):
+                    continue
+                concept_conf = min(0.95, 0.86 + (candidate_rt_score * 0.08))
+                if concept_conf > float(best.get("confidence") or 0.0):
+                    best = {
+                        "matched": True,
+                        "test_id": str(rec.get("id") or "").strip() or None,
+                        "canonical_name": (
+                            str(rec.get("canonical_ar") or "").strip()
+                            or str(rec.get("canonical_name_clean") or "").strip()
+                            or str(rec.get("canonical_name") or "").strip()
+                            or None
+                        ),
+                        "confidence": float(concept_conf),
+                    }
+                break
+
+    direct_matches = _collect_direct_test_matches(q, max_matches=6)
+    for dm in direct_matches:
+        dm_score = float(dm.get("score") or 0.0)
+        if dm_score <= 0.0:
+            continue
+
+        candidate_rec: Optional[Dict[str, Any]] = None
+        key_raw = str(dm.get("key") or "").strip()
+        display_n = _safe_normalize_for_matching(dm.get("display_name") or "")
+
+        if key_raw and key_raw in by_id:
+            candidate_rec = by_id[key_raw]
+        elif key_raw.lower().startswith("code::"):
+            code_part = key_raw.split("::", 1)[1].strip()
+            if code_part and code_part in by_code:
+                candidate_rec = by_code[code_part]
+
+        if candidate_rec is None and display_n:
+            candidate_rec = by_name.get(display_n)
+
+        if candidate_rec is None:
+            for mt in dm.get("matched_terms", []):
+                mt_n = _safe_normalize_for_matching(mt)
+                if mt_n and mt_n in by_name:
+                    candidate_rec = by_name[mt_n]
+                    break
+
+        if candidate_rec is None:
+            continue
+
+        matched_name = (
+            str(candidate_rec.get("canonical_ar") or "").strip()
+            or str(candidate_rec.get("canonical_name_clean") or "").strip()
+            or str(candidate_rec.get("canonical_name") or "").strip()
+            or None
+        )
+
+        # Keep synonyms as a boost/fallback, not a replacement for a strong structured match.
+        # This prevents ambiguous acronym aliases (e.g., short codes) from overriding a better canonical match.
+        best_conf_now = float(best.get("confidence") or 0.0)
+        dm_type = str(dm.get("match_type") or "")
+        token_count = len(q.split())
+        allow_override = (
+            not bool(best.get("matched"))
+            or (token_count == 1 and dm_score >= (best_conf_now + 0.12))
+            or (dm_type == "exact_alias" and dm_score >= 1.0 and token_count == 1)
+        )
+        if not allow_override:
+            continue
+
+        synonym_conf = min(0.99, max(dm_score, dm_score + 0.04))
+        if synonym_conf > float(best.get("confidence") or 0.0):
+            best = {
+                "matched": True,
+                "test_id": str(candidate_rec.get("id") or "").strip() or None,
+                "canonical_name": matched_name,
+                "confidence": float(synonym_conf),
+            }
+
+    return best
 
 
 def _extract_lab_code_tokens(query: str) -> List[str]:
@@ -1036,6 +1256,30 @@ def retrieve(
     """
     tests, _ = load_rag_knowledge()
     lex_min = LEXICAL_MIN_SCORE / 100.0
+    concept_query_norm = _safe_normalize_for_matching(_extract_search_terms(query) or query)
+    concept_match = identify_test_concept(concept_query_norm)
+    concept_matched = bool(concept_match.get("matched"))
+    selected_test_id = str(concept_match.get("test_id") or "").strip()
+    concept_confidence = float(concept_match.get("confidence") or 0.0)
+    print(
+        "TEST_CONCEPT_MATCH",
+        {
+            "query": str(query or "").encode("unicode_escape").decode("ascii"),
+            "matched": concept_matched,
+            "test_id": selected_test_id,
+            "canonical_name": str(concept_match.get("canonical_name") or "").encode("unicode_escape").decode("ascii"),
+            "confidence": round(concept_confidence, 4),
+        },
+    )
+    if selected_test_id and concept_confidence >= 0.9:
+        selected_norm = selected_test_id.lower()
+        restricted_tests = [
+            t
+            for t in tests
+            if str(t.get("test_id") or t.get("id") or "").strip().lower() == selected_norm
+        ]
+        if restricted_tests:
+            tests = restricted_tests
 
     expanded_query = expand_test_query(query)
     concept_expanded_query = expand_query_with_concepts(expanded_query)
@@ -1132,7 +1376,13 @@ def retrieve(
 
     # Merge: by test key, keep best score per test
     def _key(t: Dict) -> str:
-        return str(t.get("id", "")) + "|" + str(t.get("analysis_name_ar", "")) + "|" + str(t.get("analysis_name_en", ""))
+        return (
+            str(t.get("test_id") or t.get("id") or "")
+            + "|"
+            + str(t.get("analysis_name_ar", ""))
+            + "|"
+            + str(t.get("analysis_name_en", ""))
+        )
 
     direct_results: List[Dict[str, Any]] = []
     if direct_test_matches:

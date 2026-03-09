@@ -35,6 +35,24 @@ GENERIC_BAD = {
     "offer",
 }
 
+GENERIC_RISKY_SINGLE = {
+    # English broad medical fragments
+    "glucose",
+    "blood",
+    "level",
+    "test",
+    "analysis",
+    "lab",
+    "serum",
+    # Arabic broad medical fragments
+    "سكر",
+    "دم",
+    "تحليل",
+    "فحص",
+    "اختبار",
+    "مستوى",
+}
+
 AR_STOP = {
     "ØªØ­Ù„ÙŠÙ„",
     "ØªØ­Ø§Ù„ÙŠÙ„",
@@ -72,7 +90,34 @@ def is_meaningful_alias(alias: str) -> bool:
         return False
     if n in GENERIC_BAD:
         return False
+    if len(n.split()) == 1 and n in GENERIC_RISKY_SINGLE:
+        return False
     return True
+
+
+def is_code_like_alias(alias: str) -> bool:
+    n = normalize(alias)
+    if not n:
+        return False
+    if re.fullmatch(r"[a-z]{2,10}\d{1,4}[a-z]{0,3}\d{0,2}", n):
+        return True
+    # short lab abbreviations (CBC, TSH, ESR, ALT, etc.)
+    return bool(re.fullmatch(r"[a-z]{2,4}", n))
+
+
+def is_strong_test_alias(alias: str) -> bool:
+    n = normalize(alias)
+    if not is_meaningful_alias(n):
+        return False
+    tokens = n.split()
+    if is_code_like_alias(n):
+        return True
+    if len(tokens) >= 2:
+        return len(n) >= 5
+    # Single-word aliases are allowed only when specific enough.
+    if len(n) >= 5 and n not in GENERIC_RISKY_SINGLE:
+        return True
+    return False
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -138,6 +183,28 @@ def extract_text_terms(text: str) -> set[str]:
     return out
 
 
+def derive_test_aliases(
+    canonical_ar: str,
+    canonical_en: str,
+    canonical_name: str,
+    canonical_name_clean: str,
+    code: Any,
+) -> set[str]:
+    raw_fields = [canonical_ar, canonical_en, canonical_name, canonical_name_clean]
+    aliases = derive_aliases([f for f in raw_fields if str(f or "").strip()])
+    strict = {normalize(a) for a in aliases if is_strong_test_alias(a)}
+
+    # Always keep normalized full canonical names (if meaningful).
+    for raw in raw_fields:
+        n = normalize(raw)
+        if n and is_meaningful_alias(n):
+            strict.add(n)
+
+    if code is not None and str(code).strip():
+        strict.add(normalize(str(code).strip()))
+    return strict
+
+
 def build_tests_concepts() -> dict[str, dict[str, Any]]:
     tests = read_jsonl(TESTS_CLEAN_PATH)
     concepts: dict[str, dict[str, Any]] = {}
@@ -157,31 +224,43 @@ def build_tests_concepts() -> dict[str, dict[str, Any]]:
         if not key:
             continue
 
-        fields = [
-            canonical_ar,
-            str(row.get("canonical_en") or "").strip(),
-            canonical_name,
-            canonical_name_clean,
-            str(code or "").strip(),
-            str(row.get("related_tests") or "").strip(),
-            str(row.get("alternative_tests") or "").strip(),
-            str(row.get("complementary_tests") or "").strip(),
-        ]
-        aliases = derive_aliases([f for f in fields if f])
+        canonical_en = str(row.get("canonical_en") or "").strip()
+        aliases = derive_test_aliases(
+            canonical_ar=canonical_ar,
+            canonical_en=canonical_en,
+            canonical_name=canonical_name,
+            canonical_name_clean=canonical_name_clean,
+            code=code,
+        )
+        canonical_aliases = {
+            normalize(canonical_ar),
+            normalize(canonical_en),
+            normalize(canonical_name),
+            normalize(canonical_name_clean),
+            normalize(str(code or "").strip()),
+        }
+        canonical_aliases = {a for a in canonical_aliases if a and is_meaningful_alias(a)}
 
         concept = concepts.setdefault(
             key,
-            {"display_name": canonical_ar or canonical_name_clean or canonical_name or key, "aliases": set()},
+            {
+                "display_name": canonical_ar or canonical_name_clean or canonical_name or key,
+                "aliases": set(),
+                "canonical_aliases": set(),
+            },
         )
         concept["aliases"].update(aliases)
+        concept["canonical_aliases"].update(canonical_aliases)
         if code is not None and str(code).strip():
             concept["aliases"].add(str(code).strip())
 
-    # Merge tests chunks terms to improve coverage.
+    # Merge tests chunks metadata only (avoid noisy free-text term expansion).
     chunks = read_jsonl(TESTS_CHUNKS_PATH)
     for ch in chunks:
         meta = ch.get("metadata") if isinstance(ch.get("metadata"), dict) else {}
         can_ar = str(meta.get("canonical_ar") or "").strip()
+        can_en = str(meta.get("canonical_en") or "").strip()
+        can_clean = str(meta.get("canonical_name_clean") or "").strip()
         code = meta.get("code")
         if code is not None and str(code).strip():
             key = f"code::{str(code).strip()}"
@@ -189,7 +268,15 @@ def build_tests_concepts() -> dict[str, dict[str, Any]]:
             key = normalize(can_ar)
         if not key or key not in concepts:
             continue
-        concepts[key]["aliases"].update(extract_text_terms(str(ch.get("text") or "")))
+        concepts[key]["aliases"].update(
+            derive_test_aliases(
+                canonical_ar=can_ar,
+                canonical_en=can_en,
+                canonical_name=can_clean,
+                canonical_name_clean=can_clean,
+                code=code,
+            )
+        )
 
     # Merge prices into corresponding test concept when possible.
     if PRICES_INDEX_PATH.exists():
@@ -206,7 +293,7 @@ def build_tests_concepts() -> dict[str, dict[str, Any]]:
             ]
             for k in rec.get("keys") or []:
                 raw_aliases.append(str(k))
-            cand_aliases = uniq_sorted_aliases(derive_aliases(raw_aliases))
+            cand_aliases = [a for a in uniq_sorted_aliases(derive_aliases(raw_aliases)) if is_strong_test_alias(a)]
             if not cand_aliases:
                 continue
 
@@ -220,14 +307,32 @@ def build_tests_concepts() -> dict[str, dict[str, Any]]:
                 if overlap > best_overlap:
                     best_overlap = overlap
                     best_key = t_key
-            if best_key and best_overlap > 0:
+            if best_key and best_overlap >= 2:
                 concepts[best_key]["aliases"].update(cand_set)
+
+    # Prune ambiguous aliases that appear across many tests unless canonical/code-like.
+    alias_count: Counter[str] = Counter()
+    for obj in concepts.values():
+        for a in obj["aliases"]:
+            alias_count[normalize(a)] += 1
 
     final: dict[str, dict[str, Any]] = {}
     for key, obj in concepts.items():
+        kept_aliases: set[str] = set()
+        canonical_aliases = {normalize(a) for a in obj.get("canonical_aliases", set())}
+        for a in obj["aliases"]:
+            an = normalize(a)
+            if not is_strong_test_alias(an):
+                continue
+            if an in canonical_aliases or is_code_like_alias(an):
+                kept_aliases.add(an)
+                continue
+            if alias_count.get(an, 0) > 2:
+                continue
+            kept_aliases.add(an)
         final[key] = {
             "display_name": obj["display_name"],
-            "aliases": uniq_sorted_aliases(set(obj["aliases"])),
+            "aliases": uniq_sorted_aliases(kept_aliases),
         }
     return final
 

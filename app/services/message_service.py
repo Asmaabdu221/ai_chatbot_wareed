@@ -977,15 +977,48 @@ def _runtime_tests_rag_reply(question: str, expanded_query: str, history: list |
         use_cache=True,
     )
     if not has_match or not ctx or not ctx.strip():
+        print(
+            "TEST_ANSWER_PATH",
+            {
+                "query": question,
+                "has_match": bool(has_match),
+                "used_openai": False,
+                "used_compact_fallback": False,
+                "short_circuited": False,
+            },
+        )
         return None
 
+    used_openai = False
+    used_compact_fallback = False
     ai_result = openai_service.generate_response(
         user_message=question,
         knowledge_context=ctx,
         conversation_history=history,
     )
-    if isinstance(ai_result, dict) and ai_result.get("success") and (ai_result.get("response") or "").strip():
-        return str(ai_result.get("response")).strip()
+    used_openai = True
+    ai_response = ""
+    ai_success = False
+    if isinstance(ai_result, dict):
+        ai_response = str(ai_result.get("response") or "").strip()
+        ai_success = bool(ai_result.get("success")) and bool(ai_response)
+    ai_unusable = (
+        not ai_success
+        or "لا تتوفر لدي معلومات" in ai_response
+        or NO_INFO_MESSAGE in ai_response
+    )
+    if not ai_unusable:
+        print(
+            "TEST_ANSWER_PATH",
+            {
+                "query": question,
+                "has_match": True,
+                "used_openai": used_openai,
+                "used_compact_fallback": False,
+                "short_circuited": True,
+            },
+        )
+        return ai_response
 
     rag_results, has_hit = retrieve(
         expanded_query,
@@ -995,9 +1028,30 @@ def _runtime_tests_rag_reply(question: str, expanded_query: str, history: list |
     if has_hit and rag_results:
         compact_reply = _format_compact_test_fallback_reply(question, rag_results)
         if compact_reply:
+            used_compact_fallback = True
+            print(
+                "TEST_ANSWER_PATH",
+                {
+                    "query": question,
+                    "has_match": True,
+                    "used_openai": used_openai,
+                    "used_compact_fallback": used_compact_fallback,
+                    "short_circuited": True,
+                },
+            )
             return compact_reply
 
     # Last fallback: compact context itself (already cleaned in rag_pipeline).
+    print(
+        "TEST_ANSWER_PATH",
+        {
+            "query": question,
+            "has_match": True,
+            "used_openai": used_openai,
+            "used_compact_fallback": used_compact_fallback,
+            "short_circuited": True,
+        },
+    )
     return ctx.strip()
 
 
