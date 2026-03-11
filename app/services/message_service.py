@@ -278,6 +278,42 @@ def _faq_similarity_score(query_norm: str, candidate_norm: str) -> float:
     return max(ratio, blended)
 
 
+def _expand_faq_query_aliases(query_norm: str) -> list[str]:
+    """
+    Expand common user FAQ phrasings into canonical dataset-like forms.
+    This stays intentionally narrow to avoid broad FAQ hijacking.
+    """
+    base = normalize_text_ar(query_norm)
+    if not base:
+        return []
+
+    variants: set[str] = {base}
+    alias_pairs = [
+        ("هل لديكم خدمة منزلية", "هل يوفر مختبر وريد خدمة الزيارات المنزلية"),
+        ("خدمة منزلية", "خدمة الزيارات المنزلية"),
+        ("زيارة منزلية", "خدمة الزيارات المنزلية"),
+        ("كيف استلم النتائج", "هل يتم ارسال النتائج الكترونيا"),
+        ("كيف أستلم النتائج", "هل يتم ارسال النتائج الكترونيا"),
+        ("استلم النتائج", "ارسال النتائج الكترونيا"),
+        ("أستلم النتائج", "ارسال النتائج الكترونيا"),
+        ("استلام النتائج", "ارسال النتائج الكترونيا"),
+        ("هل النتائج سرية", "هل نتائج التحاليل سرية"),
+        ("النتائج سرية", "نتائج التحاليل سرية"),
+    ]
+
+    for raw_src, raw_dst in alias_pairs:
+        src = normalize_text_ar(raw_src)
+        dst = normalize_text_ar(raw_dst)
+        if not src or not dst:
+            continue
+        current = list(variants)
+        for value in current:
+            if src in value:
+                variants.add(re.sub(re.escape(src), dst, value))
+
+    return sorted(variants, key=lambda v: len(v), reverse=True)
+
+
 def _faq_hijack_guard_reason(query: str) -> str | None:
     n = _normalize_light(query)
     if not n:
@@ -373,6 +409,7 @@ def _runtime_faq_lookup(query: str) -> dict | None:
     query_norm = normalize_text_ar(query)
     if not query_norm:
         return None
+    query_variants = _expand_faq_query_aliases(query_norm) or [query_norm]
     guard_reason = _faq_hijack_guard_reason(query)
     if guard_reason:
         logger.info(
@@ -397,27 +434,28 @@ def _runtime_faq_lookup(query: str) -> dict | None:
             normalize_text_ar(item.get("question") or ""),
         ]
         for candidate_norm in [c for c in candidate_norms if c]:
-            if candidate_norm == query_norm:
-                matched = dict(item)
-                matched["_match_method"] = "exact"
-                matched["_match_score"] = 1.0
-                matched["_matched_q_norm"] = candidate_norm
-                return matched
+            for v_idx, query_value in enumerate(query_variants):
+                if candidate_norm == query_value:
+                    matched = dict(item)
+                    matched["_match_method"] = "exact" if v_idx == 0 else "alias_exact"
+                    matched["_match_score"] = 1.0
+                    matched["_matched_q_norm"] = candidate_norm
+                    return matched
 
-            score = _faq_similarity_score(query_norm, candidate_norm)
-            token_intersection = len(set(query_norm.split()) & set(candidate_norm.split()))
-            high_confidence = (
-                score >= 0.93
-                or (score >= 0.86 and token_intersection >= 4)
-                or (score >= 0.78 and token_intersection >= 5)
-            )
-            if not high_confidence:
-                continue
-            if score > best_score:
-                best_score = score
-                best_match = item
-                best_method = "high_confidence_similarity"
-                best_q_norm = candidate_norm
+                score = _faq_similarity_score(query_value, candidate_norm)
+                token_intersection = len(set(query_value.split()) & set(candidate_norm.split()))
+                high_confidence = (
+                    score >= 0.93
+                    or (score >= 0.86 and token_intersection >= 4)
+                    or (score >= 0.78 and token_intersection >= 5)
+                )
+                if not high_confidence:
+                    continue
+                if score > best_score:
+                    best_score = score
+                    best_match = item
+                    best_method = "high_confidence_similarity" if v_idx == 0 else "alias_similarity"
+                    best_q_norm = candidate_norm
 
     if not best_match:
         return None
@@ -1652,14 +1690,15 @@ def _is_package_number_selection(text: str, options_len: int) -> int | None:
 
 
 _PACKAGE_QUERY_KEYWORDS = {
-    "Ø¨Ø§Ù‚Ø©",
-    "Ø¨Ø§Ù‚Ù‡",
-    "ØªØ­Ø§Ù„ÙŠÙ„",
-    "ØªØ­Ø§Ù„ÛŒÙ„",
-    "ØªØ­Ù„ÙŠÙ„",
-    "ÙØ­Øµ",
-    "Ø¨ÙƒÙ…",
-    "Ø³Ø¹Ø±",
+    "باقة",
+    "باقه",
+    "باقات",
+    "تحليل",
+    "تحاليل",
+    "فحص",
+    "بكم",
+    "سعر",
+    "تفاصيل",
 }
 
 
@@ -1761,9 +1800,9 @@ def _format_package_details_strict(record: dict) -> str:
 
     lines = [name]
     if price_raw:
-        lines.append(f"Ø§Ù„Ø³Ø¹Ø±: {price_raw}")
+        lines.append(f"السعر: {price_raw}")
     else:
-        lines.append("Ø§Ù„Ø³Ø¹Ø±: ØºÙŠØ± Ù…ØªÙˆÙØ± Ø­Ø§Ù„ÙŠØ§Ù‹")
+        lines.append("السعر: غير متوفر حالياً")
 
     # Prefer service formatter output structure, but enforce 3-5 bullets strictly.
     _ = format_package_details(record)
@@ -1875,6 +1914,10 @@ def _package_lookup_bypass_reply(question: str, conversation_id: UUID) -> str | 
     if not query:
         return None
 
+    trigger = _is_package_query_candidate(query)
+    if not trigger:
+        return None
+
     # Direct deterministic hit first.
     single = match_single_package(query)
     if single:
@@ -1883,14 +1926,12 @@ def _package_lookup_bypass_reply(question: str, conversation_id: UUID) -> str | 
         return _format_package_details_strict(single)
 
     candidates = _dedupe_package_records_for_options(search_packages(query, top_k=6))
-    trigger = _is_package_query_candidate(query) or bool(candidates)
     if candidates:
         _save_package_selection_state(conversation_id, query, candidates)
         return _format_package_list_strict(candidates)
 
     # Semantic fallback over packages_kb.json only (after deterministic path fails).
     rag_threshold = 0.75
-    trigger = _is_package_query_candidate(query)
     if trigger:
         rag_hits = semantic_search_packages(query, top_k=3)
         if rag_hits:
