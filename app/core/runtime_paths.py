@@ -6,6 +6,7 @@ RUNTIME_RAG_DIR = RUNTIME_DIR / "rag"
 
 FAQ_INDEX_PATH = RUNTIME_LOOKUP_DIR / "faq_index.json"
 TESTS_PRICE_INDEX_PATH = RUNTIME_LOOKUP_DIR / "tests_price_index.json"
+FAQ_CLEAN_PATH = RUNTIME_RAG_DIR / "faq_clean.jsonl"
 
 TESTS_CHUNKS_PATH = RUNTIME_RAG_DIR / "tests_chunks.jsonl"
 PACKAGES_CHUNKS_PATH = RUNTIME_RAG_DIR / "packages_chunks_v2.jsonl"

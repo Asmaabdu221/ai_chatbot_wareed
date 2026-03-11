@@ -9,6 +9,7 @@ import os
 import re
 import tempfile
 import json
+from difflib import SequenceMatcher
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
@@ -37,7 +38,7 @@ from app.data.rag_pipeline import (
     _collect_direct_test_matches as rag_collect_direct_test_matches,
 )
 from app.core.config import settings
-from app.core.runtime_paths import FAQ_INDEX_PATH, TESTS_PRICE_INDEX_PATH, path_exists
+from app.core.runtime_paths import FAQ_CLEAN_PATH, TESTS_PRICE_INDEX_PATH, path_exists
 from app.utils.arabic_normalizer import normalize_for_matching
 from app.utils.gender_tone import apply_gender_variant, guess_gender, safe_clarify_message
 from app.services.report_parser_service import parse_lab_report_text, compose_report_summary, is_report_explanation_request
@@ -157,11 +158,55 @@ def load_runtime_faq():
     global _FAQ_CACHE
     if _FAQ_CACHE is not None:
         return _FAQ_CACHE
-    if path_exists(FAQ_INDEX_PATH):
-        with open(FAQ_INDEX_PATH, "r", encoding="utf-8") as f:
-            _FAQ_CACHE = json.load(f)
-            return _FAQ_CACHE
-    _FAQ_CACHE = []
+    if not path_exists(FAQ_CLEAN_PATH):
+        logger.warning("faq loader missing source | source=%s", FAQ_CLEAN_PATH)
+        _FAQ_CACHE = []
+        return _FAQ_CACHE
+
+    items: list[dict] = []
+    try:
+        with open(FAQ_CLEAN_PATH, "r", encoding="utf-8") as f:
+            for line_no, raw_line in enumerate(f, start=1):
+                line = (raw_line or "").strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except Exception as exc:
+                    logger.warning(
+                        "faq loader malformed jsonl row | source=%s | line=%s | error=%s",
+                        FAQ_CLEAN_PATH,
+                        line_no,
+                        exc,
+                    )
+                    continue
+
+                faq_id = str(row.get("id") or "").strip()
+                question = str(row.get("question") or "").strip()
+                answer = str(row.get("answer") or "").strip()
+                q_norm = str(row.get("q_norm") or "").strip()
+                if not faq_id or not question or not answer or not q_norm:
+                    logger.warning(
+                        "faq loader skipped invalid row | source=%s | line=%s | missing_required_fields=id/question/answer/q_norm",
+                        FAQ_CLEAN_PATH,
+                        line_no,
+                    )
+                    continue
+
+                items.append(
+                    {
+                        "id": faq_id,
+                        "question": question,
+                        "answer": answer,
+                        "q_norm": q_norm,
+                    }
+                )
+    except Exception as exc:
+        logger.warning("faq loader failed | source=%s | error=%s", FAQ_CLEAN_PATH, exc)
+        items = []
+
+    logger.info("faq loader ready | source=%s | records=%s", FAQ_CLEAN_PATH, len(items))
+    _FAQ_CACHE = items
     return _FAQ_CACHE
 
 
@@ -212,6 +257,52 @@ def contains_match(query_norm: str, candidate_norm: str) -> bool:
     if len(q) < 2 or len(c) < 2:
         return False
     return c in q or q in c
+
+
+def _faq_similarity_score(query_norm: str, candidate_norm: str) -> float:
+    q = (query_norm or "").strip()
+    c = (candidate_norm or "").strip()
+    if len(q) < 2 or len(c) < 2:
+        return 0.0
+    ratio = SequenceMatcher(None, q, c).ratio()
+    q_tokens = {t for t in q.split() if t}
+    c_tokens = {t for t in c.split() if t}
+    if not q_tokens or not c_tokens:
+        return ratio
+    inter = q_tokens & c_tokens
+    if not inter:
+        return ratio
+    candidate_coverage = len(inter) / len(c_tokens)
+    jaccard = len(inter) / len(q_tokens | c_tokens)
+    blended = (0.65 * candidate_coverage) + (0.35 * jaccard)
+    return max(ratio, blended)
+
+
+def _faq_hijack_guard_reason(query: str) -> str | None:
+    n = _normalize_light(query)
+    if not n:
+        return None
+
+    if _is_general_price_query(query) or any(t in n for t in {"سعر", "اسعار", "أسعار", "تكلفه", "تكلفة", "بكم", "price", "cost"}):
+        return "price_query"
+
+    if _is_symptoms_query(query):
+        return "symptoms_query"
+
+    light_intent, light_meta = _classify_light_intent(query)
+    if light_intent == "branch_location" and bool(light_meta.get("has_city_or_area")):
+        return "branch_detail_query"
+
+    package_markers = {"باقه", "باقة", "باقات", "الباقات", "package", "packages"}
+    package_detail_markers = {"تفاصيل", "مكونات", "تشمل", "محتوى", "المحتوى", "وش فيها", "ايش فيها", "includes", "list"}
+    if any(t in n for t in package_markers) and any(t in n for t in package_detail_markers):
+        return "package_detail_query"
+
+    test_explain_markers = {"شرح", "تفسير", "فسر", "ما معنى", "وش يعني", "explain", "interpret", "what is"}
+    if is_test_related_question(query) and any(t in n for t in test_explain_markers):
+        return "test_explanation_query"
+
+    return None
 
 
 def expand_query_with_synonyms(text: str) -> str:
@@ -282,33 +373,59 @@ def _runtime_faq_lookup(query: str) -> dict | None:
     query_norm = normalize_text_ar(query)
     if not query_norm:
         return None
+    guard_reason = _faq_hijack_guard_reason(query)
+    if guard_reason:
+        logger.info(
+            "faq route skipped | route=faq_skip | reason=%s | query='%s'",
+            guard_reason,
+            str(query or "")[:120],
+        )
+        return None
     faq_items = load_runtime_faq()
     if not isinstance(faq_items, list):
         return None
 
-    exact_match = None
-    contains_matches: list[dict] = []
+    best_match: dict | None = None
+    best_score = 0.0
+    best_method = ""
+    best_q_norm = ""
     for item in faq_items:
         if not isinstance(item, dict):
             continue
-        candidate_norm = normalize_text_ar(item.get("q_norm") or item.get("q") or "")
-        if not candidate_norm:
-            continue
-        if candidate_norm == query_norm:
-            exact_match = item
-            break
-        if contains_match(query_norm, candidate_norm):
-            contains_matches.append(item)
+        candidate_norms = [
+            normalize_text_ar(item.get("q_norm") or ""),
+            normalize_text_ar(item.get("question") or ""),
+        ]
+        for candidate_norm in [c for c in candidate_norms if c]:
+            if candidate_norm == query_norm:
+                matched = dict(item)
+                matched["_match_method"] = "exact"
+                matched["_match_score"] = 1.0
+                matched["_matched_q_norm"] = candidate_norm
+                return matched
 
-    if exact_match:
-        return exact_match
-    if not contains_matches:
+            score = _faq_similarity_score(query_norm, candidate_norm)
+            token_intersection = len(set(query_norm.split()) & set(candidate_norm.split()))
+            high_confidence = (
+                score >= 0.93
+                or (score >= 0.86 and token_intersection >= 4)
+                or (score >= 0.78 and token_intersection >= 5)
+            )
+            if not high_confidence:
+                continue
+            if score > best_score:
+                best_score = score
+                best_match = item
+                best_method = "high_confidence_similarity"
+                best_q_norm = candidate_norm
+
+    if not best_match:
         return None
-    contains_matches.sort(
-        key=lambda it: len(normalize_text_ar(it.get("q_norm") or it.get("q") or "")),
-        reverse=True,
-    )
-    return contains_matches[0]
+    matched = dict(best_match)
+    matched["_match_method"] = best_method
+    matched["_match_score"] = round(float(best_score), 4)
+    matched["_matched_q_norm"] = best_q_norm
+    return matched
 
 
 def extract_price_query_candidate(text: str) -> str:
@@ -3057,11 +3174,21 @@ def send_message_with_attachment(
             "مرحبا، معاكم مختبر وريد الطبية، كيف ممكن أخدمك اليوم؟"
         )
 
-    # B. FAQ – runtime lookup from faq_index.json wins unconditionally.
+    # B. FAQ – runtime lookup from faq_clean.jsonl wins unconditionally.
     runtime_faq_match = _runtime_faq_lookup(question_for_ai)
-    if runtime_faq_match and runtime_faq_match.get("a"):
+    faq_answer = ""
+    if runtime_faq_match:
+        faq_answer = str(runtime_faq_match.get("answer") or runtime_faq_match.get("a") or "").strip()
+    if runtime_faq_match and faq_answer:
+        logger.info(
+            "faq route matched | route=faq | faq_id=%s | match_method=%s | match_score=%s | matched_q_norm=%s",
+            runtime_faq_match.get("id"),
+            runtime_faq_match.get("_match_method", "unknown"),
+            runtime_faq_match.get("_match_score", "n/a"),
+            str(runtime_faq_match.get("_matched_q_norm") or runtime_faq_match.get("q_norm") or "")[:180],
+        )
         print("PATH=faq")
-        return _save_assistant_reply(str(runtime_faq_match.get("a")).strip())
+        return _save_assistant_reply(faq_answer)
 
     # C. PRICE – fixed contact message (emergency lockdown, all price intents unified).
     price_query_norm = normalize_text_ar(question_for_ai)
