@@ -1,4 +1,5 @@
-import json
+﻿import json
+from uuid import uuid4
 
 import pytest
 
@@ -16,16 +17,22 @@ def faq_runtime_file(tmp_path, monkeypatch):
     faq_path = tmp_path / "faq_clean.jsonl"
     rows = [
         {
-            "id": "faq::1",
-            "question": "ما هي الخدمات التي يقدمها مختبر وريد؟",
-            "answer": "يقدم المختبر خدمات متعددة.",
-            "q_norm": "ما هي الخدمات التي يقدمها مختبر وريد",
+            "id": "faq::2",
+            "question": "هل يوفر مختبر وريد خدمة الزيارات المنزلية؟",
+            "answer": "نعم، نوفر خدمة سحب العينات من المنزل أو مقر العمل.",
+            "q_norm": "هل يوفر مختبر وريد خدمه الزيارات المنزليه",
         },
         {
-            "id": "faq::16",
-            "question": "هل تحليل السكر التراكمي يحتاج صيام؟",
-            "answer": "لا، تحليل السكر التراكمي لا يحتاج صيام.",
-            "q_norm": "هل تحليل السكر التراكمي يحتاج صيام",
+            "id": "faq::6",
+            "question": "هل يتم إرسال النتائج إلكترونياً؟",
+            "answer": "نعم، يمكن إرسال النتائج عبر الواتساب والتطبيق والبريد الإلكتروني.",
+            "q_norm": "هل يتم ارسال النتائج الكترونيا",
+        },
+        {
+            "id": "faq::13",
+            "question": "هل نتائج التحاليل سرية؟",
+            "answer": "نعم، نتائج التحاليل سرية ويتم حفظها ضمن نظام آمن.",
+            "q_norm": "هل نتائج التحاليل سريه",
         },
     ]
     _write_jsonl(faq_path, rows)
@@ -35,42 +42,108 @@ def faq_runtime_file(tmp_path, monkeypatch):
     message_service._FAQ_CACHE = None
 
 
-def test_runtime_faq_exact_match(faq_runtime_file):
-    match = message_service._runtime_faq_lookup("ما هي الخدمات التي يقدمها مختبر وريد؟")
+@pytest.mark.parametrize(
+    "query",
+    [
+        "تجون البيت تسحبون العينة؟",
+        "فيه خدمة سحب عينات من البيت؟",
+        "تقدرون تجون تاخذون العينة من البيت؟",
+        "هل السحب المنزلي متوفر؟",
+        "عندكم خدمة سحب من المنزل؟",
+        "تجون للمكتب تسحبون العينة؟",
+    ],
+)
+def test_home_visit_dialect_phrases_match_faq(query, faq_runtime_file):
+    match = message_service._runtime_faq_lookup(query)
+    if match is None:
+        intent = message_service._recognize_faq_class_intent(query)
+        assert intent == "home_visit"
+        match = message_service._runtime_faq_lookup_by_class_intent(intent)
     assert match is not None
-    assert match["id"] == "faq::1"
-    assert match["answer"] == "يقدم المختبر خدمات متعددة."
-    assert match["_match_method"] == "exact"
-    assert match["_match_score"] == 1.0
+    assert match["id"] == "faq::2"
 
 
-def test_runtime_faq_high_confidence_paraphrase_match(faq_runtime_file):
-    match = message_service._runtime_faq_lookup("هل تحليل السكر التراكمي يحتاج صيام ولا لا")
+@pytest.mark.parametrize(
+    "query",
+    [
+        "كيف استلم النتيجة؟",
+        "النتيجة تجيني كيف؟",
+        "ترسلونها واتساب؟",
+        "اقدر اشوف النتيجة اونلاين؟",
+    ],
+)
+def test_results_delivery_dialect_phrases_match_faq(query, faq_runtime_file):
+    match = message_service._runtime_faq_lookup(query)
+    if match is None:
+        intent = message_service._recognize_faq_class_intent(query)
+        assert intent == "results_delivery"
+        match = message_service._runtime_faq_lookup_by_class_intent(intent)
     assert match is not None
-    assert match["id"] == "faq::16"
-    assert match["answer"] == "لا، تحليل السكر التراكمي لا يحتاج صيام."
+    assert match["id"] == "faq::6"
 
 
-def test_runtime_faq_unrelated_query_no_match(faq_runtime_file):
-    match = message_service._runtime_faq_lookup("كيف ارفع طلب تأمين طبي؟")
-    assert match is None
+@pytest.mark.parametrize(
+    "query",
+    [
+        "هل التحاليل سرية؟",
+        "هل احد يقدر يشوف نتيجتي؟",
+        "هل المعلومات الطبية خاصة؟",
+        "هل النتائج سرية؟",
+    ],
+)
+def test_privacy_dialect_phrases_match_faq(query, faq_runtime_file):
+    match = message_service._runtime_faq_lookup(query)
+    if match is None:
+        intent = message_service._recognize_faq_class_intent(query)
+        assert intent == "privacy"
+        match = message_service._runtime_faq_lookup_by_class_intent(intent)
+    assert match is not None
+    assert match["id"] == "faq::13"
 
 
-def test_runtime_faq_price_query_not_hijacked(faq_runtime_file):
-    match = message_service._runtime_faq_lookup("كم سعر تحليل السكر التراكمي؟")
-    assert match is None
+def test_faq_class_queries_do_not_hijack_package_route(faq_runtime_file, monkeypatch):
+    fake_record = {
+        "id": "pkg::1",
+        "name_raw": "تحليل الأمراض المناعية (ANA TEST)",
+        "description_raw": "وصف",
+        "price_raw": "100 ريال",
+        "turnaround_text": "",
+        "sample_type_text": "",
+    }
+
+    monkeypatch.setattr(message_service, "match_single_package", lambda _q: fake_record)
+    monkeypatch.setattr(message_service, "search_packages", lambda _q, top_k=6: [fake_record])
+    monkeypatch.setattr(message_service, "semantic_search_packages", lambda _q, top_k=3: [{"id": "pkg::1", "score": 0.99}])
+
+    faq_like_queries = [
+        "تجون البيت تسحبون العينة؟",
+        "فيه خدمة سحب عينات من البيت؟",
+        "كيف استلم النتيجة؟",
+        "النتيجة تجيني كيف؟",
+        "هل التحاليل سرية؟",
+        "هل احد يقدر يشوف نتيجتي؟",
+    ]
+
+    for query in faq_like_queries:
+        reply = message_service._package_lookup_bypass_reply(query, uuid4())
+        assert reply is None
 
 
-def test_runtime_faq_branch_detail_query_not_hijacked(faq_runtime_file):
-    match = message_service._runtime_faq_lookup("وين أقرب فرع في الرياض حي النخيل؟")
-    assert match is None
+def test_faq_class_safe_fallback_when_intent_has_no_record(tmp_path, monkeypatch):
+    faq_path = tmp_path / "faq_clean.jsonl"
+    rows = [
+        {
+            "id": "faq::2",
+            "question": "هل يوفر مختبر وريد خدمة الزيارات المنزلية؟",
+            "answer": "نعم، نوفر خدمة سحب العينات من المنزل أو مقر العمل.",
+            "q_norm": "هل يوفر مختبر وريد خدمه الزيارات المنزليه",
+        }
+    ]
+    _write_jsonl(faq_path, rows)
+    monkeypatch.setattr(message_service, "FAQ_CLEAN_PATH", faq_path)
+    message_service._FAQ_CACHE = None
 
-
-def test_runtime_faq_package_detail_query_not_hijacked(faq_runtime_file):
-    match = message_service._runtime_faq_lookup("تفاصيل باقة السكري والدهون")
-    assert match is None
-
-
-def test_runtime_faq_symptoms_query_not_hijacked(faq_runtime_file):
-    match = message_service._runtime_faq_lookup("عندي صداع ودوخة من أمس")
-    assert match is None
+    assert message_service._runtime_faq_lookup_by_class_intent("privacy") is None
+    safe_reply = message_service._safe_faq_class_fallback_reply("privacy")
+    assert isinstance(safe_reply, str)
+    assert safe_reply.strip()

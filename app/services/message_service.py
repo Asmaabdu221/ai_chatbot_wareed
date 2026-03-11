@@ -314,6 +314,124 @@ def _expand_faq_query_aliases(query_norm: str) -> list[str]:
     return sorted(variants, key=lambda v: len(v), reverse=True)
 
 
+def _recognize_faq_class_intent(query: str) -> str | None:
+    """
+    Recognize FAQ-class intents from natural Arabic/Saudi phrasing.
+    Kept narrow and rule-based to avoid broad hijacking.
+    """
+    n = normalize_text_ar(query)
+    if not n:
+        return None
+
+    home_location = {"بيت", "البيت", "منزل", "المنزل", "مكتب", "المكتب"}
+    home_action = {"سحب", "عينه", "العينه", "عيّنه", "زياره", "الزيارات", "تجون", "تاخذون", "متوفر", "خدمه"}
+    if (
+        "سحب منزلي" in n
+        or "سحب عينات من البيت" in n
+        or "زيارات منزليه" in n
+        or ("منزلي" in n and "سحب" in n)
+        or (
+            any(t in n for t in home_location)
+            and any(t in n for t in home_action)
+        )
+    ):
+        return "home_visit"
+
+    result_core = {"نتيجه", "النتيجه", "نتيجة", "النتيجة", "نتائج", "النتائج"}
+    result_delivery = {
+        "استلم",
+        "استلام",
+        "تجيني",
+        "ترسلون",
+        "واتساب",
+        "ايميل",
+        "اونلاين",
+        "online",
+        "تطبيق",
+        "الكتروني",
+        "الكترونيا",
+    }
+    has_result_core = any(t in n for t in result_core)
+    has_result_delivery = any(t in n for t in result_delivery)
+    if (
+        ("هل يتم ارسال النتائج" in n)
+        or ("ارسال النتائج" in n)
+        or (has_result_core and has_result_delivery)
+        or ("واتساب" in n and ("ترسل" in n or has_result_core))
+        or ("اونلاين" in n and has_result_core)
+        or ("online" in n and has_result_core)
+    ):
+        return "results_delivery"
+
+    privacy_tokens = {
+        "سري",
+        "سريه",
+        "سرية",
+        "خصوصيه",
+        "خصوصية",
+        "خاصه",
+        "خاصة",
+        "يشوف نتيجتي",
+        "يقدر يشوف",
+        "المعلومات الطبيه",
+        "المعلومات الطبية",
+        "بياناتي",
+    }
+    if any(t in n for t in privacy_tokens):
+        return "privacy"
+
+    return None
+
+
+def _runtime_faq_lookup_by_class_intent(intent: str) -> dict | None:
+    faq_items = load_runtime_faq()
+    if not isinstance(faq_items, list):
+        return None
+
+    intent_patterns: dict[str, tuple[str, ...]] = {
+        "home_visit": ("الزيارات المنزلية", "سحب", "منزل"),
+        "results_delivery": ("ارسال النتائج", "الكترونيا", "واتساب", "تطبيق", "البريد"),
+        "privacy": ("نتائج التحاليل سري", "سرية", "خصوصية"),
+    }
+    patterns = intent_patterns.get(intent) or ()
+    if not patterns:
+        return None
+
+    best_item: dict | None = None
+    best_score = 0
+    for item in faq_items:
+        if not isinstance(item, dict):
+            continue
+        candidate = normalize_text_ar(
+            f"{item.get('q_norm') or ''} {item.get('question') or ''} {item.get('answer') or ''}"
+        )
+        if not candidate:
+            continue
+        score = sum(1 for p in patterns if normalize_text_ar(p) in candidate)
+        if score > best_score:
+            best_score = score
+            best_item = item
+
+    if best_item is None or best_score <= 0:
+        return None
+
+    matched = dict(best_item)
+    matched["_match_method"] = "faq_class_intent"
+    matched["_match_score"] = float(best_score)
+    matched["_matched_q_norm"] = normalize_text_ar(matched.get("q_norm") or matched.get("question") or "")
+    return matched
+
+
+def _safe_faq_class_fallback_reply(intent: str) -> str:
+    if intent == "home_visit":
+        return f"بالنسبة لخدمة السحب المنزلي، هل تقصد السحب من البيت أو من مقر العمل؟ وللدعم المباشر: {WAREED_CUSTOMER_SERVICE_PHONE}"
+    if intent == "results_delivery":
+        return "بالنسبة لاستلام النتائج، هل تقصد الاستلام عبر الواتساب أو التطبيق أو البريد الإلكتروني؟"
+    if intent == "privacy":
+        return "نقدر نوضح لك سياسة خصوصية النتائج. هل تقصد سرية نتائج التحاليل أو صلاحيات الاطلاع على النتيجة؟"
+    return safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, "unknown")
+
+
 def _faq_hijack_guard_reason(query: str) -> str | None:
     n = _normalize_light(query)
     if not n:
@@ -1914,6 +2032,15 @@ def _package_lookup_bypass_reply(question: str, conversation_id: UUID) -> str | 
     if not query:
         return None
 
+    faq_class_intent = _recognize_faq_class_intent(query)
+    if faq_class_intent:
+        logger.info(
+            "package route skipped | reason=faq_class_intent | faq_intent=%s | query='%s'",
+            faq_class_intent,
+            query[:120],
+        )
+        return None
+
     trigger = _is_package_query_candidate(query)
     if not trigger:
         return None
@@ -3230,6 +3357,31 @@ def send_message_with_attachment(
         )
         print("PATH=faq")
         return _save_assistant_reply(faq_answer)
+
+    faq_class_intent = _recognize_faq_class_intent(question_for_ai)
+    if faq_class_intent:
+        intent_faq_match = _runtime_faq_lookup_by_class_intent(faq_class_intent)
+        intent_faq_answer = ""
+        if intent_faq_match:
+            intent_faq_answer = str(intent_faq_match.get("answer") or "").strip()
+        if intent_faq_match and intent_faq_answer:
+            logger.info(
+                "faq route matched | route=faq | faq_intent=%s | faq_id=%s | match_method=%s | match_score=%s | matched_q_norm=%s",
+                faq_class_intent,
+                intent_faq_match.get("id"),
+                intent_faq_match.get("_match_method", "faq_class_intent"),
+                intent_faq_match.get("_match_score", "n/a"),
+                str(intent_faq_match.get("_matched_q_norm") or intent_faq_match.get("q_norm") or "")[:180],
+            )
+            print("PATH=faq")
+            return _save_assistant_reply(intent_faq_answer)
+        logger.info(
+            "faq route fallback | route=faq_safe | faq_intent=%s | query='%s'",
+            faq_class_intent,
+            question_for_ai[:120],
+        )
+        print("PATH=faq_safe")
+        return _save_assistant_reply(_safe_faq_class_fallback_reply(faq_class_intent))
 
     # C. PRICE – fixed contact message (emergency lockdown, all price intents unified).
     price_query_norm = normalize_text_ar(question_for_ai)
