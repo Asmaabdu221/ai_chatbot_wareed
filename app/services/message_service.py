@@ -334,16 +334,23 @@ def _recognize_faq_class_intent(query: str) -> str | None:
             any(t in n for t in home_location)
             and any(t in n for t in home_action)
         )
+        or (
+            "تجون" in n
+            and ("عينه" in n or "العينه" in n or "سحب" in n or "تاخذون" in n)
+        )
     ):
         return "home_visit"
 
-    result_core = {"نتيجه", "النتيجه", "نتيجة", "النتيجة", "نتائج", "النتائج"}
+    result_core = {"نتيجه", "النتيجه", "نتيجة", "النتيجة", "نتائج", "النتائج", "نتيجتي"}
     result_delivery = {
         "استلم",
         "استلام",
         "تجيني",
         "ترسلون",
+        "ترسلونها",
         "واتساب",
+        "واتس",
+        "بالواتس",
         "ايميل",
         "اونلاين",
         "online",
@@ -358,6 +365,7 @@ def _recognize_faq_class_intent(query: str) -> str | None:
         or ("ارسال النتائج" in n)
         or (has_result_core and has_result_delivery)
         or ("واتساب" in n and ("ترسل" in n or has_result_core))
+        or (("ترسلون" in n or "ترسلونها" in n) and ("واتساب" in n or "واتس" in n or "بالواتس" in n))
         or ("اونلاين" in n and has_result_core)
         or ("online" in n and has_result_core)
     ):
@@ -430,6 +438,80 @@ def _safe_faq_class_fallback_reply(intent: str) -> str:
     if intent == "privacy":
         return "نقدر نوضح لك سياسة خصوصية النتائج. هل تقصد سرية نتائج التحاليل أو صلاحيات الاطلاع على النتيجة؟"
     return safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, "unknown")
+
+
+def _is_faq_rephrase_enabled() -> bool:
+    return bool(getattr(settings, "ENABLE_FAQ_REPHRASE", False))
+
+
+def _maybe_rephrase_faq_answer(question: str, answer: str) -> str:
+    """
+    Optional post-processing for FAQ answers: keep facts unchanged and wording natural.
+    Disabled by default unless ENABLE_FAQ_REPHRASE=true in settings.
+    """
+    base_answer = str(answer or "").strip()
+    if not base_answer:
+        return ""
+    if not _is_faq_rephrase_enabled():
+        return base_answer
+    try:
+        prompt = (
+            "أعد صياغة الإجابة التالية بشكل سعودي طبيعي ومختصر.\n"
+            "التزم بالحقائق نفسها حرفياً بدون إضافة معلومات جديدة.\n"
+            "إذا كانت الإجابة مناسبة كما هي، أعدها كما هي.\n\n"
+            f"سؤال المستخدم: {question}\n"
+            f"الإجابة الأصلية: {base_answer}"
+        )
+        result = openai_service.generate_response(
+            user_message=prompt,
+            knowledge_context="FAQ answer rephrase only. Do not add or remove facts.",
+            conversation_history=None,
+        )
+        if not isinstance(result, dict) or not bool(result.get("success")):
+            return base_answer
+        candidate = sanitize_for_ui(str(result.get("response") or "")).strip()
+        if not candidate:
+            return base_answer
+        # Guardrail: keep rephrase compact and avoid drifting to long generated content.
+        if len(candidate) > max(420, int(len(base_answer) * 1.8)):
+            return base_answer
+        return candidate
+    except Exception as exc:
+        logger.warning("faq rephrase failed | error=%s", exc)
+        return base_answer
+
+
+def _resolve_faq_response(query: str) -> tuple[str | None, dict | None]:
+    """
+    3-step FAQ flow:
+    1) direct FAQ lookup
+    2) FAQ-class intent -> intent-bound FAQ lookup
+    3) safe FAQ fallback (no package/test fallback)
+    """
+    runtime_faq_match = _runtime_faq_lookup(query)
+    if runtime_faq_match:
+        faq_answer = str(runtime_faq_match.get("answer") or runtime_faq_match.get("a") or "").strip()
+        if faq_answer:
+            return _maybe_rephrase_faq_answer(query, faq_answer), runtime_faq_match
+
+    faq_class_intent = _recognize_faq_class_intent(query)
+    if not faq_class_intent:
+        return None, None
+
+    intent_faq_match = _runtime_faq_lookup_by_class_intent(faq_class_intent)
+    if intent_faq_match:
+        intent_faq_answer = str(intent_faq_match.get("answer") or "").strip()
+        if intent_faq_answer:
+            return _maybe_rephrase_faq_answer(query, intent_faq_answer), intent_faq_match
+
+    safe_reply = _safe_faq_class_fallback_reply(faq_class_intent)
+    return safe_reply, {
+        "id": None,
+        "_match_method": "faq_safe",
+        "_match_score": "n/a",
+        "_matched_q_norm": "",
+        "_faq_intent": faq_class_intent,
+    }
 
 
 def _faq_hijack_guard_reason(query: str) -> str | None:
@@ -3342,46 +3424,23 @@ def send_message_with_attachment(
             "مرحبا، معاكم مختبر وريد الطبية، كيف ممكن أخدمك اليوم؟"
         )
 
-    # B. FAQ – runtime lookup from faq_clean.jsonl wins unconditionally.
-    runtime_faq_match = _runtime_faq_lookup(question_for_ai)
-    faq_answer = ""
-    if runtime_faq_match:
-        faq_answer = str(runtime_faq_match.get("answer") or runtime_faq_match.get("a") or "").strip()
-    if runtime_faq_match and faq_answer:
+    # B. FAQ – 3-step flow (lookup -> intent-bound lookup -> safe fallback).
+    faq_reply, faq_meta = _resolve_faq_response(question_for_ai)
+    if faq_reply:
+        match_method = str((faq_meta or {}).get("_match_method") or "unknown")
+        faq_intent = str((faq_meta or {}).get("_faq_intent") or "")
+        route_name = "faq_safe" if match_method == "faq_safe" else "faq"
         logger.info(
-            "faq route matched | route=faq | faq_id=%s | match_method=%s | match_score=%s | matched_q_norm=%s",
-            runtime_faq_match.get("id"),
-            runtime_faq_match.get("_match_method", "unknown"),
-            runtime_faq_match.get("_match_score", "n/a"),
-            str(runtime_faq_match.get("_matched_q_norm") or runtime_faq_match.get("q_norm") or "")[:180],
+            "faq route matched | route=%s | faq_intent=%s | faq_id=%s | match_method=%s | match_score=%s | matched_q_norm=%s",
+            route_name,
+            faq_intent or "n/a",
+            (faq_meta or {}).get("id"),
+            match_method,
+            (faq_meta or {}).get("_match_score", "n/a"),
+            str((faq_meta or {}).get("_matched_q_norm") or (faq_meta or {}).get("q_norm") or "")[:180],
         )
-        print("PATH=faq")
-        return _save_assistant_reply(faq_answer)
-
-    faq_class_intent = _recognize_faq_class_intent(question_for_ai)
-    if faq_class_intent:
-        intent_faq_match = _runtime_faq_lookup_by_class_intent(faq_class_intent)
-        intent_faq_answer = ""
-        if intent_faq_match:
-            intent_faq_answer = str(intent_faq_match.get("answer") or "").strip()
-        if intent_faq_match and intent_faq_answer:
-            logger.info(
-                "faq route matched | route=faq | faq_intent=%s | faq_id=%s | match_method=%s | match_score=%s | matched_q_norm=%s",
-                faq_class_intent,
-                intent_faq_match.get("id"),
-                intent_faq_match.get("_match_method", "faq_class_intent"),
-                intent_faq_match.get("_match_score", "n/a"),
-                str(intent_faq_match.get("_matched_q_norm") or intent_faq_match.get("q_norm") or "")[:180],
-            )
-            print("PATH=faq")
-            return _save_assistant_reply(intent_faq_answer)
-        logger.info(
-            "faq route fallback | route=faq_safe | faq_intent=%s | query='%s'",
-            faq_class_intent,
-            question_for_ai[:120],
-        )
-        print("PATH=faq_safe")
-        return _save_assistant_reply(_safe_faq_class_fallback_reply(faq_class_intent))
+        print("PATH=faq_safe" if route_name == "faq_safe" else "PATH=faq")
+        return _save_assistant_reply(faq_reply)
 
     # C. PRICE – fixed contact message (emergency lockdown, all price intents unified).
     price_query_norm = normalize_text_ar(question_for_ai)

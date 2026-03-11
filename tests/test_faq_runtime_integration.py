@@ -45,9 +45,11 @@ def faq_runtime_file(tmp_path, monkeypatch):
 @pytest.mark.parametrize(
     "query",
     [
+        "في عندكم سحب من البيت",
         "تجون البيت تسحبون العينة؟",
         "فيه خدمة سحب عينات من البيت؟",
         "تقدرون تجون تاخذون العينة من البيت؟",
+        "تقدرون تجون تاخذون العينة",
         "هل السحب المنزلي متوفر؟",
         "عندكم خدمة سحب من المنزل؟",
         "تجون للمكتب تسحبون العينة؟",
@@ -67,8 +69,10 @@ def test_home_visit_dialect_phrases_match_faq(query, faq_runtime_file):
     "query",
     [
         "كيف استلم النتيجة؟",
+        "كيف استلم نتيجتي",
         "النتيجة تجيني كيف؟",
         "ترسلونها واتساب؟",
+        "عادي ترسلونها بالواتس",
         "اقدر اشوف النتيجة اونلاين؟",
     ],
 )
@@ -87,6 +91,7 @@ def test_results_delivery_dialect_phrases_match_faq(query, faq_runtime_file):
     [
         "هل التحاليل سرية؟",
         "هل احد يقدر يشوف نتيجتي؟",
+        "في حد غيري يقدر يشوف نتيجتي",
         "هل المعلومات الطبية خاصة؟",
         "هل النتائج سرية؟",
     ],
@@ -116,12 +121,17 @@ def test_faq_class_queries_do_not_hijack_package_route(faq_runtime_file, monkeyp
     monkeypatch.setattr(message_service, "semantic_search_packages", lambda _q, top_k=3: [{"id": "pkg::1", "score": 0.99}])
 
     faq_like_queries = [
+        "في عندكم سحب من البيت",
         "تجون البيت تسحبون العينة؟",
         "فيه خدمة سحب عينات من البيت؟",
+        "تقدرون تجون تاخذون العينة",
         "كيف استلم النتيجة؟",
+        "كيف استلم نتيجتي",
         "النتيجة تجيني كيف؟",
+        "عادي ترسلونها بالواتس",
         "هل التحاليل سرية؟",
         "هل احد يقدر يشوف نتيجتي؟",
+        "في حد غيري يقدر يشوف نتيجتي",
     ]
 
     for query in faq_like_queries:
@@ -147,3 +157,22 @@ def test_faq_class_safe_fallback_when_intent_has_no_record(tmp_path, monkeypatch
     safe_reply = message_service._safe_faq_class_fallback_reply("privacy")
     assert isinstance(safe_reply, str)
     assert safe_reply.strip()
+
+
+def test_optional_faq_rephrase_keeps_faq_route(monkeypatch, faq_runtime_file):
+    monkeypatch.setattr(message_service, "_is_faq_rephrase_enabled", lambda: True)
+    monkeypatch.setattr(
+        message_service.openai_service,
+        "generate_response",
+        lambda **kwargs: {
+            "success": True,
+            "response": "تقدر تشوف نتيجتك عبر الواتساب أو التطبيق أو البريد الإلكتروني بدون زيارة المركز.",
+            "model": "mock",
+            "tokens_used": 0,
+            "error": None,
+        },
+    )
+    answer, meta = message_service._resolve_faq_response("كيف استلم نتيجتي")
+    assert isinstance(answer, str) and answer.strip()
+    assert "الواتساب" in answer
+    assert meta is not None
