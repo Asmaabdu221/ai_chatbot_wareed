@@ -176,3 +176,44 @@ def test_optional_faq_rephrase_keeps_faq_route(monkeypatch, faq_runtime_file):
     assert isinstance(answer, str) and answer.strip()
     assert "الواتساب" in answer
     assert meta is not None
+
+
+def test_privacy_access_question_starts_with_no_for_ghairi_phrase(faq_runtime_file):
+    answer, meta = message_service._resolve_faq_response("في حد غيري يقدر يشوف نتيجتي")
+    assert meta is not None
+    assert (meta.get("id") == "faq::13") or (meta.get("_faq_intent") == "privacy")
+    assert isinstance(answer, str) and answer.strip()
+    assert answer.strip().startswith("لا")
+
+
+def test_privacy_access_question_starts_with_no_for_ahad_phrase(faq_runtime_file):
+    answer, meta = message_service._resolve_faq_response("هل احد يقدر يشوف نتيجتي؟")
+    assert meta is not None
+    assert (meta.get("id") == "faq::13") or (meta.get("_faq_intent") == "privacy")
+    assert isinstance(answer, str) and answer.strip()
+    assert answer.strip().startswith("لا")
+
+
+def test_results_online_question_does_not_start_with_yes(faq_runtime_file):
+    answer, meta = message_service._resolve_faq_response("اقدر اشوف النتيجة اونلاين")
+    assert meta is not None
+    assert (meta.get("id") == "faq::6") or (meta.get("_faq_intent") == "results_delivery")
+    assert isinstance(answer, str) and answer.strip()
+    assert not answer.strip().startswith("نعم")
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "هل اقدر اطلع نتيجيتي اونلاين و الا",
+        "من وين اشوف النتيجة",
+        "كيف اعرف نتيجتي",
+    ],
+)
+def test_results_delivery_remaining_phrases_route_to_faq_and_not_package(query, faq_runtime_file):
+    answer, meta = message_service._resolve_faq_response(query)
+    assert isinstance(answer, str) and answer.strip()
+    assert meta is not None
+    assert (meta.get("id") == "faq::6") or (meta.get("_faq_intent") == "results_delivery")
+    package_reply = message_service._package_lookup_bypass_reply(query, uuid4())
+    assert package_reply is None

@@ -341,7 +341,7 @@ def _recognize_faq_class_intent(query: str) -> str | None:
     ):
         return "home_visit"
 
-    result_core = {"نتيجه", "النتيجه", "نتيجة", "النتيجة", "نتائج", "النتائج", "نتيجتي"}
+    result_core = {"نتيجه", "النتيجه", "نتيجة", "النتيجة", "نتائج", "النتائج", "نتيجتي", "نتيجيتي"}
     result_delivery = {
         "استلم",
         "استلام",
@@ -360,6 +360,31 @@ def _recognize_faq_class_intent(query: str) -> str | None:
     }
     has_result_core = any(t in n for t in result_core)
     has_result_delivery = any(t in n for t in result_delivery)
+    result_explicit_phrases = {
+        "هل اقدر اطلع نتيجتي اونلاين",
+        "هل اقدر اطلع نتيجيتي اونلاين",
+        "هل اقدر اطلع نتيجتي اونلاين و الا",
+        "هل اقدر اطلع نتيجتي اونلاين والا",
+        "هل اقدر اطلع نتيجيتي اونلاين و الا",
+        "هل اقدر اطلع نتيجيتي اونلاين والا",
+        "اقدر اطلع نتيجتي اونلاين",
+        "اقدر اطلع نتيجيتي اونلاين",
+        "اقدر اطلع نتيجتي اونلاين و الا",
+        "اقدر اطلع نتيجتي اونلاين والا",
+        "اقدر اطلع نتيجيتي اونلاين و الا",
+        "اقدر اطلع نتيجيتي اونلاين والا",
+        "كيف اشوف نتيجتي",
+        "كيف اشوف نتيجيتي",
+        "من وين اشوف النتيجه",
+        "من وين اشوف النتيجة",
+        "ابي اشوف نتيجتي",
+        "ابي اشوف نتيجيتي",
+        "اشوفها اونلاين",
+        "اقدر افتح النتيجه من الجوال",
+        "اقدر افتح النتيجة من الجوال",
+        "كيف اعرف نتيجتي",
+        "كيف اعرف نتيجيتي",
+    }
     if (
         ("هل يتم ارسال النتائج" in n)
         or ("ارسال النتائج" in n)
@@ -368,6 +393,8 @@ def _recognize_faq_class_intent(query: str) -> str | None:
         or (("ترسلون" in n or "ترسلونها" in n) and ("واتساب" in n or "واتس" in n or "بالواتس" in n))
         or ("اونلاين" in n and has_result_core)
         or ("online" in n and has_result_core)
+        or any(p in n for p in result_explicit_phrases)
+        or (("كيف" in n or "من وين" in n or "اعرف" in n or "ابي" in n or "اقدر" in n) and has_result_core)
     ):
         return "results_delivery"
 
@@ -481,6 +508,42 @@ def _maybe_rephrase_faq_answer(question: str, answer: str) -> str:
         return base_answer
 
 
+def _trim_leading_yes_prefix(text: str) -> str:
+    value = str(text or "").strip()
+    value = re.sub(r"^\s*(نعم)\s*[,،:\-]?\s*", "", value)
+    return value.strip() or str(text or "").strip()
+
+
+def _render_faq_answer_for_query(query: str, answer: str, faq_meta: dict | None = None) -> str:
+    """
+    FAQ answer rendering layer:
+    - privacy access questions -> prefer negative opener "لا،"
+    - results how/where/view/get questions -> avoid starting with "نعم"
+    Keeps same facts from FAQ answer without adding new information.
+    """
+    rendered = str(answer or "").strip()
+    if not rendered:
+        return ""
+
+    n = normalize_text_ar(query)
+    intent = str((faq_meta or {}).get("_faq_intent") or "").strip() or (_recognize_faq_class_intent(query) or "")
+    access_privacy_query = intent == "privacy" and any(t in n for t in {"احد", "غيري", "يشوف", "نتيجتي", "يقدر يشوف"})
+    results_style_query = intent == "results_delivery" and any(
+        t in n for t in {"كيف", "من وين", "اشوف", "اطلع", "ابي", "اقدر", "افتح", "اعرف", "اونلاين", "الجوال"}
+    )
+
+    if access_privacy_query:
+        body = _trim_leading_yes_prefix(rendered)
+        if body.startswith("لا"):
+            return body
+        return f"لا، {body}"
+
+    if results_style_query and rendered.startswith("نعم"):
+        return _trim_leading_yes_prefix(rendered)
+
+    return rendered
+
+
 def _resolve_faq_response(query: str) -> tuple[str | None, dict | None]:
     """
     3-step FAQ flow:
@@ -492,7 +555,8 @@ def _resolve_faq_response(query: str) -> tuple[str | None, dict | None]:
     if runtime_faq_match:
         faq_answer = str(runtime_faq_match.get("answer") or runtime_faq_match.get("a") or "").strip()
         if faq_answer:
-            return _maybe_rephrase_faq_answer(query, faq_answer), runtime_faq_match
+            rephrased = _maybe_rephrase_faq_answer(query, faq_answer)
+            return _render_faq_answer_for_query(query, rephrased, runtime_faq_match), runtime_faq_match
 
     faq_class_intent = _recognize_faq_class_intent(query)
     if not faq_class_intent:
@@ -502,7 +566,9 @@ def _resolve_faq_response(query: str) -> tuple[str | None, dict | None]:
     if intent_faq_match:
         intent_faq_answer = str(intent_faq_match.get("answer") or "").strip()
         if intent_faq_answer:
-            return _maybe_rephrase_faq_answer(query, intent_faq_answer), intent_faq_match
+            intent_faq_match["_faq_intent"] = faq_class_intent
+            rephrased = _maybe_rephrase_faq_answer(query, intent_faq_answer)
+            return _render_faq_answer_for_query(query, rephrased, intent_faq_match), intent_faq_match
 
     safe_reply = _safe_faq_class_fallback_reply(faq_class_intent)
     return safe_reply, {
