@@ -42,6 +42,48 @@ def faq_runtime_file(tmp_path, monkeypatch):
     message_service._FAQ_CACHE = None
 
 
+@pytest.fixture()
+def faq_runtime_file_intent_map(tmp_path, monkeypatch):
+    faq_path = tmp_path / "faq_clean.jsonl"
+    rows = [
+        {
+            "id": "faq::1",
+            "question": "ما هي الخدمات التي يقدمها مختبر وريد؟",
+            "answer": "يقدم المختبر تحاليل طبية متعددة.",
+            "q_norm": "ما هي الخدمات التي يقدمها مختبر وريد",
+        },
+        {
+            "id": "faq::2",
+            "question": "هل يوفر مختبر وريد خدمة الزيارات المنزلية؟",
+            "answer": "نعم، نوفر خدمة سحب العينات من المنزل أو مقر العمل.",
+            "q_norm": "هل يوفر مختبر وريد خدمه الزيارات المنزليه",
+        },
+        {
+            "id": "faq::6",
+            "question": "هل يتم إرسال النتائج إلكترونياً؟",
+            "answer": "نعم، يمكن إرسال النتائج عبر الواتساب والتطبيق والبريد الإلكتروني.",
+            "q_norm": "هل يتم ارسال النتائج الكترونيا",
+        },
+        {
+            "id": "faq::11",
+            "question": "هل توجد عروض أو تخفيضات حالياً؟",
+            "answer": "نعم، توجد عروض وباقات تتغير حسب الفترة.",
+            "q_norm": "هل توجد عروض او تخفيضات حاليا",
+        },
+        {
+            "id": "faq::13",
+            "question": "هل نتائج التحاليل سرية؟",
+            "answer": "نعم، نتائج التحاليل سرية.",
+            "q_norm": "هل نتائج التحاليل سريه",
+        },
+    ]
+    _write_jsonl(faq_path, rows)
+    monkeypatch.setattr(message_service, "FAQ_CLEAN_PATH", faq_path)
+    message_service._FAQ_CACHE = None
+    yield faq_path
+    message_service._FAQ_CACHE = None
+
+
 @pytest.mark.parametrize(
     "query",
     [
@@ -181,7 +223,7 @@ def test_optional_faq_rephrase_keeps_faq_route(monkeypatch, faq_runtime_file):
 def test_privacy_access_question_starts_with_no_for_ghairi_phrase(faq_runtime_file):
     answer, meta = message_service._resolve_faq_response("في حد غيري يقدر يشوف نتيجتي")
     assert meta is not None
-    assert (meta.get("id") == "faq::13") or (meta.get("_faq_intent") == "privacy")
+    assert (meta.get("id") == "faq::13") or (meta.get("_faq_intent") in {"privacy", "faq_privacy"})
     assert isinstance(answer, str) and answer.strip()
     assert answer.strip().startswith("لا")
 
@@ -189,7 +231,7 @@ def test_privacy_access_question_starts_with_no_for_ghairi_phrase(faq_runtime_fi
 def test_privacy_access_question_starts_with_no_for_ahad_phrase(faq_runtime_file):
     answer, meta = message_service._resolve_faq_response("هل احد يقدر يشوف نتيجتي؟")
     assert meta is not None
-    assert (meta.get("id") == "faq::13") or (meta.get("_faq_intent") == "privacy")
+    assert (meta.get("id") == "faq::13") or (meta.get("_faq_intent") in {"privacy", "faq_privacy"})
     assert isinstance(answer, str) and answer.strip()
     assert answer.strip().startswith("لا")
 
@@ -197,7 +239,7 @@ def test_privacy_access_question_starts_with_no_for_ahad_phrase(faq_runtime_file
 def test_results_online_question_does_not_start_with_yes(faq_runtime_file):
     answer, meta = message_service._resolve_faq_response("اقدر اشوف النتيجة اونلاين")
     assert meta is not None
-    assert (meta.get("id") == "faq::6") or (meta.get("_faq_intent") == "results_delivery")
+    assert (meta.get("id") == "faq::6") or (meta.get("_faq_intent") in {"results_delivery", "faq_results_delivery"})
     assert isinstance(answer, str) and answer.strip()
     assert not answer.strip().startswith("نعم")
 
@@ -214,6 +256,56 @@ def test_results_delivery_remaining_phrases_route_to_faq_and_not_package(query, 
     answer, meta = message_service._resolve_faq_response(query)
     assert isinstance(answer, str) and answer.strip()
     assert meta is not None
-    assert (meta.get("id") == "faq::6") or (meta.get("_faq_intent") == "results_delivery")
+    assert (meta.get("id") == "faq::6") or (meta.get("_faq_intent") in {"results_delivery", "faq_results_delivery"})
     package_reply = message_service._package_lookup_bypass_reply(query, uuid4())
     assert package_reply is None
+
+
+@pytest.mark.parametrize(
+    "query, expected_intent, expected_id",
+    [
+        ("فيه خدمة زيارة منزلية للتحاليل؟", "faq_home_visit", "faq::2"),
+        ("عادي ترسلونها بالواتس؟", "faq_results_delivery", "faq::6"),
+        ("الموظفين يشوفون النتائج؟", "faq_privacy", "faq::13"),
+        ("هل عندكم تخفيضات حاليا؟", "faq_offers_discounts", "faq::11"),
+        ("ايش الخدمات اللي تقدمونها؟", "faq_general_services", "faq::1"),
+    ],
+)
+def test_detect_intent_and_map_to_canonical_faq(query, expected_intent, expected_id, faq_runtime_file_intent_map):
+    intent = message_service._detect_faq_intent(query)
+    assert intent == expected_intent
+    match = message_service._runtime_faq_lookup_by_intent(intent)
+    assert match is not None
+    assert match["id"] == expected_id
+    assert match.get("_match_method") == "faq_intent_canonical"
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "عادي ترسلونها بالواتس؟",
+        "كيف استلم نتيجتي؟",
+        "اقدر اشوف نتيجتي اونلاين",
+    ],
+)
+def test_multiple_results_phrasings_resolve_to_same_canonical_faq(query, faq_runtime_file_intent_map):
+    answer, meta = message_service._resolve_faq_response(query)
+    assert isinstance(answer, str) and answer.strip()
+    assert meta is not None
+    assert meta.get("_faq_intent") == "faq_results_delivery"
+    assert meta.get("id") == "faq::6"
+
+
+def test_booking_intent_detected_without_canonical_record_returns_safe_faq(faq_runtime_file_intent_map):
+    intent = message_service._detect_faq_intent("لازم احجز قبل ما اجي؟")
+    assert intent == "faq_booking_required"
+    assert message_service._runtime_faq_lookup_by_intent(intent) is None
+    answer, meta = message_service._resolve_faq_response("لازم احجز قبل ما اجي؟")
+    assert isinstance(answer, str) and answer.strip()
+    assert meta is not None
+    assert meta.get("_match_method") == "faq_safe"
+    assert meta.get("_faq_intent") == "faq_booking_required"
+
+
+def test_not_faq_intent_keeps_normal_routing_path(faq_runtime_file_intent_map):
+    assert message_service._detect_faq_intent("كم سعر تحليل فيتامين د") == "not_faq"
