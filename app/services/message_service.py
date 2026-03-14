@@ -67,6 +67,8 @@ WAREED_CUSTOMER_SERVICE_PHONE = "920003694"
 _FAQ_CACHE = None
 _FAQ_INTENT_CANONICAL_CACHE = None
 _FAQ_INTENT_CANONICAL_CACHE_KEY = None
+_FAQ_SEMANTIC_ROUTER_CACHE = None
+_FAQ_SEMANTIC_ROUTER_CACHE_KEY = None
 _PRICES_CACHE = None
 _SYNONYMS_CACHE = None
 
@@ -258,6 +260,231 @@ def normalize_text_ar(s: str) -> str:
     return value
 
 
+_FAQ_SEMANTIC_CONFIDENCE_THRESHOLD = 0.60
+_FAQ_SEMANTIC_MARGIN_THRESHOLD = 0.03
+_FAQ_ROUTE_MIN_QUERY_CHARS = 3
+
+_FAQ_INTENT_STOPWORDS = {
+    "هل",
+    "ما",
+    "ماذا",
+    "كيف",
+    "كم",
+    "اذا",
+    "إذا",
+    "التي",
+    "الذي",
+    "على",
+    "عن",
+    "في",
+    "الى",
+    "إلى",
+    "من",
+    "او",
+    "أو",
+    "هذا",
+    "هذه",
+    "ذلك",
+    "مختبر",
+    "وريد",
+}
+
+_FAQ_PARAPHRASE_REPLACEMENTS: tuple[tuple[str, str], ...] = (
+    ("كيف يتم ضمان", "كيف اضمن"),
+    ("الكترونيا", "اونلاين"),
+    ("الزيارات المنزلية", "سحب العينات من المنزل"),
+    ("العروض", "التخفيضات"),
+    ("سرية", "خصوصية"),
+    ("الغدة الدرقية", "tsh"),
+    ("السكر التراكمي", "hba1c"),
+)
+
+
+def _faq_token_set(text_norm: str) -> set[str]:
+    return {t for t in str(text_norm or "").split() if t}
+
+
+def _faq_char_ngrams(text_norm: str, n: int = 3) -> set[str]:
+    s = str(text_norm or "").replace(" ", "")
+    if len(s) < n:
+        return {s} if s else set()
+    return {s[i : i + n] for i in range(len(s) - n + 1)}
+
+
+def _faq_semantic_similarity(query_norm: str, candidate_norm: str) -> float:
+    q = str(query_norm or "").strip()
+    c = str(candidate_norm or "").strip()
+    if len(q) < 2 or len(c) < 2:
+        return 0.0
+
+    q_tokens = _faq_token_set(q)
+    c_tokens = _faq_token_set(c)
+    if not q_tokens or not c_tokens:
+        return SequenceMatcher(None, q, c).ratio()
+
+    inter = q_tokens & c_tokens
+    union = q_tokens | c_tokens
+    token_jaccard = (len(inter) / len(union)) if union else 0.0
+    candidate_coverage = (len(inter) / len(c_tokens)) if c_tokens else 0.0
+    containment_boost = 0.08 if (c in q or q in c) else 0.0
+    seq_ratio = SequenceMatcher(None, q, c).ratio()
+
+    q_ngrams = _faq_char_ngrams(q, n=3)
+    c_ngrams = _faq_char_ngrams(c, n=3)
+    ng_inter = q_ngrams & c_ngrams
+    ng_union = q_ngrams | c_ngrams
+    char_jaccard = (len(ng_inter) / len(ng_union)) if ng_union else 0.0
+
+    score = (
+        0.45 * candidate_coverage
+        + 0.25 * token_jaccard
+        + 0.20 * seq_ratio
+        + 0.10 * char_jaccard
+        + containment_boost
+    )
+    return max(0.0, min(1.0, score))
+
+
+def _slugify_faq_intent_text(text: str) -> str:
+    n = normalize_text_ar(text)
+    tokens = [t for t in n.split() if t and t not in _FAQ_INTENT_STOPWORDS]
+    if not tokens:
+        return "general"
+    return "_".join(tokens[:4])
+
+
+def _build_faq_intent_name(item: dict) -> str:
+    faq_id = str((item or {}).get("id") or "").strip().replace("::", "_").replace(":", "_")
+    slug = _slugify_faq_intent_text(str((item or {}).get("q_norm") or (item or {}).get("question") or ""))
+    return f"faq_intent_{faq_id}_{slug}"
+
+
+def _expand_faq_paraphrases(base_texts: list[str]) -> list[str]:
+    variants: set[str] = set()
+    for raw in base_texts:
+        n = normalize_text_ar(raw)
+        if not n:
+            continue
+        variants.add(n)
+        variants.add(re.sub(r"^هل\s+", "", n).strip())
+        variants.add(re.sub(r"^ما\s+", "", n).strip())
+        variants.add(n.replace("مختبر وريد", "").strip())
+        core_tokens = [t for t in n.split() if t and t not in _FAQ_INTENT_STOPWORDS]
+        if len(core_tokens) >= 3:
+            variants.add(" ".join(core_tokens[:8]))
+            variants.add(" ".join(core_tokens))
+        for src, dst in _FAQ_PARAPHRASE_REPLACEMENTS:
+            src_n = normalize_text_ar(src)
+            dst_n = normalize_text_ar(dst)
+            if src_n and dst_n and src_n in n:
+                variants.add(re.sub(re.escape(src_n), dst_n, n))
+
+    # Add acronym-like hints from FAQ text (e.g., HbA1c, TSH) in generic phrasing.
+    latin_tokens: set[str] = set()
+    for raw in base_texts:
+        for tok in re.findall(r"[A-Za-z][A-Za-z0-9]{1,9}", str(raw or "")):
+            latin_tokens.add(tok.lower())
+    for tok in latin_tokens:
+        variants.add(tok)
+        variants.add(f"تحليل {tok}")
+        variants.add(f"فحص {tok}")
+
+    return [v for v in variants if v]
+
+
+def _build_faq_semantic_router() -> dict[str, dict]:
+    global _FAQ_SEMANTIC_ROUTER_CACHE, _FAQ_SEMANTIC_ROUTER_CACHE_KEY
+    faq_items = load_runtime_faq()
+    if not isinstance(faq_items, list):
+        return {"intents": {}, "by_id": {}, "by_intent": {}}
+
+    cache_key = tuple(
+        (str(item.get("id") or ""), str(item.get("q_norm") or ""), str(item.get("question") or ""))
+        for item in faq_items
+        if isinstance(item, dict)
+    )
+    if _FAQ_SEMANTIC_ROUTER_CACHE is not None and _FAQ_SEMANTIC_ROUTER_CACHE_KEY == cache_key:
+        return _FAQ_SEMANTIC_ROUTER_CACHE
+
+    intents: dict[str, dict] = {}
+    by_id: dict[str, dict] = {}
+    by_intent: dict[str, dict] = {}
+    for item in faq_items:
+        if not isinstance(item, dict):
+            continue
+        faq_id = str(item.get("id") or "").strip()
+        question = str(item.get("question") or "").strip()
+        answer = str(item.get("answer") or "").strip()
+        q_norm = str(item.get("q_norm") or "").strip()
+        if not faq_id or not question or not answer:
+            continue
+        intent_name = _build_faq_intent_name(item)
+        paraphrases = _expand_faq_paraphrases([question, q_norm, answer])
+        if q_norm:
+            paraphrases.append(normalize_text_ar(q_norm))
+        paraphrases.append(normalize_text_ar(question))
+
+        intent_record = {
+            "intent_name": intent_name,
+            "canonical_faq_id": faq_id,
+            "paraphrases": sorted({p for p in paraphrases if p}),
+            "item": dict(item),
+        }
+        intents[intent_name] = intent_record
+        by_id[faq_id] = intent_record
+        by_intent[intent_name] = intent_record
+
+    _FAQ_SEMANTIC_ROUTER_CACHE = {"intents": intents, "by_id": by_id, "by_intent": by_intent}
+    _FAQ_SEMANTIC_ROUTER_CACHE_KEY = cache_key
+    return _FAQ_SEMANTIC_ROUTER_CACHE
+
+
+def _classify_faq_semantic_intent(query: str) -> dict | None:
+    n = normalize_text_ar(query)
+    if len(n) < _FAQ_ROUTE_MIN_QUERY_CHARS:
+        return None
+
+    router = _build_faq_semantic_router()
+    intents = router.get("intents") or {}
+    if not intents:
+        return None
+
+    ranked: list[tuple[float, str, dict]] = []
+    for intent_name, rec in intents.items():
+        paraphrases = rec.get("paraphrases") or []
+        best_score = 0.0
+        best_phrase = ""
+        for p in paraphrases:
+            score = _faq_semantic_similarity(n, p)
+            if score > best_score:
+                best_score = score
+                best_phrase = p
+        ranked.append((best_score, best_phrase, rec))
+
+    if not ranked:
+        return None
+    ranked.sort(key=lambda x: x[0], reverse=True)
+    top_score, top_phrase, top_rec = ranked[0]
+    second_score = ranked[1][0] if len(ranked) > 1 else 0.0
+    margin = top_score - second_score
+
+    dynamic_threshold = _FAQ_SEMANTIC_CONFIDENCE_THRESHOLD
+    if len(n.split()) <= 2:
+        dynamic_threshold = max(dynamic_threshold, 0.68)
+
+    if top_score < dynamic_threshold or margin < _FAQ_SEMANTIC_MARGIN_THRESHOLD:
+        return None
+
+    item = dict(top_rec.get("item") or {})
+    item["_faq_intent"] = str(top_rec.get("intent_name") or "")
+    item["_canonical_faq_id"] = str(top_rec.get("canonical_faq_id") or "")
+    item["_match_method"] = "faq_semantic_intent"
+    item["_match_score"] = round(float(top_score), 4)
+    item["_match_margin"] = round(float(margin), 4)
+    item["_matched_q_norm"] = str(top_phrase or "")
+    return item
+
+
 def contains_match(query_norm: str, candidate_norm: str) -> bool:
     q = (query_norm or "").strip()
     c = (candidate_norm or "").strip()
@@ -271,18 +498,7 @@ def _faq_similarity_score(query_norm: str, candidate_norm: str) -> float:
     c = (candidate_norm or "").strip()
     if len(q) < 2 or len(c) < 2:
         return 0.0
-    ratio = SequenceMatcher(None, q, c).ratio()
-    q_tokens = {t for t in q.split() if t}
-    c_tokens = {t for t in c.split() if t}
-    if not q_tokens or not c_tokens:
-        return ratio
-    inter = q_tokens & c_tokens
-    if not inter:
-        return ratio
-    candidate_coverage = len(inter) / len(c_tokens)
-    jaccard = len(inter) / len(q_tokens | c_tokens)
-    blended = (0.65 * candidate_coverage) + (0.35 * jaccard)
-    return max(ratio, blended)
+    return _faq_semantic_similarity(q, c)
 
 
 def _expand_faq_query_aliases(query_norm: str) -> list[str]:
@@ -321,190 +537,39 @@ def _expand_faq_query_aliases(query_norm: str) -> list[str]:
     return sorted(variants, key=lambda v: len(v), reverse=True)
 
 
-_FAQ_INTENT_LABELS = (
-    "faq_home_visit",
-    "faq_results_delivery",
-    "faq_privacy",
-    "faq_privacy_sensitive",
-    "faq_hba1c_fasting",
-    "faq_thyroid_fasting",
-    "faq_offers_discounts",
-    "faq_booking_required",
-    "faq_general_services",
-)
-
-_FAQ_INTENT_CANONICAL_HINTS: dict[str, tuple[str, ...]] = {
-    "faq_home_visit": ("خدمة منزلية", "الزيارات المنزلية", "سحب العينات", "منزل"),
-    "faq_results_delivery": ("ارسال النتائج", "الكترونيا", "واتساب", "تطبيق", "البريد"),
-    "faq_privacy": ("نتائج التحاليل سرية", "سرية", "خصوصية"),
-    "faq_privacy_sensitive": ("خصوصية التحاليل الحساسة", "تحاليل حساسة", "فحوصات حساسة", "سرية التحاليل الحساسة"),
-    "faq_hba1c_fasting": ("السكر التراكمي", "hba1c", "صيام"),
-    "faq_thyroid_fasting": ("الغدة الدرقية", "tsh", "صيام"),
-    "faq_offers_discounts": ("عروض", "تخفيضات", "باقات", "خصومات"),
-    "faq_booking_required": ("حجز", "موعد", "قبل الحضور", "حضور"),
-    "faq_general_services": ("الخدمات", "يقدمها مختبر", "تحاليل", "المختبر"),
-}
-
-_FAQ_INTENT_CANONICAL_IDS: dict[str, str] = {
-    "faq_privacy_sensitive": "faq::14",
-    "faq_hba1c_fasting": "faq::16",
-    "faq_thyroid_fasting": "faq::18",
-}
-
-
-def _contains_any(text_norm: str, tokens: set[str]) -> bool:
-    return any(token in text_norm for token in tokens)
-
-
 def _detect_faq_intent(query: str) -> str:
     """
-    Lightweight FAQ intent classifier.
-    Returns one of _FAQ_INTENT_LABELS or "not_faq".
+    Semantic FAQ intent classifier over all canonical FAQ records.
+    Returns intent name or "not_faq" when confidence is low.
     """
-    n = normalize_text_ar(query)
-    if not n:
+    match = _classify_faq_semantic_intent(query)
+    if not match:
         return "not_faq"
-
-    # High-priority canonical FAQ intents that must short-circuit fallbacks.
-    has_fasting = any(t in n for t in {"صيام", "صايم", "صايمه", "صائمة", "صائم"})
-    has_hba1c = ("السكر التراكمي" in n) or ("تراكمي" in n) or ("hba1c" in n)
-    has_thyroid = ("الغدة الدرقية" in n) or ("الغده الدرقيه" in n) or ("tsh" in n) or ("thyroid" in n)
-    has_sensitive = any(t in n for t in {"حساس", "حساسة", "حساسه"})
-    has_privacy = any(t in n for t in {"خصوصية", "خصوصيه", "سرية", "سريه", "سرية"})
-    has_analysis_ref = any(t in n for t in {"تحليل", "تحاليل", "فحص", "فحوصات"})
-
-    if has_sensitive and has_privacy and has_analysis_ref:
-        return "faq_privacy_sensitive"
-    if has_hba1c and has_fasting:
-        return "faq_hba1c_fasting"
-    if has_thyroid and has_fasting:
-        return "faq_thyroid_fasting"
-
-    scores = {intent: 0 for intent in _FAQ_INTENT_LABELS}
-
-    home_location = {"بيت", "البيت", "منزل", "المنزل", "مكتب", "المكتب", "منزلي", "المنزلي"}
-    home_actions = {"سحب", "عينه", "العينه", "زيارة", "زياره", "تجون", "تاخذون", "خدمه", "الخدمه"}
-    if _contains_any(n, home_location):
-        scores["faq_home_visit"] += 1
-    if _contains_any(n, home_actions):
-        scores["faq_home_visit"] += 1
-    if ("تجون" in n and ("سحب" in n or "عينه" in n or "العينه" in n)) or ("سحب" in n and "منز" in n):
-        scores["faq_home_visit"] += 2
-
-    result_core = {"نتيجة", "نتيجه", "النتيجة", "النتيجه", "نتائج", "النتائج", "نتيجتي", "نتيجيتي"}
-    result_channels = {"واتساب", "واتس", "بالواتس", "ايميل", "البريد", "تطبيق", "اونلاين", "online", "جوال"}
-    result_actions = {"استلم", "استلام", "تجيني", "ارسل", "ارسال", "ترسل", "ترسلون", "اشوف", "اطلع", "افتح", "اعرف"}
-    if _contains_any(n, result_core):
-        scores["faq_results_delivery"] += 1
-    if _contains_any(n, result_channels):
-        scores["faq_results_delivery"] += 1
-    if _contains_any(n, result_actions):
-        scores["faq_results_delivery"] += 1
-    if _contains_any(n, result_core) and (_contains_any(n, result_channels) or _contains_any(n, result_actions)):
-        scores["faq_results_delivery"] += 2
-
-    privacy_core = {"سري", "سرية", "سريه", "خصوصية", "خصوصيه", "خاص", "خاصه", "خاصة", "بيانات", "معلومات"}
-    privacy_access = {"يشوف", "يطلع", "اطلاع", "احد", "غيري", "غير", "مخول", "مخولين"}
-    if _contains_any(n, privacy_core):
-        scores["faq_privacy"] += 1
-    if _contains_any(n, privacy_access):
-        scores["faq_privacy"] += 1
-    if (_contains_any(n, result_core) and _contains_any(n, privacy_access)) or ("نتيج" in n and "يشوف" in n):
-        scores["faq_privacy"] += 2
-    if _contains_any(n, result_core) and _contains_any(n, privacy_core):
-        scores["faq_privacy"] += 2
-
-    offers_tokens = {"عرض", "عروض", "تخفيض", "تخفيضات", "خصم", "خصومات", "باقات", "باقات", "موسمية", "مخفض"}
-    if _contains_any(n, offers_tokens):
-        scores["faq_offers_discounts"] += 2
-
-    booking_tokens = {"حجز", "احجز", "موعد", "ابوكنج", "booking", "appointment", "قبل ما اجي", "لازم احجز"}
-    if _contains_any(n, booking_tokens):
-        scores["faq_booking_required"] += 2
-
-    services_tokens = {"الخدمات", "خدمات", "تقدمون", "تقدم", "يوفر", "يوفرون", "المختبر", "تحاليلي", "تحاليل"}
-    if _contains_any(n, services_tokens):
-        scores["faq_general_services"] += 1
-    if ("ايش" in n or "وش" in n or "ما هي" in n or "ماهي" in n) and _contains_any(n, {"خدمات", "الخدمات", "تقدمون", "يوفر"}):
-        scores["faq_general_services"] += 2
-
-    best_intent = max(scores, key=scores.get)
-    best_score = scores.get(best_intent, 0)
-    min_score_by_intent = {
-        "faq_home_visit": 2,
-        "faq_results_delivery": 2,
-        "faq_privacy": 1,
-        "faq_privacy_sensitive": 2,
-        "faq_hba1c_fasting": 2,
-        "faq_thyroid_fasting": 2,
-        "faq_offers_discounts": 2,
-        "faq_booking_required": 2,
-        "faq_general_services": 2,
-    }
-    if best_score < min_score_by_intent.get(best_intent, 2):
-        return "not_faq"
-    return best_intent
+    return str(match.get("_faq_intent") or "not_faq")
 
 
 def _build_faq_intent_canonical_map() -> dict[str, dict]:
-    global _FAQ_INTENT_CANONICAL_CACHE, _FAQ_INTENT_CANONICAL_CACHE_KEY
-    faq_items = load_runtime_faq()
-    if not isinstance(faq_items, list):
-        return {}
-
-    cache_key = tuple(
-        (str(item.get("id") or ""), str(item.get("q_norm") or ""), str(item.get("question") or ""))
-        for item in faq_items
-        if isinstance(item, dict)
-    )
-    if _FAQ_INTENT_CANONICAL_CACHE is not None and _FAQ_INTENT_CANONICAL_CACHE_KEY == cache_key:
-        return _FAQ_INTENT_CANONICAL_CACHE
-
-    resolved: dict[str, dict] = {}
-    faq_by_id: dict[str, dict] = {
-        str(item.get("id") or "").strip(): item for item in faq_items if isinstance(item, dict)
+    router = _build_faq_semantic_router()
+    intents = router.get("intents") or {}
+    return {
+        str(intent_name): dict(rec.get("item") or {})
+        for intent_name, rec in intents.items()
+        if isinstance(rec, dict)
     }
-
-    for intent, faq_id in _FAQ_INTENT_CANONICAL_IDS.items():
-        item = faq_by_id.get(str(faq_id or "").strip())
-        if item is not None:
-            resolved[intent] = dict(item)
-
-    for intent, hints in _FAQ_INTENT_CANONICAL_HINTS.items():
-        if intent in resolved:
-            continue
-        hint_norms = [normalize_text_ar(h) for h in hints if str(h).strip()]
-        best_item: dict | None = None
-        best_score = 0
-        for item in faq_items:
-            if not isinstance(item, dict):
-                continue
-            candidate = normalize_text_ar(f"{item.get('q_norm') or ''} {item.get('question') or ''}")
-            if not candidate:
-                continue
-            score = sum(1 for h in hint_norms if h and h in candidate)
-            if score > best_score:
-                best_score = score
-                best_item = item
-        if best_item is not None and best_score > 0:
-            resolved[intent] = dict(best_item)
-
-    _FAQ_INTENT_CANONICAL_CACHE = resolved
-    _FAQ_INTENT_CANONICAL_CACHE_KEY = cache_key
-    return resolved
 
 
 def _runtime_faq_lookup_by_intent(intent: str) -> dict | None:
-    if intent not in _FAQ_INTENT_LABELS:
+    intent_key = str(intent or "").strip()
+    if not intent_key:
         return None
-    canonical = _build_faq_intent_canonical_map().get(intent)
-    if not canonical:
+    canonical = _build_faq_intent_canonical_map().get(intent_key)
+    if not isinstance(canonical, dict):
         return None
     matched = dict(canonical)
-    matched["_match_method"] = "faq_intent_canonical"
+    matched["_match_method"] = "faq_semantic_intent"
     matched["_match_score"] = 1.0
     matched["_matched_q_norm"] = normalize_text_ar(matched.get("q_norm") or matched.get("question") or "")
-    matched["_faq_intent"] = intent
+    matched["_faq_intent"] = intent_key
     return matched
 
 
@@ -512,50 +577,56 @@ def _recognize_faq_class_intent(query: str) -> str | None:
     """
     Backward-compatible wrapper for legacy callers/tests.
     """
-    mapped = {
-        "faq_home_visit": "home_visit",
-        "faq_results_delivery": "results_delivery",
-        "faq_privacy": "privacy",
-    }
     intent = _detect_faq_intent(query)
-    return mapped.get(intent)
+    if intent == "not_faq":
+        return None
+    n = normalize_text_ar(query)
+    if any(t in n for t in {"منزل", "بيت", "سحب العينات", "زيارات منزلية"}):
+        return "home_visit"
+    if any(t in n for t in {"نتيجة", "نتائج", "واتساب", "الكترونيا", "اونلاين"}):
+        return "results_delivery"
+    if any(t in n for t in {"خصوصية", "سرية", "يشوف نتيجتي", "اطلاع"}):
+        return "privacy"
+    return None
 
 
 def _runtime_faq_lookup_by_class_intent(intent: str) -> dict | None:
-    legacy_to_new = {
-        "home_visit": "faq_home_visit",
-        "results_delivery": "faq_results_delivery",
-        "privacy": "faq_privacy",
+    intent_key = str(intent or "").strip()
+    if not intent_key:
+        return None
+    router = _build_faq_semantic_router()
+    intents = router.get("intents") or {}
+    if intent_key in intents:
+        return _runtime_faq_lookup_by_intent(intent_key)
+
+    class_hints = {
+        "home_visit": ("منز", "بيت", "زيار", "عينات"),
+        "results_delivery": ("نتيج", "واتس", "الكتر", "اونلاين", "تطبيق"),
+        "privacy": ("سر", "خصوص", "بيانات", "يشوف"),
     }
-    new_intent = legacy_to_new.get(str(intent or "").strip(), str(intent or "").strip())
-    return _runtime_faq_lookup_by_intent(new_intent)
+    hints = class_hints.get(intent_key, ())
+    if not hints:
+        return None
+    best: tuple[int, str] | None = None
+    for intent_name, rec in intents.items():
+        item = rec.get("item") or {}
+        text = normalize_text_ar(f"{item.get('q_norm') or ''} {item.get('question') or ''}")
+        score = sum(1 for h in hints if h and h in text)
+        if score > 0 and (best is None or score > best[0]):
+            best = (score, intent_name)
+    if not best:
+        return None
+    return _runtime_faq_lookup_by_intent(best[1])
 
 
 def _safe_faq_class_fallback_reply(intent: str) -> str:
-    legacy_to_new = {
-        "home_visit": "faq_home_visit",
-        "results_delivery": "faq_results_delivery",
-        "privacy": "faq_privacy",
-    }
-    intent_key = legacy_to_new.get(str(intent or "").strip(), str(intent or "").strip())
-    if intent_key == "faq_home_visit":
+    intent_key = str(intent or "").strip()
+    if intent_key in {"faq_home_visit", "home_visit"}:
         return f"بالنسبة لخدمة السحب المنزلي، هل تقصد السحب من البيت أو من مقر العمل؟ وللدعم المباشر: {WAREED_CUSTOMER_SERVICE_PHONE}"
-    if intent_key == "faq_results_delivery":
+    if intent_key in {"faq_results_delivery", "results_delivery"}:
         return "بالنسبة لاستلام النتائج، هل تقصد الاستلام عبر الواتساب أو التطبيق أو البريد الإلكتروني؟"
-    if intent_key == "faq_privacy":
+    if intent_key in {"faq_privacy", "privacy"}:
         return "نقدر نوضح لك سياسة خصوصية النتائج. هل تقصد سرية نتائج التحاليل أو صلاحيات الاطلاع على النتيجة؟"
-    if intent_key == "faq_privacy_sensitive":
-        return "نقدر نوضح لك آلية حماية خصوصية التحاليل الحساسة وسرية النتائج."
-    if intent_key == "faq_hba1c_fasting":
-        return "بالنسبة لتحليل السكر التراكمي (HbA1c)، نقدر نوضح هل يحتاج صيام أو لا."
-    if intent_key == "faq_thyroid_fasting":
-        return "بالنسبة لتحاليل الغدة الدرقية وTSH، نقدر نوضح هل تحتاج صيام أو لا."
-    if intent_key == "faq_offers_discounts":
-        return "بالنسبة للعروض والتخفيضات، يمكن نوضح أحدث الباقات المتاحة عبر صفحة العروض أو خدمة العملاء."
-    if intent_key == "faq_booking_required":
-        return "بالنسبة للحجز المسبق، نقدر نوضح لك السياسة الحالية للحجز قبل الزيارة."
-    if intent_key == "faq_general_services":
-        return "نقدر نوضح لك الخدمات والتحاليل المتاحة في مختبر وريد."
     return safe_clarify_message(WAREED_CUSTOMER_SERVICE_PHONE, "unknown")
 
 
@@ -619,8 +690,11 @@ def _render_faq_answer_for_query(query: str, answer: str, faq_meta: dict | None 
 
     n = normalize_text_ar(query)
     intent = str((faq_meta or {}).get("_faq_intent") or "").strip() or _detect_faq_intent(query)
-    access_privacy_query = intent in {"privacy", "faq_privacy"} and any(t in n for t in {"احد", "غيري", "يشوف", "نتيجتي", "يقدر يشوف"})
-    results_style_query = intent in {"results_delivery", "faq_results_delivery"} and any(
+    faq_id = str((faq_meta or {}).get("id") or "").strip()
+    privacy_intent = ("privacy" in intent) or faq_id in {"faq::13", "faq::14"}
+    results_intent = ("result" in intent) or faq_id == "faq::6"
+    access_privacy_query = privacy_intent and any(t in n for t in {"احد", "غيري", "يشوف", "نتيجتي", "يقدر يشوف"})
+    results_style_query = results_intent and any(
         t in n for t in {"كيف", "من وين", "اشوف", "اطلع", "ابي", "اقدر", "افتح", "اعرف", "اونلاين", "الجوال"}
     )
 
@@ -643,24 +717,6 @@ def _resolve_faq_response(query: str) -> tuple[str | None, dict | None]:
     2) intent -> canonical FAQ record resolution
     3) deterministic FAQ answer (or safe FAQ fallback)
     """
-    faq_intent = _detect_faq_intent(query)
-    if faq_intent != "not_faq":
-        intent_faq_match = _runtime_faq_lookup_by_intent(faq_intent)
-        if intent_faq_match:
-            intent_faq_answer = str(intent_faq_match.get("answer") or "").strip()
-            if intent_faq_answer:
-                rephrased = _maybe_rephrase_faq_answer(query, intent_faq_answer)
-                return _render_faq_answer_for_query(query, rephrased, intent_faq_match), intent_faq_match
-
-        safe_reply = _safe_faq_class_fallback_reply(faq_intent)
-        return safe_reply, {
-            "id": None,
-            "_match_method": "faq_safe",
-            "_match_score": "n/a",
-            "_matched_q_norm": "",
-            "_faq_intent": faq_intent,
-        }
-
     runtime_faq_match = _runtime_faq_lookup(query)
     if not runtime_faq_match:
         return None, None
@@ -774,23 +830,28 @@ def _runtime_faq_lookup(query: str) -> dict | None:
             str(query or "")[:120],
         )
         return None
+    semantic_match = _classify_faq_semantic_intent(query)
+    if semantic_match:
+        return semantic_match
+
     faq_items = load_runtime_faq()
     if not isinstance(faq_items, list):
         return None
-
     for item in faq_items:
         if not isinstance(item, dict):
             continue
-        candidate_norms = [
+        for candidate_norm in (
             normalize_text_ar(item.get("q_norm") or ""),
             normalize_text_ar(item.get("question") or ""),
-        ]
-        for candidate_norm in [c for c in candidate_norms if c]:
-            if candidate_norm == query_norm:
+        ):
+            if candidate_norm and candidate_norm == query_norm:
                 matched = dict(item)
-                matched["_match_method"] = "exact"
+                matched["_match_method"] = "faq_exact"
                 matched["_match_score"] = 1.0
+                matched["_match_margin"] = 1.0
                 matched["_matched_q_norm"] = candidate_norm
+                matched["_faq_intent"] = _build_faq_intent_name(item)
+                matched["_canonical_faq_id"] = str(item.get("id") or "").strip()
                 return matched
     return None
 
