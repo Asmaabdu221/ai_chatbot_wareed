@@ -64,6 +64,11 @@ logger = logging.getLogger(__name__)
 
 WAREED_CUSTOMER_SERVICE_PHONE = "920003694"
 
+# Temporary runtime reset: FAQ-only mode.
+# When enabled, active routing resolves only FAQ answers from faq_clean.jsonl.
+FAQ_ONLY_RUNTIME_MODE = True
+FAQ_ONLY_FALLBACK_REPLY = "هذا النوع من الأسئلة غير مفعّل بعد في النسخة الحالية، وسنقوم بإضافته تدريجيًا."
+
 _FAQ_CACHE = None
 _FAQ_INTENT_CANONICAL_CACHE = None
 _FAQ_INTENT_CANONICAL_CACHE_KEY = None
@@ -725,6 +730,19 @@ def _resolve_faq_response(query: str) -> tuple[str | None, dict | None]:
         return None, None
     rephrased = _maybe_rephrase_faq_answer(query, faq_answer)
     return _render_faq_answer_for_query(query, rephrased, runtime_faq_match), runtime_faq_match
+
+
+def _route_faq_only_response(query: str) -> tuple[str, dict]:
+    faq_reply, faq_meta = _resolve_faq_response(query)
+    if faq_reply:
+        return faq_reply, dict(faq_meta or {})
+    return FAQ_ONLY_FALLBACK_REPLY, {
+        "id": None,
+        "_match_method": "faq_only_fallback",
+        "_match_score": 0.0,
+        "_faq_intent": "not_faq",
+        "_matched_q_norm": "",
+    }
 
 
 def _faq_hijack_guard_reason(query: str) -> str | None:
@@ -3571,11 +3589,18 @@ def send_message_with_attachment(
             extracted_context = extract_text_from_document(attachment_content, attachment_filename or "")
 
     question_for_ai = effective_content or "Voice message"
-    expanded_query = expand_query_with_synonyms(question_for_ai) or question_for_ai
-    print(
-        "PATH=synonyms_expanded",
-        {"original": question_for_ai, "expanded": expanded_query[:200]},
-    )
+    if FAQ_ONLY_RUNTIME_MODE:
+        expanded_query = question_for_ai
+        print(
+            "PATH=synonyms_disabled_faq_only",
+            {"original": question_for_ai, "expanded": expanded_query[:200]},
+        )
+    else:
+        expanded_query = expand_query_with_synonyms(question_for_ai) or question_for_ai
+        print(
+            "PATH=synonyms_expanded",
+            {"original": question_for_ai, "expanded": expanded_query[:200]},
+        )
     ai_prompt = question_for_ai
     if attachment_content:
         ai_prompt = (
@@ -3597,6 +3622,16 @@ def send_message_with_attachment(
     user_msg = add_message(db, conversation_id, MessageRole.USER, question_for_ai)
     db.commit()
     db.refresh(user_msg)
+
+    if FAQ_ONLY_RUNTIME_MODE:
+        faq_reply, faq_meta = _route_faq_only_response(question_for_ai)
+        logger.info(
+            "faq-only mode active | faq_id=%s | match_method=%s",
+            (faq_meta or {}).get("id"),
+            (faq_meta or {}).get("_match_method"),
+        )
+        print("PATH=faq_only")
+        return _save_assistant_reply(faq_reply)
 
     history = get_conversation_history_for_ai(db, conv, max_messages=20)
 
