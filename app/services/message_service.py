@@ -325,6 +325,9 @@ _FAQ_INTENT_LABELS = (
     "faq_home_visit",
     "faq_results_delivery",
     "faq_privacy",
+    "faq_privacy_sensitive",
+    "faq_hba1c_fasting",
+    "faq_thyroid_fasting",
     "faq_offers_discounts",
     "faq_booking_required",
     "faq_general_services",
@@ -334,9 +337,18 @@ _FAQ_INTENT_CANONICAL_HINTS: dict[str, tuple[str, ...]] = {
     "faq_home_visit": ("خدمة منزلية", "الزيارات المنزلية", "سحب العينات", "منزل"),
     "faq_results_delivery": ("ارسال النتائج", "الكترونيا", "واتساب", "تطبيق", "البريد"),
     "faq_privacy": ("نتائج التحاليل سرية", "سرية", "خصوصية"),
+    "faq_privacy_sensitive": ("خصوصية التحاليل الحساسة", "تحاليل حساسة", "فحوصات حساسة", "سرية التحاليل الحساسة"),
+    "faq_hba1c_fasting": ("السكر التراكمي", "hba1c", "صيام"),
+    "faq_thyroid_fasting": ("الغدة الدرقية", "tsh", "صيام"),
     "faq_offers_discounts": ("عروض", "تخفيضات", "باقات", "خصومات"),
     "faq_booking_required": ("حجز", "موعد", "قبل الحضور", "حضور"),
     "faq_general_services": ("الخدمات", "يقدمها مختبر", "تحاليل", "المختبر"),
+}
+
+_FAQ_INTENT_CANONICAL_IDS: dict[str, str] = {
+    "faq_privacy_sensitive": "faq::14",
+    "faq_hba1c_fasting": "faq::16",
+    "faq_thyroid_fasting": "faq::18",
 }
 
 
@@ -352,6 +364,21 @@ def _detect_faq_intent(query: str) -> str:
     n = normalize_text_ar(query)
     if not n:
         return "not_faq"
+
+    # High-priority canonical FAQ intents that must short-circuit fallbacks.
+    has_fasting = any(t in n for t in {"صيام", "صايم", "صايمه", "صائمة", "صائم"})
+    has_hba1c = ("السكر التراكمي" in n) or ("تراكمي" in n) or ("hba1c" in n)
+    has_thyroid = ("الغدة الدرقية" in n) or ("الغده الدرقيه" in n) or ("tsh" in n) or ("thyroid" in n)
+    has_sensitive = any(t in n for t in {"حساس", "حساسة", "حساسه"})
+    has_privacy = any(t in n for t in {"خصوصية", "خصوصيه", "سرية", "سريه", "سرية"})
+    has_analysis_ref = any(t in n for t in {"تحليل", "تحاليل", "فحص", "فحوصات"})
+
+    if has_sensitive and has_privacy and has_analysis_ref:
+        return "faq_privacy_sensitive"
+    if has_hba1c and has_fasting:
+        return "faq_hba1c_fasting"
+    if has_thyroid and has_fasting:
+        return "faq_thyroid_fasting"
 
     scores = {intent: 0 for intent in _FAQ_INTENT_LABELS}
 
@@ -407,6 +434,9 @@ def _detect_faq_intent(query: str) -> str:
         "faq_home_visit": 2,
         "faq_results_delivery": 2,
         "faq_privacy": 1,
+        "faq_privacy_sensitive": 2,
+        "faq_hba1c_fasting": 2,
+        "faq_thyroid_fasting": 2,
         "faq_offers_discounts": 2,
         "faq_booking_required": 2,
         "faq_general_services": 2,
@@ -431,7 +461,18 @@ def _build_faq_intent_canonical_map() -> dict[str, dict]:
         return _FAQ_INTENT_CANONICAL_CACHE
 
     resolved: dict[str, dict] = {}
+    faq_by_id: dict[str, dict] = {
+        str(item.get("id") or "").strip(): item for item in faq_items if isinstance(item, dict)
+    }
+
+    for intent, faq_id in _FAQ_INTENT_CANONICAL_IDS.items():
+        item = faq_by_id.get(str(faq_id or "").strip())
+        if item is not None:
+            resolved[intent] = dict(item)
+
     for intent, hints in _FAQ_INTENT_CANONICAL_HINTS.items():
+        if intent in resolved:
+            continue
         hint_norms = [normalize_text_ar(h) for h in hints if str(h).strip()]
         best_item: dict | None = None
         best_score = 0
@@ -503,6 +544,12 @@ def _safe_faq_class_fallback_reply(intent: str) -> str:
         return "بالنسبة لاستلام النتائج، هل تقصد الاستلام عبر الواتساب أو التطبيق أو البريد الإلكتروني؟"
     if intent_key == "faq_privacy":
         return "نقدر نوضح لك سياسة خصوصية النتائج. هل تقصد سرية نتائج التحاليل أو صلاحيات الاطلاع على النتيجة؟"
+    if intent_key == "faq_privacy_sensitive":
+        return "نقدر نوضح لك آلية حماية خصوصية التحاليل الحساسة وسرية النتائج."
+    if intent_key == "faq_hba1c_fasting":
+        return "بالنسبة لتحليل السكر التراكمي (HbA1c)، نقدر نوضح هل يحتاج صيام أو لا."
+    if intent_key == "faq_thyroid_fasting":
+        return "بالنسبة لتحاليل الغدة الدرقية وTSH، نقدر نوضح هل تحتاج صيام أو لا."
     if intent_key == "faq_offers_discounts":
         return "بالنسبة للعروض والتخفيضات، يمكن نوضح أحدث الباقات المتاحة عبر صفحة العروض أو خدمة العملاء."
     if intent_key == "faq_booking_required":

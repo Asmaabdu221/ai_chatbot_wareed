@@ -84,6 +84,36 @@ def faq_runtime_file_intent_map(tmp_path, monkeypatch):
     message_service._FAQ_CACHE = None
 
 
+@pytest.fixture()
+def faq_runtime_file_canonical_missed_cases(tmp_path, monkeypatch):
+    faq_path = tmp_path / "faq_clean.jsonl"
+    rows = [
+        {
+            "id": "faq::14",
+            "question": "كيف اضمن خصوصية التحاليل الحساسة؟",
+            "answer": "نحافظ على سرية وخصوصية التحاليل الحساسة وفق سياسات حماية البيانات.",
+            "q_norm": "كيف اضمن خصوصيه التحاليل الحساسه",
+        },
+        {
+            "id": "faq::16",
+            "question": "هل تحليل السكر التراكمي HbA1c يحتاج صيام؟",
+            "answer": "تحليل السكر التراكمي HbA1c لا يحتاج صيام.",
+            "q_norm": "هل تحليل السكر التراكمي hba1c يحتاج صيام",
+        },
+        {
+            "id": "faq::18",
+            "question": "هل تحليل الغدة الدرقية TSH يحتاج صيام؟",
+            "answer": "عادة تحاليل الغدة الدرقية مثل TSH لا تحتاج صيام.",
+            "q_norm": "هل تحليل الغده الدرقيه tsh يحتاج صيام",
+        },
+    ]
+    _write_jsonl(faq_path, rows)
+    monkeypatch.setattr(message_service, "FAQ_CLEAN_PATH", faq_path)
+    message_service._FAQ_CACHE = None
+    yield faq_path
+    message_service._FAQ_CACHE = None
+
+
 @pytest.mark.parametrize(
     "query",
     [
@@ -309,3 +339,23 @@ def test_booking_intent_detected_without_canonical_record_returns_safe_faq(faq_r
 
 def test_not_faq_intent_keeps_normal_routing_path(faq_runtime_file_intent_map):
     assert message_service._detect_faq_intent("كم سعر تحليل فيتامين د") == "not_faq"
+
+
+@pytest.mark.parametrize(
+    "query, expected_id",
+    [
+        ("كيف اضمن خصوصيه التحاليل الحساسه", "faq::14"),
+        ("تحليل السكر التراكمي يحتاج صيام او لا", "faq::16"),
+        ("هل السكر التراكمي يحتاج صيام", "faq::16"),
+        ("تحليل الغدة الدرقية يحتاج صيام", "faq::18"),
+        ("هل تحليل TSH يحتاج صيام", "faq::18"),
+    ],
+)
+def test_missed_faq_phrasings_resolve_to_expected_canonical_faq(
+    query, expected_id, faq_runtime_file_canonical_missed_cases
+):
+    answer, meta = message_service._resolve_faq_response(query)
+    assert isinstance(answer, str) and answer.strip()
+    assert meta is not None
+    assert meta.get("id") == expected_id
+    assert meta.get("_match_method") == "faq_intent_canonical"
