@@ -70,12 +70,12 @@ logger = logging.getLogger(__name__)
 WAREED_CUSTOMER_SERVICE_PHONE = "920003694"
 
 # Full runtime reset mode: disable all knowledge/routing logic while rebuilding.
-SYSTEM_REBUILD_MODE = True
+SYSTEM_REBUILD_MODE = False
 SYSTEM_REBUILD_REPLY = "النظام حالياً في وضع إعادة البناء وسيتم تفعيل المساعد قريباً."
 
 # Temporary runtime reset: FAQ-only mode.
 # When enabled, active routing resolves only FAQ answers from faq_clean.jsonl.
-FAQ_ONLY_RUNTIME_MODE = False
+FAQ_ONLY_RUNTIME_MODE = True
 FAQ_ONLY_FALLBACK_REPLY = "هذا النوع من الأسئلة غير مفعّل بعد في النسخة الحالية، وسنقوم بإضافته تدريجيًا."
 
 _FAQ_CACHE = None
