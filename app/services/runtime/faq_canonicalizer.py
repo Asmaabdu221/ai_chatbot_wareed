@@ -1,0 +1,790 @@
+"""Canonicalize Saudi/Gulf-style FAQ user phrasing into FAQ-aligned candidates."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+from app.services.runtime.text_normalizer import normalize_arabic, tokenize_arabic
+
+
+@dataclass(frozen=True)
+class FAQCanonicalRule:
+    """Deterministic canonicalization rule for one FAQ concept."""
+    faq_id: str
+    concept: str
+    canonical_question: str
+    trigger_phrases: tuple[str, ...]
+    keyword_groups: tuple[tuple[str, ...], ...]
+
+
+# ---------------------------------------------------------------------------
+# Generic colloquial/variant phrase replacements
+# ---------------------------------------------------------------------------
+
+_GENERIC_PHRASE_REPLACEMENTS: tuple[tuple[str, str], ...] = (
+    ("وش", "ما"),
+    ("وشو", "ما"),
+    ("ايش", "ما"),
+    ("اش", "ما"),
+    ("شنو", "ما"),
+    ("شلون", "كيف"),
+    ("كيفاش", "كيف"),
+    ("وين", "اين"),
+    ("فين", "اين"),
+    ("الحين", "حاليا"),
+    ("دحين", "حاليا"),
+    ("هسه", "حاليا"),
+    ("لسه", "ما زال"),
+    ("لسى", "ما زال"),
+    ("النتيجه", "النتائج"),
+    ("النتايج", "النتائج"),
+    ("نتيجتي", "نتائج التحاليل"),
+    ("تحاليلك", "التحاليل"),
+    ("تحاليلي", "التحاليل"),
+    ("من البيت", "الزيارات المنزلية"),
+    ("للبيت", "الزيارات المنزلية"),
+    ("في البيت", "الزيارات المنزلية"),
+    ("سحب منزلي", "الزيارات المنزلية"),
+    ("زياره منزليه", "الزيارات المنزلية"),
+    ("استلام النتائج", "ارسال النتائج الكترونيا"),
+    ("تجي النتيجه", "ارسال النتائج الكترونيا"),
+    ("توصلني النتيجه", "ارسال النتائج الكترونيا"),
+    ("شبكه", "البطاقه البنكيه"),
+    ("بطاقه", "البطاقه البنكيه"),
+)
+
+_GENERIC_TOKEN_HINTS: dict[str, tuple[str, ...]] = {
+    "خصوصيه": ("سرية", "نتائج التحاليل"),
+    "سريه": ("سرية", "نتائج التحاليل"),
+    "يشوف": ("سرية", "نتائج التحاليل"),
+    "يطلع": ("سرية", "نتائج التحاليل"),
+    "البيت": ("الزيارات المنزلية",),
+    "المنزل": ("الزيارات المنزلية",),
+    "الدوام": ("مقر العمل",),
+    "الشغل": ("مقر العمل",),
+    "صيام": ("تحتاج صيام",),
+    "صايم": ("تحتاج صيام",),
+    "افطر": ("لا يحتاج صيام",),
+    "فاطر": ("لا يحتاج صيام",),
+    "عروض": ("عروض", "تخفيضات"),
+    "خصومات": ("عروض", "تخفيضات"),
+    "باقات": ("باقات", "عروض"),
+    "رمز": ("رمز",),
+    "كود": ("رمز",),
+}
+
+
+# ---------------------------------------------------------------------------
+# Canonical rules derived from the real FAQ file
+# ---------------------------------------------------------------------------
+
+FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
+    FAQCanonicalRule(
+        faq_id="faq::1",
+        concept="services_overview",
+        canonical_question="ما هي الخدمات التي يقدمها مختبر وريد",
+        trigger_phrases=(
+            "ما هي الخدمات التي يقدمها مختبر وريد",
+            "ما هي الخدمات",
+            "وش الخدمات",
+            "وش الخدمات اللي عندكم",
+            "ايش الخدمات اللي عندكم",
+            "شنو الخدمات",
+            "ما الخدمات المتوفرة",
+            "ايش الخدمات المتوفره",
+            "ايش تقدمون",
+            "وش تقدمون",
+            "وش عندكم خدمات",
+            "ما الذي يقدمه مختبر وريد",
+            "ما الذي يوفره مختبر وريد",
+            "ايش الفحوصات اللي عندكم",
+            "وش التحاليل اللي عندكم",
+            "ما هي التحاليل التي يقدمها مختبر وريد",
+            "هل عندكم تحاليل متنوعه",
+        ),
+        keyword_groups=(
+            ("الخدمات",),
+            ("مختبر", "وريد"),
+            ("التحاليل", "عندكم"),
+            ("الفحوصات", "عندكم"),
+            ("وش", "الخدمات"),
+            ("ايش", "الخدمات"),
+        ),
+    ),
+    FAQCanonicalRule(
+        faq_id="faq::2",
+        concept="home_visit",
+        canonical_question="هل يوفر مختبر وريد خدمة الزيارات المنزلية",
+        trigger_phrases=(
+            "هل يوفر مختبر وريد خدمة الزيارات المنزلية",
+            "خدمة الزيارات المنزلية",
+            "هل عندكم سحب منزلي",
+            "هل عندكم سحب من البيت",
+            "عندكم سحب من البيت",
+            "هل تجون البيت",
+            "هل تجون للبيت",
+            "هل فيه زيارة منزلية",
+            "هل يوجد زيارة منزلية",
+            "هل توفرون زيارة منزلية",
+            "هل توفرون سحب عينات من المنزل",
+            "هل تسحبون عينات من البيت",
+            "هل تقدرون تجون للمنزل",
+            "هل فيه اخذ عينه من المنزل",
+            "هل عندكم خدمة منزلية",
+            "هل تروحون البيت لسحب العينه",
+            "هل تسحبون عينات في مقر العمل",
+            "هل عندكم سحب في الدوام",
+        ),
+        keyword_groups=(
+            ("سحب", "المنزل"),
+            ("سحب", "البيت"),
+            ("زيارات", "منزلية"),
+            ("زيارة", "منزلية"),
+            ("عينات", "المنزل"),
+            ("مقر", "العمل"),
+            ("تجون", "البيت"),
+        ),
+    ),
+    FAQCanonicalRule(
+        faq_id="faq::3",
+        concept="results_turnaround",
+        canonical_question="كم تستغرق نتائج التحاليل للظهور",
+        trigger_phrases=(
+            "كم تستغرق نتائج التحاليل للظهور",
+            "متى تطلع النتائج",
+            "متى تظهر النتائج",
+            "كم تاخذ النتائج",
+            "كم تحتاج النتيجه",
+            "متى تطلع نتيجة التحليل",
+            "متى تطلع نتيجتي",
+            "كم المده لظهور النتائج",
+            "متى تجهز النتائج",
+            "كم خلال تطلع النتائج",
+            "متى استلم النتائج",
+            "وش وقت ظهور النتائج",
+            "كم ساعة وتطلع النتيجه",
+            "متى تكون النتيجه جاهزه",
+        ),
+        keyword_groups=(
+            ("متى", "النتائج"),
+            ("كم", "النتائج"),
+            ("ظهور", "النتائج"),
+            ("استلام", "النتائج"),
+            ("تطلع", "النتائج"),
+        ),
+    ),
+    FAQCanonicalRule(
+        faq_id="faq::4",
+        concept="fasting_general",
+        canonical_question="ما هي التحاليل التي تحتاج الي صيام",
+        trigger_phrases=(
+            "ما هي التحاليل التي تحتاج الي صيام",
+            "وش التحاليل اللي تحتاج صيام",
+            "ايش التحاليل اللي تحتاج صيام",
+            "ما التحاليل التي تحتاج صيام",
+            "اي تحاليل تحتاج صيام",
+            "وش التحاليل اللي لازم لها صيام",
+            "التحاليل التي تحتاج صيام",
+            "وش التحاليل الصايمه",
+            "وش الفحوصات اللي تحتاج صيام",
+            "ايش الفحوصات اللي تحتاج صيام",
+            "قبل التحليل لازم صيام لاي فحوصات",
+            "وش اللي يحتاج صيام من التحاليل",
+            "هل كل التحاليل تحتاج صيام",
+            "اي تحليل يحتاج صيام",
+        ),
+        keyword_groups=(
+            ("تحاليل", "صيام"),
+            ("فحوصات", "صيام"),
+            ("تحتاج", "صيام"),
+            ("لازم", "صيام"),
+            ("صايم", "تحليل"),
+        ),
+    ),
+    FAQCanonicalRule(
+        faq_id="faq::5",
+        concept="discounted_packages",
+        canonical_question="هل يقدم مختبر وريد باقات وعروض تحاليل مخفضه",
+        trigger_phrases=(
+            "هل يقدم مختبر وريد باقات وعروض تحاليل مخفضه",
+            "هل عندكم باقات",
+            "هل عندكم باقات مخفضه",
+            "هل عندكم باقات تحاليل",
+            "هل فيه باقات تحاليل",
+            "هل توجد باقات",
+            "هل عندكم عروض باقات",
+            "هل تقدمون باقات موسمية",
+            "هل يوجد باقات موسمية",
+            "هل عندكم باقة شاملة",
+            "هل عندكم باقة مناعة",
+            "هل عندكم باقات صحية",
+            "هل فيه عروض على الباقات",
+            "هل التحاليل عليها باقات",
+            "ابي باقة تحاليل",
+        ),
+        keyword_groups=(
+            ("باقات",),
+            ("باقه",),
+            ("عروض", "باقات"),
+            ("تحاليل", "مخفضه"),
+            ("تحليل", "باقه"),
+        ),
+    ),
+    FAQCanonicalRule(
+        faq_id="faq::6",
+        concept="electronic_results",
+        canonical_question="هل يتم ارسال النتائج الكترونيا",
+        trigger_phrases=(
+            "هل يتم ارسال النتائج الكترونيا",
+            "هل ترسلون النتائج الكترونيا",
+            "هل النتائج تنرسل واتساب",
+            "هل ترسلونها واتساب",
+            "كيف استلم النتيجه",
+            "كيف استلم النتائج",
+            "كيف توصلني النتيجه",
+            "هل ترسلون النتائج بالايميل",
+            "هل النتائج على البريد",
+            "هل اقدر اخذ النتيجه واتساب",
+            "هل النتيجه تجيني بالجوال",
+            "هل ترسلون النتائج على التطبيق",
+            "هل استلم النتيجه الكترونيا",
+            "هل لازم ارجع الفرع لاخذ النتيجه",
+            "هل استطيع الحصول على النتائج بدون الرجوع للمركز",
+        ),
+        keyword_groups=(
+            ("ارسال", "النتائج"),
+            ("استلام", "النتائج"),
+            ("النتائج", "واتساب"),
+            ("النتائج", "البريد"),
+            ("النتائج", "التطبيق"),
+            ("النتائج", "الكترونيا"),
+        ),
+    ),
+    FAQCanonicalRule(
+        faq_id="faq::7",
+        concept="payment_methods",
+        canonical_question="ما هي طرق الدفع المتاحه",
+        trigger_phrases=(
+            "ما هي طرق الدفع المتاحه",
+            "وش طرق الدفع",
+            "ايش طرق الدفع",
+            "كيف الدفع",
+            "وش وسائل الدفع",
+            "ايش وسائل الدفع",
+            "هل اقدر ادفع بطاقه",
+            "هل اقدر ادفع شبكه",
+            "هل عندكم تمارا",
+            "هل تقبلون تحويل بنكي",
+            "هل فيه دفع الكتروني",
+            "هل اقدر ادفع كاش",
+            "ما طرق السداد",
+            "وش خيارات الدفع",
+            "كيف اسدد",
+            "هل فيه تمارا",
+        ),
+        keyword_groups=(
+            ("طرق", "الدفع"),
+            ("وسائل", "الدفع"),
+            ("الدفع", "بطاقه"),
+            ("الدفع", "شبكه"),
+            ("الدفع", "تمارا"),
+            ("السداد",),
+            ("تحويل", "بنكي"),
+        ),
+    ),
+    FAQCanonicalRule(
+        faq_id="faq::8",
+        concept="safety_children_elderly",
+        canonical_question="هل التحاليل امنه للاطفال وكبار السن",
+        trigger_phrases=(
+            "هل التحاليل امنه للاطفال وكبار السن",
+            "هل التحاليل امنه للاطفال",
+            "هل التحاليل امنه لكبار السن",
+            "هل السحب امن للاطفال",
+            "هل السحب امن لكبار السن",
+            "هل فيه خطوره على الاطفال",
+            "هل فيه خطوره على كبار السن",
+            "هل الفحوصات مناسبه للاطفال",
+            "هل الفحوصات مناسبه لكبار السن",
+            "هل الاجراء امن للاطفال",
+            "هل التحاليل تطمن للاطفال",
+        ),
+        keyword_groups=(
+            ("امنه", "الاطفال"),
+            ("امنه", "كبار", "السن"),
+            ("اطفال",),
+            ("كبار", "السن"),
+            ("خطوره", "الاطفال"),
+            ("خطوره", "كبار", "السن"),
+        ),
+    ),
+    FAQCanonicalRule(
+        faq_id="faq::9",
+        concept="consultation_after_results",
+        canonical_question="هل يوجد استشاره طبيه بعد ظهور النتائج",
+        trigger_phrases=(
+            "هل يوجد استشاره طبيه بعد ظهور النتائج",
+            "هل فيه استشاره بعد النتيجه",
+            "هل يوجد استشاره بعد النتائج",
+            "هل تفسرون النتائج",
+            "هل اقدر استشير بعد النتيجه",
+            "هل فيه دكتور يشرح النتيجه",
+            "هل احد يفسر لي النتائج",
+            "هل متوفر تفسير النتائج",
+            "هل يمكن ترتيب استشارة طبية",
+            "هل عندكم استشارة بعد التحليل",
+            "هل في احد يشرح التحليل بعد ما يطلع",
+        ),
+        keyword_groups=(
+            ("استشاره", "النتائج"),
+            ("تفسير", "النتائج"),
+            ("يشرح", "النتيجه"),
+            ("دكتور", "النتيجه"),
+            ("بعد", "النتائج"),
+        ),
+    ),
+    FAQCanonicalRule(
+        faq_id="faq::10",
+        concept="branches_locations",
+        canonical_question="اين تتواجد فروع مختبرات وريد",
+        trigger_phrases=(
+            "اين تتواجد فروع مختبرات وريد",
+            "وين فروعكم",
+            "فين فروعكم",
+            "وين الفروع",
+            "اين الفروع",
+            "ابي الفروع",
+            "عندكم كم فرع",
+            "فروع مختبر وريد وين",
+            "وين اقرب فرع",
+            "وين موجودين",
+            "في اي مدن موجودين",
+            "اين يوجد مختبر وريد",
+            "هل لكم فروع في المملكه",
+            "هل لكم فروع كثيره",
+        ),
+        keyword_groups=(
+            ("فروع",),
+            ("فرع",),
+            ("اين", "الفروع"),
+            ("وين", "الفروع"),
+            ("اقرب", "فرع"),
+            ("مدن", "موجودين"),
+        ),
+    ),
+    FAQCanonicalRule(
+        faq_id="faq::11",
+        concept="current_offers",
+        canonical_question="هل توجد عروض او تخفيضات حاليا",
+        trigger_phrases=(
+            "هل توجد عروض او تخفيضات حاليا",
+            "هل فيه عروض حاليا",
+            "هل فيه خصومات حاليا",
+            "وش العروض الحاليه",
+            "وش عروضكم الحين",
+            "هل عندكم عروض الحين",
+            "ايش العروض الحالية",
+            "ما هي العروض الحالية",
+            "هل في تخفيضات الان",
+            "هل توجد تخفيضات حالياً",
+            "وش الخصومات المتوفره",
+            "هل فيه عروض اليوم",
+            "هل عندكم باقات عليها خصم الحين",
+        ),
+        keyword_groups=(
+            ("عروض", "حاليا"),
+            ("تخفيضات", "حاليا"),
+            ("خصومات", "حاليا"),
+            ("العروض", "الحاليه"),
+            ("الان", "عروض"),
+            ("الحين", "عروض"),
+        ),
+    ),
+    FAQCanonicalRule(
+        faq_id="faq::12",
+        concept="old_offer_validity",
+        canonical_question="كيف اعرف اذا كان هناك عرض قديم ما زال ساريا",
+        trigger_phrases=(
+            "كيف اعرف اذا كان هناك عرض قديم ما زال ساريا",
+            "هل العرض القديم ما زال ساري",
+            "كيف اعرف اذا العرض باقي",
+            "هل العرض لسه موجود",
+            "هل العرض ما زال موجود",
+            "كيف اتاكد من صلاحية العرض",
+            "كيف اتاكد اذا العرض مستمر",
+            "هل التخفيض القديم ما زال ساري",
+            "كيف اعرف اذا الخصم القديم باقي",
+            "هل الباقه القديمه ما زالت متاحه",
+            "ابي اتاكد اذا العرض القديم ما انتهى",
+            "هل العرض السابق باقي",
+            "هل عرض امس او الاسبوع الماضي ما زال ساري",
+        ),
+        keyword_groups=(
+            ("عرض", "قديم"),
+            ("العرض", "ما", "زال"),
+            ("العرض", "ساري"),
+            ("عرض", "لسه"),
+            ("عرض", "باقي"),
+            ("تخفيض", "قديم"),
+            ("خصم", "قديم"),
+        ),
+    ),
+    FAQCanonicalRule(
+        faq_id="faq::13",
+        concept="results_privacy",
+        canonical_question="هل نتائج التحاليل سريه",
+        trigger_phrases=(
+            "هل نتائج التحاليل سريه",
+            "هل النتائج سريه",
+            "هل تحاليلي سريه",
+            "هل احد يقدر يشوف نتيجتي",
+            "هل احد يطلع على نتيجتي",
+            "هل احد يعرف نتيجتي",
+            "هل احد يقدر يشوف تحاليلي",
+            "هل معلوماتي الطبيه سريه",
+            "هل النتائج خاصه",
+            "هل فيه خصوصيه للنتائج",
+            "هل تسلمون النتيجه لاي شخص",
+            "هل احد غيري يقدر يستلم النتيجه",
+            "هل يحق لاحد الاطلاع على النتائج",
+            "هل بياناتي الطبيه محفوظة",
+        ),
+        keyword_groups=(
+            ("النتائج", "سريه"),
+            ("النتائج", "خصوصيه"),
+            ("يشوف", "نتيجتي"),
+            ("يطلع", "نتيجتي"),
+            ("احد", "نتيجتي"),
+            ("تحاليلي", "سريه"),
+            ("خاصه", "النتائج"),
+        ),
+    ),
+    FAQCanonicalRule(
+        faq_id="faq::14",
+        concept="sensitive_tests_privacy",
+        canonical_question="كيف يتم ضمان خصوصيه التحاليل الحساسه مثل الهرمونات او الامراض المزمنه",
+        trigger_phrases=(
+            "كيف يتم ضمان خصوصيه التحاليل الحساسه مثل الهرمونات او الامراض المزمنه",
+            "كيف تضمنون خصوصيه التحاليل الحساسه",
+            "كيف تحمون التحاليل الحساسه",
+            "كيف تكون سريه التحاليل الحساسه",
+            "كيف يتم حفظ خصوصيه الهرمونات",
+            "كيف يتم حفظ خصوصيه الامراض المزمنه",
+            "هل تحاليل الهرمونات سريه",
+            "هل التحاليل الحساسه محميه",
+            "هل معلومات الهرمونات محفوظه",
+            "كيف تحافظون على نتائج التحاليل الحساسه",
+            "هل في حمايه للتحاليل الحساسه",
+            "هل البيانات الحساسه مشفره",
+            "كيف تضمنون عدم تسريب التحاليل الحساسه",
+        ),
+        keyword_groups=(
+            ("خصوصيه", "تحاليل", "حساسه"),
+            ("تحاليل", "حساسه"),
+            ("هرمونات", "خصوصيه"),
+            ("امراض", "مزمنه", "خصوصيه"),
+            ("بيانات", "حساسه"),
+            ("مشفر", "البيانات"),
+        ),
+    ),
+    FAQCanonicalRule(
+        faq_id="faq::15",
+        concept="free_tests",
+        canonical_question="ما هي التحاليل المجانيه التي يقدمها مختبر وريد",
+        trigger_phrases=(
+            "ما هي التحاليل المجانيه التي يقدمها مختبر وريد",
+            "وش التحاليل المجانيه",
+            "هل عندكم تحاليل مجانيه",
+            "هل فيه فحوصات مجانيه",
+            "وش المجاني عندكم",
+            "هل عندكم فحص مجاني",
+            "هل عندكم ان بودي مجاني",
+            "هل inbody مجاني",
+            "هل فيه تحاليل بالتعاون مع صحتي",
+            "ما الفحوصات المجانيه المتوفرة",
+            "هل عندكم عروض مجانيه",
+            "وش المجانيات",
+        ),
+        keyword_groups=(
+            ("تحاليل", "مجانيه"),
+            ("فحوصات", "مجانيه"),
+            ("فحص", "مجاني"),
+            ("ان", "بودي"),
+            ("inbody",),
+            ("صحتي", "مجانيه"),
+        ),
+    ),
+    FAQCanonicalRule(
+        faq_id="faq::16",
+        concept="hba1c_fasting",
+        canonical_question="هل تحليل السكر التراكمي يحتاج صيام",
+        trigger_phrases=(
+            "هل تحليل السكر التراكمي يحتاج صيام",
+            "هل التراكمي يحتاج صيام",
+            "هل السكر التراكمي يحتاج صيام",
+            "التراكمي لازم صيام",
+            "تحليل hb1ac يحتاج صيام",
+            "تحليل hba1c يحتاج صيام",
+            "هل اقدر اسوي التراكمي بدون صيام",
+            "هل التراكمي يحتاج اكون صايم",
+            "هل تحليل السكر التراكمي لازم اكون صايم",
+            "هل التراكمي ينفع وانا فاطر",
+            "هل hba1c يحتاج صيام",
+        ),
+        keyword_groups=(
+            ("سكر", "تراكمي", "صيام"),
+            ("التراكمي", "صيام"),
+            ("hba1c", "صيام"),
+            ("hb1ac", "صيام"),
+            ("تراكمي", "صايم"),
+        ),
+    ),
+    FAQCanonicalRule(
+        faq_id="faq::17",
+        concept="hba1c_code",
+        canonical_question="ما هو رمز تحليل السكر التراكمي",
+        trigger_phrases=(
+            "ما هو رمز تحليل السكر التراكمي",
+            "وش رمز السكر التراكمي",
+            "ايش رمز التراكمي",
+            "ما كود تحليل السكر التراكمي",
+            "وش كود التراكمي",
+            "رمز hba1c",
+            "كود hba1c",
+            "اختصار السكر التراكمي",
+            "رمز تحليل التراكمي",
+            "اسم تحليل السكر التراكمي بالرمز",
+            "رمز التراكمي ايش",
+        ),
+        keyword_groups=(
+            ("رمز", "التراكمي"),
+            ("كود", "التراكمي"),
+            ("اختصار", "التراكمي"),
+            ("hba1c", "رمز"),
+            ("تحليل", "التراكمي", "رمز"),
+        ),
+    ),
+    FAQCanonicalRule(
+        faq_id="faq::18",
+        concept="thyroid_fasting",
+        canonical_question="هل تحليل الغده الدرقيه يحتاج صيام",
+        trigger_phrases=(
+            "هل تحليل الغده الدرقيه يحتاج صيام",
+            "هل تحليل الغده يحتاج صيام",
+            "هل الغده تحتاج صيام",
+            "هل تحليل thyroid يحتاج صيام",
+            "هل tsh يحتاج صيام",
+            "هل t3 يحتاج صيام",
+            "هل t4 يحتاج صيام",
+            "هل ft3 يحتاج صيام",
+            "هل ft4 يحتاج صيام",
+            "تحاليل الغده تحتاج صيام",
+            "هل تحليل الغدة الدرقية لازم صيام",
+            "هل اقدر اسوي تحليل الغده بدون صيام",
+            "هل تحليل الغده ينفع وانا فاطر",
+        ),
+        keyword_groups=(
+            ("الغده", "صيام"),
+            ("الغده", "الدرقيه", "صيام"),
+            ("tsh", "صيام"),
+            ("t3", "صيام"),
+            ("t4", "صيام"),
+            ("ft3", "صيام"),
+            ("ft4", "صيام"),
+        ),
+    ),
+)
+
+
+# ---------------------------------------------------------------------------
+# Helper utilities
+# ---------------------------------------------------------------------------
+
+def _unique_keep_order(values: list[str]) -> list[str]:
+    """Return unique non-empty strings while preserving order."""
+    seen: set[str] = set()
+    result: list[str] = []
+
+    for value in values:
+        item = normalize_arabic(value)
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        result.append(item)
+
+    return result
+
+
+def _apply_generic_replacements(text: str) -> list[str]:
+    """Generate light deterministic rewrites from colloquial forms."""
+    base = normalize_arabic(text)
+    if not base:
+        return []
+
+    variants = [base]
+
+    current = base
+    for old, new in _GENERIC_PHRASE_REPLACEMENTS:
+        old_n = normalize_arabic(old)
+        new_n = normalize_arabic(new)
+        if old_n and old_n in current:
+            current = current.replace(old_n, new_n)
+
+    variants.append(current)
+
+    expanded_parts: list[str] = [current]
+    tokens = tokenize_arabic(current)
+    for token in tokens:
+        hints = _GENERIC_TOKEN_HINTS.get(token)
+        if hints:
+            expanded_parts.extend(normalize_arabic(h) for h in hints)
+
+    if expanded_parts:
+        variants.append(" ".join(_unique_keep_order(expanded_parts)))
+
+    return _unique_keep_order(variants)
+
+
+def _contains_all_tokens(text: str, required_tokens: tuple[str, ...]) -> bool:
+    """Check whether all required tokens exist in normalized text."""
+    text_tokens = set(tokenize_arabic(text))
+    needed = set(tokenize_arabic(" ".join(required_tokens)))
+    return bool(needed) and needed.issubset(text_tokens)
+
+
+def _contains_any_phrase(text: str, phrases: tuple[str, ...]) -> list[str]:
+    """Return trigger phrases that appear as substrings in text."""
+    text_n = normalize_arabic(text)
+    matched: list[str] = []
+
+    for phrase in phrases:
+        phrase_n = normalize_arabic(phrase)
+        if phrase_n and phrase_n in text_n:
+            matched.append(phrase_n)
+
+    return matched
+
+
+def _score_rule_against_variants(rule: FAQCanonicalRule, variants: list[str]) -> tuple[float, list[str]]:
+    """Score one FAQ canonical rule against normalized user variants."""
+    best_score = 0.0
+    best_hits: list[str] = []
+
+    for variant in variants:
+        score = 0.0
+        hits: list[str] = []
+
+        matched_phrases = _contains_any_phrase(variant, rule.trigger_phrases)
+        if matched_phrases:
+            score += min(0.60, 0.22 + (0.08 * len(matched_phrases)))
+            hits.extend(matched_phrases[:4])
+
+        for group in rule.keyword_groups:
+            if _contains_all_tokens(variant, group):
+                score += 0.18
+                hits.append(normalize_arabic(" ".join(group)))
+
+        variant_tokens = set(tokenize_arabic(variant))
+        canonical_tokens = set(tokenize_arabic(rule.canonical_question))
+        if variant_tokens and canonical_tokens:
+            overlap = len(variant_tokens & canonical_tokens) / max(len(canonical_tokens), len(variant_tokens))
+            score += 0.25 * overlap
+
+        if normalize_arabic(rule.canonical_question) == normalize_arabic(variant):
+            score = 1.0
+
+        score = min(1.0, score)
+
+        if score > best_score:
+            best_score = score
+            best_hits = _unique_keep_order(hits)
+
+    return best_score, best_hits
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+def get_faq_canonical_candidates(
+    user_text: str,
+    min_score: float = 0.34,
+) -> list[dict[str, Any]]:
+    """Return FAQ-aware canonical candidates inferred from user phrasing."""
+    variants = _apply_generic_replacements(user_text)
+    if not variants:
+        return []
+
+    candidates: list[dict[str, Any]] = []
+
+    for rule in FAQ_CANONICAL_RULES:
+        score, matched_terms = _score_rule_against_variants(rule, variants)
+        if score < min_score:
+            continue
+
+        candidates.append(
+            {
+                "faq_id": rule.faq_id,
+                "concept": rule.concept,
+                "canonical_question": normalize_arabic(rule.canonical_question),
+                "score": float(round(score, 4)),
+                "matched_terms": matched_terms,
+            }
+        )
+
+    candidates.sort(key=lambda item: item["score"], reverse=True)
+    return candidates
+
+
+def canonicalize_faq_query(user_text: str, min_score: float = 0.34) -> dict[str, Any]:
+    """Canonicalize a user FAQ query into normalized variants and FAQ candidates."""
+    normalized = normalize_arabic(user_text)
+    variants = _apply_generic_replacements(user_text)
+    candidates = get_faq_canonical_candidates(user_text, min_score=min_score)
+
+    candidate_texts = _unique_keep_order(
+        [normalized] +
+        variants +
+        [c["canonical_question"] for c in candidates]
+    )
+
+    return {
+        "original": user_text,
+        "normalized": normalized,
+        "variants": variants,
+        "candidate_texts": candidate_texts,
+        "candidates": candidates,
+        "concepts": [c["concept"] for c in candidates],
+        "faq_ids": [c["faq_id"] for c in candidates],
+    }
+
+
+if __name__ == "__main__":
+    samples = [
+        "وش الخدمات اللي عندكم",
+        "عندكم سحب من البيت؟",
+        "متى تطلع نتيجتي",
+        "وش التحاليل اللي تحتاج صيام",
+        "فيه عروض الحين",
+        "كيف اعرف اذا العرض القديم باقي",
+        "هل احد يقدر يشوف نتيجتي",
+        "هل تحاليل الهرمونات سرية",
+        "وش التحاليل المجانية",
+        "رمز التراكمي ايش",
+        "الغده تحتاج صيام ولا لا",
+    ]
+
+    for sample in samples:
+        result = canonicalize_faq_query(sample)
+        print(f"INPUT      : {sample}")
+        print(f"NORMALIZED : {result['normalized']}")
+        print(f"CONCEPTS   : {result['concepts']}")
+        print(f"FAQ IDS    : {result['faq_ids']}")
+        print("CANDIDATES :")
+        for candidate in result["candidates"][:3]:
+            print(
+                f"  - {candidate['faq_id']} | {candidate['concept']} | "
+                f"{candidate['score']:.4f} | {candidate['canonical_question']}"
+            )
+        print("-" * 80)

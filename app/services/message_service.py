@@ -59,6 +59,11 @@ from app.data.packages_service import (
     load_packages_index,
 )
 from app.services.packages_rag_service import semantic_search_packages
+from app.services.runtime.faq_resolver import resolve_faq_answer
+from app.services.runtime.runtime_fallbacks import (
+    get_rebuild_mode_message,
+    get_faq_no_match_message,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -3636,17 +3641,16 @@ def send_message_with_attachment(
     if SYSTEM_REBUILD_MODE:
         logger.info("system rebuild mode active | knowledge_routing=disabled")
         print("PATH=rebuild_mode")
-        return _save_assistant_reply(SYSTEM_REBUILD_REPLY)
+        return _save_assistant_reply(get_rebuild_mode_message())
 
     if FAQ_ONLY_RUNTIME_MODE:
-        faq_reply, faq_meta = _route_faq_only_response(question_for_ai)
+        faq_reply = resolve_faq_answer(question_for_ai)
         logger.info(
-            "faq-only mode active | faq_id=%s | match_method=%s",
-            (faq_meta or {}).get("id"),
-            (faq_meta or {}).get("_match_method"),
+            "faq-only mode active | matched=%s",
+            bool(faq_reply),
         )
         print("PATH=faq_only")
-        return _save_assistant_reply(faq_reply)
+        return _save_assistant_reply(faq_reply or get_faq_no_match_message())
 
     history = get_conversation_history_for_ai(db, conv, max_messages=20)
 
