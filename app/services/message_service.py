@@ -9,6 +9,7 @@ import os
 import re
 import tempfile
 import json
+from typing import Optional
 from difflib import SequenceMatcher
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
@@ -19,8 +20,10 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Conversation, Message, MessageRole
 from app.services.conversation_service import get_conversation_for_user, set_conversation_title_from_first_message
+from app.services.document_extract_service import extract_text_from_document
 from app.services.openai_service import openai_service
-from app.services.question_router import route as route_question, classify_intent
+from app.services.prescription_vision_service import process_prescription_image
+from app.services.question_router import classify_intent
 from app.data.knowledge_loader_v2 import get_knowledge_context
 from app.data.knowledge_loader_v2 import get_knowledge_base
 from app.data.rag_pipeline import (
@@ -62,6 +65,10 @@ from app.services.packages_rag_service import semantic_search_packages
 from app.services.runtime.runtime_router import route_runtime_message
 
 logger = logging.getLogger(__name__)
+
+# ============================================================================
+# constants/config
+# ============================================================================
 
 WAREED_CUSTOMER_SERVICE_PHONE = "920003694"
 
@@ -166,6 +173,10 @@ _GENERAL_PRICE_TRIGGERS = {
 }
 
 _PRICE_QUERY_KEYWORDS = ("Ø³Ø¹Ø±", "Ø¨ÙƒÙ…", "ÙƒÙ… Ø³Ø¹Ø±", "ØªÙƒÙ„ÙÙ‡", "ØªÙƒÙ„ÙØ©", "Ø§Ù„Ø³Ø¹Ø±")
+
+# ============================================================================
+# normalization + FAQ/runtime helper caches
+# ============================================================================
 
 
 def load_runtime_faq():
@@ -3456,11 +3467,9 @@ def add_prescription_messages(
     db.refresh(assistant_msg)
     return user_msg, assistant_msg
 
-
-from typing import Optional
-from app.services.document_extract_service import extract_text_from_document
-from app.services.prescription_vision_service import process_prescription_image
-
+# ============================================================================
+# attachment helpers
+# ============================================================================
 
 def _transcribe_audio_bytes(audio_bytes: bytes, filename: str = "voice-message.webm") -> str:
     if not audio_bytes:
@@ -3489,6 +3498,11 @@ def _transcribe_audio_bytes(audio_bytes: bytes, filename: str = "voice-message.w
             os.remove(temp_audio_path)
         except Exception:
             pass
+
+
+# ============================================================================
+# public DB/message functions + main message flow
+# ============================================================================
 
 def send_message_with_ai(
     db: Session,
