@@ -59,11 +59,7 @@ from app.data.packages_service import (
     load_packages_index,
 )
 from app.services.packages_rag_service import semantic_search_packages
-from app.services.runtime.faq_resolver import resolve_faq_answer
-from app.services.runtime.runtime_fallbacks import (
-    get_rebuild_mode_message,
-    get_faq_no_match_message,
-)
+from app.services.runtime.runtime_router import route_runtime_message
 
 logger = logging.getLogger(__name__)
 
@@ -3638,19 +3634,23 @@ def send_message_with_attachment(
     db.commit()
     db.refresh(user_msg)
 
-    if SYSTEM_REBUILD_MODE:
-        logger.info("system rebuild mode active | knowledge_routing=disabled")
-        print("PATH=rebuild_mode")
-        return _save_assistant_reply(get_rebuild_mode_message())
-
-    if FAQ_ONLY_RUNTIME_MODE:
-        faq_reply = resolve_faq_answer(question_for_ai)
-        logger.info(
-            "faq-only mode active | matched=%s",
-            bool(faq_reply),
+    runtime_mode_active = SYSTEM_REBUILD_MODE or FAQ_ONLY_RUNTIME_MODE
+    if runtime_mode_active:
+        runtime_result = route_runtime_message(
+            question_for_ai,
+            system_rebuild_mode=SYSTEM_REBUILD_MODE,
+            faq_only_runtime_mode=FAQ_ONLY_RUNTIME_MODE,
         )
-        print("PATH=faq_only")
-        return _save_assistant_reply(faq_reply or get_faq_no_match_message())
+
+        logger.info(
+            "runtime router handled message | route=%s | source=%s | matched=%s | meta=%s",
+            runtime_result.get("route"),
+            runtime_result.get("source"),
+            runtime_result.get("matched"),
+            runtime_result.get("meta"),
+        )
+        print(f"PATH={runtime_result.get('route')}")
+        return _save_assistant_reply(str(runtime_result.get("reply") or "").strip())
 
     history = get_conversation_history_for_ai(db, conv, max_messages=20)
 

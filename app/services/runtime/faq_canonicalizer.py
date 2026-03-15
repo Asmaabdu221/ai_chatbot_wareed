@@ -11,6 +11,7 @@ from app.services.runtime.text_normalizer import normalize_arabic, tokenize_arab
 @dataclass(frozen=True)
 class FAQCanonicalRule:
     """Deterministic canonicalization rule for one FAQ concept."""
+
     faq_id: str
     concept: str
     canonical_question: str
@@ -19,12 +20,13 @@ class FAQCanonicalRule:
 
 
 # ---------------------------------------------------------------------------
-# Generic colloquial/variant phrase replacements
+# Generic colloquial / variant phrase normalization
+# IMPORTANT: keep longer phrases first when overlap is possible
 # ---------------------------------------------------------------------------
 
 _GENERIC_PHRASE_REPLACEMENTS: tuple[tuple[str, str], ...] = (
-    ("وش", "ما"),
     ("وشو", "ما"),
+    ("وش", "ما"),
     ("ايش", "ما"),
     ("اش", "ما"),
     ("شنو", "ما"),
@@ -37,11 +39,11 @@ _GENERIC_PHRASE_REPLACEMENTS: tuple[tuple[str, str], ...] = (
     ("هسه", "حاليا"),
     ("لسه", "ما زال"),
     ("لسى", "ما زال"),
-    ("النتيجه", "النتائج"),
     ("النتايج", "النتائج"),
+    ("النتيجه", "النتائج"),
     ("نتيجتي", "نتائج التحاليل"),
-    ("تحاليلك", "التحاليل"),
     ("تحاليلي", "التحاليل"),
+    ("تحاليلك", "التحاليل"),
     ("من البيت", "الزيارات المنزلية"),
     ("للبيت", "الزيارات المنزلية"),
     ("في البيت", "الزيارات المنزلية"),
@@ -50,9 +52,32 @@ _GENERIC_PHRASE_REPLACEMENTS: tuple[tuple[str, str], ...] = (
     ("استلام النتائج", "ارسال النتائج الكترونيا"),
     ("تجي النتيجه", "ارسال النتائج الكترونيا"),
     ("توصلني النتيجه", "ارسال النتائج الكترونيا"),
-    ("شبكه", "البطاقه البنكيه"),
     ("بطاقه", "البطاقه البنكيه"),
+    ("شبكه", "البطاقه البنكيه"),
 )
+
+# Multi-word phrase hints are handled at phrase level, not token level.
+_GENERIC_PHRASE_HINTS: dict[str, tuple[str, ...]] = {
+    "يشوف نتيجتي": ("سرية", "نتائج التحاليل"),
+    "يطلع على نتيجتي": ("سرية", "نتائج التحاليل"),
+    "احد يقدر يشوف": ("سرية", "نتائج التحاليل"),
+    "احد يطلع": ("سرية", "نتائج التحاليل"),
+    "احد غيري": ("سرية", "نتائج التحاليل"),
+    "متى تطلع نتيجتي": ("ظهور النتائج", "نتائج التحاليل"),
+    "متى استلم نتيجتي": ("استلام النتائج", "نتائج التحاليل"),
+    "كيف استلم النتيجه": ("ارسال النتائج الكترونيا", "استلام النتائج"),
+    "كيف استلم النتائج": ("ارسال النتائج الكترونيا", "استلام النتائج"),
+    "عندكم سحب من البيت": ("الزيارات المنزلية",),
+    "هل عندكم سحب من البيت": ("الزيارات المنزلية",),
+    "سحب عينات من المنزل": ("الزيارات المنزلية",),
+    "وش طرق الدفع": ("طرق الدفع",),
+    "ايش طرق الدفع": ("طرق الدفع",),
+    "وش التحاليل المجانيه": ("تحاليل مجانيه",),
+    "ما هي التحاليل المجانيه": ("تحاليل مجانيه",),
+    "وش عندكم من عروض": ("عروض", "تخفيضات"),
+    "ابي اعرف العروض": ("عروض", "تخفيضات"),
+    "ابغى اعرف العروض": ("عروض", "تخفيضات"),
+}
 
 _GENERIC_TOKEN_HINTS: dict[str, tuple[str, ...]] = {
     "خصوصيه": ("سرية", "نتائج التحاليل"),
@@ -72,6 +97,14 @@ _GENERIC_TOKEN_HINTS: dict[str, tuple[str, ...]] = {
     "باقات": ("باقات", "عروض"),
     "رمز": ("رمز",),
     "كود": ("رمز",),
+    "واتساب": ("ارسال النتائج الكترونيا",),
+    "ايميل": ("ارسال النتائج الكترونيا",),
+    "البريد": ("ارسال النتائج الكترونيا",),
+    "تراكمي": ("السكر التراكمي",),
+    "الغده": ("الغده الدرقيه",),
+    "ابي": ("اريد",),
+    "ابغى": ("اريد",),
+    "يمدي": ("اقدر",),
 }
 
 
@@ -102,14 +135,22 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             "وش التحاليل اللي عندكم",
             "ما هي التحاليل التي يقدمها مختبر وريد",
             "هل عندكم تحاليل متنوعه",
+            "ما عندكم من خدمات",
+            "ما الخدمات الموجوده",
+            "وش الموجود عندكم",
+            "وش المتوفر عندكم",
+            "ما هي الفحوصات المتوفرة",
+            "ايش الفحوصات المتوفره",
+            "وش عندكم",
+            "ابي اعرف الخدمات",
+            "ابغى اعرف الخدمات",
         ),
         keyword_groups=(
             ("الخدمات",),
             ("مختبر", "وريد"),
             ("التحاليل", "عندكم"),
             ("الفحوصات", "عندكم"),
-            ("وش", "الخدمات"),
-            ("ايش", "الخدمات"),
+            ("ما", "الخدمات"),
         ),
     ),
     FAQCanonicalRule(
@@ -135,6 +176,13 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             "هل تروحون البيت لسحب العينه",
             "هل تسحبون عينات في مقر العمل",
             "هل عندكم سحب في الدوام",
+            "هل تجون للمكتب",
+            "هل تسحبون بالمكتب",
+            "هل فيه سحب عينات بالمنزل",
+            "هل ترسلون احد ياخذ العينه من البيت",
+            "هل فيه سحب منزلي",
+            "ابي سحب منزلي",
+            "ابغى سحب منزلي",
         ),
         keyword_groups=(
             ("سحب", "المنزل"),
@@ -144,6 +192,7 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             ("عينات", "المنزل"),
             ("مقر", "العمل"),
             ("تجون", "البيت"),
+            ("سحب", "الدوام"),
         ),
     ),
     FAQCanonicalRule(
@@ -165,6 +214,20 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             "وش وقت ظهور النتائج",
             "كم ساعة وتطلع النتيجه",
             "متى تكون النتيجه جاهزه",
+            "متى تطلع النتيجه",
+            "النتيجه متى تطلع",
+            "متى تجيني النتيجه",
+            "النتيجه متى تظهر",
+            "كم تاخذ النتيجه",
+            "متى تجهز نتيجتي",
+            "متى استلم نتيجتي",
+            "متى توصل النتيجه",
+            "متى اشوف النتيجه",
+            "كم تجلس النتيجه",
+            "متى تكون النتائج جاهزه",
+            "نتيجتي متى تجهز",
+            "متى تطلع تحاليلي",
+            "متى تظهر تحاليلي",
         ),
         keyword_groups=(
             ("متى", "النتائج"),
@@ -172,6 +235,15 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             ("ظهور", "النتائج"),
             ("استلام", "النتائج"),
             ("تطلع", "النتائج"),
+            ("متى", "نتائج"),
+            ("متى", "النتيجه"),
+            ("كم", "النتيجه"),
+            ("تجهز", "نتائج"),
+            ("استلم", "نتائج"),
+            ("توصل", "النتيجه"),
+            ("اشوف", "النتيجه"),
+            ("تظهر", "التحاليل"),
+            ("تطلع", "التحاليل"),
         ),
     ),
     FAQCanonicalRule(
@@ -193,6 +265,9 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             "وش اللي يحتاج صيام من التحاليل",
             "هل كل التحاليل تحتاج صيام",
             "اي تحليل يحتاج صيام",
+            "وش يحتاج صيام من الفحوصات",
+            "ابي اعرف ايش يحتاج صيام",
+            "التحاليل الصيامه وش هي",
         ),
         keyword_groups=(
             ("تحاليل", "صيام"),
@@ -222,6 +297,9 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             "هل فيه عروض على الباقات",
             "هل التحاليل عليها باقات",
             "ابي باقة تحاليل",
+            "هل عندكم باقات وعروض",
+            "هل فيه باقات مخفضه",
+            "هل يوجد عروض على التحاليل",
         ),
         keyword_groups=(
             ("باقات",),
@@ -251,6 +329,11 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             "هل استلم النتيجه الكترونيا",
             "هل لازم ارجع الفرع لاخذ النتيجه",
             "هل استطيع الحصول على النتائج بدون الرجوع للمركز",
+            "كيف تجيني النتيجه",
+            "كيف توصلني النتائج",
+            "هل ترسلون النتيجه على الجوال",
+            "هل اقدر اشوف النتيجه اونلاين",
+            "هل اقدر اخذ النتيجه بدون مراجعه الفرع",
         ),
         keyword_groups=(
             ("ارسال", "النتائج"),
@@ -259,6 +342,7 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             ("النتائج", "البريد"),
             ("النتائج", "التطبيق"),
             ("النتائج", "الكترونيا"),
+            ("كيف", "النتيجه"),
         ),
     ),
     FAQCanonicalRule(
@@ -282,6 +366,9 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             "وش خيارات الدفع",
             "كيف اسدد",
             "هل فيه تمارا",
+            "هل عندكم دفع شبكه",
+            "هل تقبلون البطاقه البنكيه",
+            "هل عندكم سداد ببطاقه",
         ),
         keyword_groups=(
             ("طرق", "الدفع"),
@@ -291,6 +378,7 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             ("الدفع", "تمارا"),
             ("السداد",),
             ("تحويل", "بنكي"),
+            ("الدفع", "كاش"),
         ),
     ),
     FAQCanonicalRule(
@@ -309,6 +397,9 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             "هل الفحوصات مناسبه لكبار السن",
             "هل الاجراء امن للاطفال",
             "هل التحاليل تطمن للاطفال",
+            "هل الفحص امن على كبار السن",
+            "هل السحب يضر كبار السن",
+            "هل التحليل مناسب للاطفال",
         ),
         keyword_groups=(
             ("امنه", "الاطفال"),
@@ -335,6 +426,9 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             "هل يمكن ترتيب استشارة طبية",
             "هل عندكم استشارة بعد التحليل",
             "هل في احد يشرح التحليل بعد ما يطلع",
+            "هل فيه احد يشرح لي النتيجه",
+            "هل اقدر اخذ استشاره بعد التحاليل",
+            "هل عندكم تفسير بعد النتيجه",
         ),
         keyword_groups=(
             ("استشاره", "النتائج"),
@@ -357,20 +451,20 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             "ابي الفروع",
             "عندكم كم فرع",
             "فروع مختبر وريد وين",
-            "وين اقرب فرع",
             "وين موجودين",
             "في اي مدن موجودين",
             "اين يوجد مختبر وريد",
             "هل لكم فروع في المملكه",
             "هل لكم فروع كثيره",
+            "كم عندكم فرع",
+            "في كم مدينه موجودين",
         ),
         keyword_groups=(
             ("فروع",),
             ("فرع",),
             ("اين", "الفروع"),
-            ("وين", "الفروع"),
-            ("اقرب", "فرع"),
             ("مدن", "موجودين"),
+            ("كم", "فرع"),
         ),
     ),
     FAQCanonicalRule(
@@ -391,6 +485,9 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             "وش الخصومات المتوفره",
             "هل فيه عروض اليوم",
             "هل عندكم باقات عليها خصم الحين",
+            "وش عندكم عروض الحين",
+            "هل فيه عروض هاليومين",
+            "هل عندكم تخفيضات الحين",
         ),
         keyword_groups=(
             ("عروض", "حاليا"),
@@ -399,6 +496,7 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             ("العروض", "الحاليه"),
             ("الان", "عروض"),
             ("الحين", "عروض"),
+            ("اليوم", "عروض"),
         ),
     ),
     FAQCanonicalRule(
@@ -419,6 +517,8 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             "ابي اتاكد اذا العرض القديم ما انتهى",
             "هل العرض السابق باقي",
             "هل عرض امس او الاسبوع الماضي ما زال ساري",
+            "هل العرض القديم باقي",
+            "كيف اعرف اذا الخصم ما زال موجود",
         ),
         keyword_groups=(
             ("عرض", "قديم"),
@@ -428,6 +528,7 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             ("عرض", "باقي"),
             ("تخفيض", "قديم"),
             ("خصم", "قديم"),
+            ("عرض", "مستمر"),
         ),
     ),
     FAQCanonicalRule(
@@ -449,6 +550,9 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             "هل احد غيري يقدر يستلم النتيجه",
             "هل يحق لاحد الاطلاع على النتائج",
             "هل بياناتي الطبيه محفوظة",
+            "هل غيري يقدر يشوف النتيجه",
+            "هل النتيجه تطلع لاحد غيري",
+            "هل فيه احد يقدر يدخل على نتيجتي",
         ),
         keyword_groups=(
             ("النتائج", "سريه"),
@@ -458,6 +562,7 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             ("احد", "نتيجتي"),
             ("تحاليلي", "سريه"),
             ("خاصه", "النتائج"),
+            ("غيري", "النتيجه"),
         ),
     ),
     FAQCanonicalRule(
@@ -478,6 +583,8 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             "هل في حمايه للتحاليل الحساسه",
             "هل البيانات الحساسه مشفره",
             "كيف تضمنون عدم تسريب التحاليل الحساسه",
+            "هل الهرمونات تعتبر سريه",
+            "هل الامراض المزمنه تعتبر سريه",
         ),
         keyword_groups=(
             ("خصوصيه", "تحاليل", "حساسه"),
@@ -486,6 +593,7 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             ("امراض", "مزمنه", "خصوصيه"),
             ("بيانات", "حساسه"),
             ("مشفر", "البيانات"),
+            ("هرمونات", "سريه"),
         ),
     ),
     FAQCanonicalRule(
@@ -505,6 +613,8 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             "ما الفحوصات المجانيه المتوفرة",
             "هل عندكم عروض مجانيه",
             "وش المجانيات",
+            "هل عندكم شي مجاني",
+            "وش الفحوصات المجانيه",
         ),
         keyword_groups=(
             ("تحاليل", "مجانيه"),
@@ -513,6 +623,7 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             ("ان", "بودي"),
             ("inbody",),
             ("صحتي", "مجانيه"),
+            ("المجاني",),
         ),
     ),
     FAQCanonicalRule(
@@ -531,6 +642,8 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             "هل تحليل السكر التراكمي لازم اكون صايم",
             "هل التراكمي ينفع وانا فاطر",
             "هل hba1c يحتاج صيام",
+            "تحليل التراكمي يحتاج صيام",
+            "ابي اسوي التراكمي وانا فاطر",
         ),
         keyword_groups=(
             ("سكر", "تراكمي", "صيام"),
@@ -538,6 +651,7 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             ("hba1c", "صيام"),
             ("hb1ac", "صيام"),
             ("تراكمي", "صايم"),
+            ("التراكمي", "فاطر"),
         ),
     ),
     FAQCanonicalRule(
@@ -556,6 +670,8 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             "رمز تحليل التراكمي",
             "اسم تحليل السكر التراكمي بالرمز",
             "رمز التراكمي ايش",
+            "اختصار التراكمي",
+            "كود السكر التراكمي",
         ),
         keyword_groups=(
             ("رمز", "التراكمي"),
@@ -563,6 +679,7 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             ("اختصار", "التراكمي"),
             ("hba1c", "رمز"),
             ("تحليل", "التراكمي", "رمز"),
+            ("كود", "hba1c"),
         ),
     ),
     FAQCanonicalRule(
@@ -583,6 +700,8 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             "هل تحليل الغدة الدرقية لازم صيام",
             "هل اقدر اسوي تحليل الغده بدون صيام",
             "هل تحليل الغده ينفع وانا فاطر",
+            "هل الغده الدرقيه تحتاج صيام",
+            "هل فحص الغده يحتاج صيام",
         ),
         keyword_groups=(
             ("الغده", "صيام"),
@@ -592,6 +711,7 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
             ("t4", "صيام"),
             ("ft3", "صيام"),
             ("ft4", "صيام"),
+            ("الغده", "فاطر"),
         ),
     ),
 )
@@ -601,8 +721,29 @@ FAQ_CANONICAL_RULES: tuple[FAQCanonicalRule, ...] = (
 # Helper utilities
 # ---------------------------------------------------------------------------
 
+_BRANCH_CITY_TERMS: tuple[str, ...] = (
+    "الرياض",
+    "جده",
+    "الدمام",
+    "الخبر",
+    "مكه",
+    "المدينه",
+    "القصيم",
+    "الطايف",
+    "تبوك",
+    "حائل",
+    "ابها",
+    "خميس مشيط",
+    "جازان",
+    "نجران",
+    "الجبيل",
+    "الاحساء",
+    "الأحساء",
+)
+
+
 def _unique_keep_order(values: list[str]) -> list[str]:
-    """Return unique non-empty strings while preserving order."""
+    """Return unique non-empty normalized strings while preserving order."""
     seen: set[str] = set()
     result: list[str] = []
 
@@ -634,6 +775,12 @@ def _apply_generic_replacements(text: str) -> list[str]:
     variants.append(current)
 
     expanded_parts: list[str] = [current]
+
+    for phrase, hints in _GENERIC_PHRASE_HINTS.items():
+        phrase_n = normalize_arabic(phrase)
+        if phrase_n and phrase_n in current:
+            expanded_parts.extend(normalize_arabic(h) for h in hints)
+
     tokens = tokenize_arabic(current)
     for token in tokens:
         hints = _GENERIC_TOKEN_HINTS.get(token)
@@ -654,7 +801,7 @@ def _contains_all_tokens(text: str, required_tokens: tuple[str, ...]) -> bool:
 
 
 def _contains_any_phrase(text: str, phrases: tuple[str, ...]) -> list[str]:
-    """Return trigger phrases that appear as substrings in text."""
+    """Return trigger phrases that appear as substrings in normalized text."""
     text_n = normalize_arabic(text)
     matched: list[str] = []
 
@@ -688,7 +835,10 @@ def _score_rule_against_variants(rule: FAQCanonicalRule, variants: list[str]) ->
         variant_tokens = set(tokenize_arabic(variant))
         canonical_tokens = set(tokenize_arabic(rule.canonical_question))
         if variant_tokens and canonical_tokens:
-            overlap = len(variant_tokens & canonical_tokens) / max(len(canonical_tokens), len(variant_tokens))
+            overlap = len(variant_tokens & canonical_tokens) / max(
+                len(canonical_tokens),
+                len(variant_tokens),
+            )
             score += 0.25 * overlap
 
         if normalize_arabic(rule.canonical_question) == normalize_arabic(variant):
@@ -703,19 +853,11 @@ def _score_rule_against_variants(rule: FAQCanonicalRule, variants: list[str]) ->
     return best_score, best_hits
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
-def get_faq_canonical_candidates(
-    user_text: str,
-    min_score: float = 0.34,
+def _get_candidates_from_variants(
+    variants: list[str],
+    min_score: float,
 ) -> list[dict[str, Any]]:
-    """Return FAQ-aware canonical candidates inferred from user phrasing."""
-    variants = _apply_generic_replacements(user_text)
-    if not variants:
-        return []
-
+    """Return FAQ candidates from already-built normalized variants."""
     candidates: list[dict[str, Any]] = []
 
     for rule in FAQ_CANONICAL_RULES:
@@ -737,16 +879,31 @@ def get_faq_canonical_candidates(
     return candidates
 
 
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+def get_faq_canonical_candidates(
+    user_text: str,
+    min_score: float = 0.34,
+) -> list[dict[str, Any]]:
+    """Return FAQ-aware canonical candidates inferred from user phrasing."""
+    variants = _apply_generic_replacements(user_text)
+    if not variants:
+        return []
+    return _get_candidates_from_variants(variants, min_score=min_score)
+
+
 def canonicalize_faq_query(user_text: str, min_score: float = 0.34) -> dict[str, Any]:
     """Canonicalize a user FAQ query into normalized variants and FAQ candidates."""
     normalized = normalize_arabic(user_text)
     variants = _apply_generic_replacements(user_text)
-    candidates = get_faq_canonical_candidates(user_text, min_score=min_score)
+    candidates = _get_candidates_from_variants(variants, min_score=min_score)
 
     candidate_texts = _unique_keep_order(
-        [normalized] +
-        variants +
-        [c["canonical_question"] for c in candidates]
+        [normalized]
+        + variants
+        + [c["canonical_question"] for c in candidates]
     )
 
     return {
@@ -758,6 +915,57 @@ def canonicalize_faq_query(user_text: str, min_score: float = 0.34) -> dict[str,
         "concepts": [c["concept"] for c in candidates],
         "faq_ids": [c["faq_id"] for c in candidates],
     }
+
+
+def is_branch_specific_query(user_text: str) -> bool:
+    """Return True when the query targets a specific branch/location, not generic branches FAQ."""
+    n = normalize_arabic(user_text)
+    if not n:
+        return False
+
+    generic_branch_queries = (
+        "وين فروعكم",
+        "اين تتواجد فروع مختبرات وريد",
+        "عندكم كم فرع",
+        "اين الفروع",
+        "ابي الفروع",
+        "وين موجودين",
+        "في اي مدن موجودين",
+        "كم عندكم فرع",
+    )
+    if any(normalize_arabic(p) in n for p in generic_branch_queries):
+        return False
+
+    specific_phrases = (
+        "اقرب فرع",
+        "فرع بالرياض",
+        "فرع في",
+        "وين الفرع",
+        "موقع الفرع",
+        "الفرع في",
+        "فرع النسيم",
+        "فرع العليا",
+        "فرع الروضه",
+        "فرع الملقا",
+        "وين القى الفرع",
+        "لوكيشن الفرع",
+        "عنوان الفرع",
+    )
+    if any(normalize_arabic(p) in n for p in specific_phrases):
+        return True
+
+    if "فرع" in n and any(
+        (f"في {normalize_arabic(city)}" in n) or (f"ب{normalize_arabic(city)}" in n)
+        for city in _BRANCH_CITY_TERMS
+    ):
+        return True
+
+    if any(normalize_arabic(city) in n for city in _BRANCH_CITY_TERMS) and any(
+        token in n for token in ("اقرب", "موقع", "عنوان", "لوكيشن", "حي", "الحي")
+    ):
+        return True
+
+    return False
 
 
 if __name__ == "__main__":
@@ -773,6 +981,7 @@ if __name__ == "__main__":
         "وش التحاليل المجانية",
         "رمز التراكمي ايش",
         "الغده تحتاج صيام ولا لا",
+        "وين اقرب فرع بالرياض",
     ]
 
     for sample in samples:
@@ -781,6 +990,7 @@ if __name__ == "__main__":
         print(f"NORMALIZED : {result['normalized']}")
         print(f"CONCEPTS   : {result['concepts']}")
         print(f"FAQ IDS    : {result['faq_ids']}")
+        print(f"BRANCH-SPECIFIC: {is_branch_specific_query(sample)}")
         print("CANDIDATES :")
         for candidate in result["candidates"][:3]:
             print(
