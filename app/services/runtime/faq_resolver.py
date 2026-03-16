@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import logging
 from typing import Any
 
 from app.services.runtime.faq_canonicalizer import (
@@ -13,6 +14,8 @@ from app.services.runtime.faq_loader import load_faq_records
 from app.services.runtime.faq_matcher import find_best_faq_match
 from app.services.runtime.text_normalizer import normalize_arabic
 
+logger = logging.getLogger(__name__)
+
 
 def _safe_str(value: Any) -> str:
     """Convert any value to a safely stripped string."""
@@ -22,6 +25,11 @@ def _safe_str(value: Any) -> str:
 def _safe_list(value: Any) -> list[Any]:
     """Return value as list when possible, otherwise an empty list."""
     return value if isinstance(value, list) else []
+
+
+def _escape_debug(value: Any) -> str:
+    """Return unicode-escaped debug-safe text."""
+    return _safe_str(value).encode("unicode_escape").decode()
 
 
 def _is_privacy_style_question(user_text: str) -> bool:
@@ -96,12 +104,44 @@ def _build_search_texts(user_text: str) -> tuple[dict[str, Any], list[str]]:
     """Canonicalize user text and return canonical data plus search texts."""
     canon = canonicalize_faq_query(user_text)
 
-    search_texts = list(canon.get("candidate_texts") or [])
+    # Keep user-derived texts first (normalized + variants).
+    # Avoid blindly injecting all canonical candidate questions because
+    # low-confidence candidates can create false exact matches.
+    search_texts = _unique_keep_order(
+        [_safe_str(canon.get("normalized"))]
+        + [_safe_str(v) for v in _safe_list(canon.get("variants"))]
+    )
+
+    # Add only high-confidence canonical question hints.
+    for candidate in _safe_list(canon.get("candidates")):
+        if not isinstance(candidate, dict):
+            continue
+        score = float(candidate.get("score") or 0.0)
+        if score < 0.50:
+            continue
+        canonical_q = _safe_str(candidate.get("canonical_question"))
+        if canonical_q:
+            search_texts.append(canonical_q)
+
+    search_texts = _unique_keep_order(search_texts)
     if not search_texts:
         fallback_text = _safe_str(user_text)
         search_texts = [fallback_text] if fallback_text else []
 
     return canon, search_texts
+
+
+def _unique_keep_order(values: list[str]) -> list[str]:
+    """Return unique non-empty strings while preserving input order."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        clean = _safe_str(value)
+        if not clean or clean in seen:
+            continue
+        seen.add(clean)
+        out.append(clean)
+    return out
 
 
 def _pick_best_match(
@@ -178,8 +218,34 @@ def resolve_faq(user_text: str) -> dict[str, Any] | None:
     if not raw_text:
         return None
 
+    # Hard guard in FAQ-only phase:
+    # branch/location-specific queries should not resolve to generic/unrelated FAQs.
+    if is_branch_specific_query(raw_text):
+        logger.info(
+            "FAQ_RESOLVER_DEBUG | query=%s | normalized=%s | candidate_texts=[] | selected_faq_id=none | matched_text=none | route=faq_only_no_match_branch_specific",
+            _escape_debug(raw_text),
+            _escape_debug(normalize_arabic(raw_text)),
+        )
+        print(
+            "FAQ_RESOLVER_DEBUG",
+            {
+                "query": _escape_debug(raw_text),
+                "normalized": _escape_debug(normalize_arabic(raw_text)),
+                "candidate_texts": [],
+                "selected_faq_id": "",
+                "matched_text": "",
+                "route": "faq_only_no_match_branch_specific",
+            },
+        )
+        return None
+
     canon, search_texts = _build_search_texts(raw_text)
     if not search_texts:
+        logger.info(
+            "FAQ_RESOLVER_DEBUG | query=%s | normalized=%s | candidate_texts=[] | selected_faq_id=none | matched_text=none | route=faq_only_no_match_no_search_texts",
+            _escape_debug(raw_text),
+            _escape_debug(canon.get("normalized")),
+        )
         return None
 
     faq_records = load_faq_records()
@@ -188,14 +254,39 @@ def resolve_faq(user_text: str) -> dict[str, Any] | None:
 
     best, best_search_text = _pick_best_match(search_texts, faq_records)
     if not best:
+        logger.info(
+            "FAQ_RESOLVER_DEBUG | query=%s | normalized=%s | candidate_texts=%s | selected_faq_id=none | matched_text=none | route=faq_only_no_match",
+            _escape_debug(raw_text),
+            _escape_debug(canon.get("normalized")),
+            [_escape_debug(x) for x in search_texts],
+        )
+        print(
+            "FAQ_RESOLVER_DEBUG",
+            {
+                "query": _escape_debug(raw_text),
+                "normalized": _escape_debug(canon.get("normalized")),
+                "candidate_texts": [_escape_debug(x) for x in search_texts],
+                "selected_faq_id": "",
+                "matched_text": "",
+                "route": "faq_only_no_match",
+            },
+        )
         return None
 
     record = best.get("record") or {}
     faq_id = _safe_str(record.get("id"))
     concepts = _resolve_concepts_for_match(canon, faq_id)
 
-    # Guard: do not let generic branches FAQ answer branch-specific queries
+    # Guard: keep defensive check for generic branches FAQ too.
     if _should_block_branch_faq(raw_text, faq_id):
+        logger.info(
+            "FAQ_RESOLVER_DEBUG | query=%s | normalized=%s | candidate_texts=%s | selected_faq_id=%s | matched_text=%s | route=faq_only_no_match_blocked_generic_branch",
+            _escape_debug(raw_text),
+            _escape_debug(canon.get("normalized")),
+            [_escape_debug(x) for x in search_texts],
+            faq_id,
+            _escape_debug(best_search_text),
+        )
         return None
 
     answer = _refine_faq_answer_style(
@@ -204,7 +295,7 @@ def resolve_faq(user_text: str) -> dict[str, Any] | None:
         concepts=concepts,
     )
 
-    return {
+    result = {
         "faq_id": faq_id,
         "question": _safe_str(record.get("question")),
         "answer": answer,
@@ -216,6 +307,26 @@ def resolve_faq(user_text: str) -> dict[str, Any] | None:
         "matched_via": "faq",
         "source": "faq",
     }
+    logger.info(
+        "FAQ_RESOLVER_DEBUG | query=%s | normalized=%s | candidate_texts=%s | selected_faq_id=%s | matched_text=%s | route=faq_only",
+        _escape_debug(raw_text),
+        _escape_debug(canon.get("normalized")),
+        [_escape_debug(x) for x in search_texts],
+        faq_id,
+        _escape_debug(result.get("matched_text")),
+    )
+    print(
+        "FAQ_RESOLVER_DEBUG",
+        {
+            "query": _escape_debug(raw_text),
+            "normalized": _escape_debug(canon.get("normalized")),
+            "candidate_texts": [_escape_debug(x) for x in search_texts],
+            "selected_faq_id": faq_id,
+            "matched_text": _escape_debug(result.get("matched_text")),
+            "route": "faq_only",
+        },
+    )
+    return result
 
 
 def resolve_faq_answer(user_text: str) -> str | None:

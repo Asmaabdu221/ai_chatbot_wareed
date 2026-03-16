@@ -14,6 +14,7 @@ Future stages:
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from app.services.runtime.faq_resolver import resolve_faq
@@ -23,10 +24,17 @@ from app.services.runtime.runtime_fallbacks import (
     get_rebuild_mode_message,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def _safe_str(value: Any) -> str:
     """Convert any value to a safely stripped string."""
     return str(value or "").strip()
+
+
+def _escape_debug(value: Any) -> str:
+    """Return unicode-escaped debug-safe text."""
+    return _safe_str(value).encode("unicode_escape").decode()
 
 
 def route_runtime_message(
@@ -60,6 +68,21 @@ def route_runtime_message(
     if faq_only_runtime_mode:
         faq_result = resolve_faq(text)
         if faq_result:
+            logger.info(
+                "FAQ_ONLY_DEBUG | q=%s | selected_faq_id=%s | matched_text=%s | route=faq_only",
+                text,
+                _safe_str(faq_result.get("faq_id")),
+                _safe_str(faq_result.get("matched_text")),
+            )
+            print(
+                "FAQ_ONLY_DEBUG",
+                {
+                    "query": _escape_debug(text),
+                    "selected_faq_id": _safe_str(faq_result.get("faq_id")),
+                    "matched_text": _escape_debug(faq_result.get("matched_text")),
+                    "route": "faq_only",
+                },
+            )
             return {
                 "reply": _safe_str(faq_result.get("answer")),
                 "route": "faq_only",
@@ -75,6 +98,19 @@ def route_runtime_message(
                 },
             }
 
+        logger.info(
+            "FAQ_ONLY_DEBUG | q=%s | selected_faq_id=none | matched_text=none | route=faq_only_no_match",
+            text,
+        )
+        print(
+            "FAQ_ONLY_DEBUG",
+            {
+                "query": _escape_debug(text),
+                "selected_faq_id": "",
+                "matched_text": "",
+                "route": "faq_only_no_match",
+            },
+        )
         return {
             "reply": get_faq_no_match_message(),
             "route": "faq_only_no_match",
