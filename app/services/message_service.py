@@ -3428,6 +3428,7 @@ def get_conversation_history_for_ai(
     db: Session,
     conversation: Conversation,
     max_messages: int = 20,
+    include_created_at: bool = False,
 ) -> list[dict[str, str]]:
     """Load recent messages as [{role, content}] for AI context. Excludes soft-deleted."""
     stmt = (
@@ -3438,7 +3439,65 @@ def get_conversation_history_for_ai(
     )
     messages = list(db.execute(stmt).scalars().all())
     messages.reverse()
+    if include_created_at:
+        return [
+            {
+                "role": m.role.value,
+                "content": m.content,
+                "created_at": m.created_at,
+            }
+            for m in messages
+        ]
     return [{"role": m.role.value, "content": m.content} for m in messages]
+
+
+def _to_utc_naive(dt: datetime | None) -> datetime | None:
+    """Convert datetime to naive UTC for safe comparisons."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt
+    return dt.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _extract_recent_runtime_context(
+    db: Session,
+    conversation: Conversation,
+    ttl_minutes: int = 15,
+) -> tuple[str, str, bool]:
+    """Return last user/assistant texts from recent history within TTL."""
+    now_utc = datetime.utcnow()
+    cutoff = now_utc - timedelta(minutes=ttl_minutes)
+    history = get_conversation_history_for_ai(
+        db,
+        conversation,
+        max_messages=20,
+        include_created_at=True,
+    )
+
+    recent = []
+    for item in history:
+        created_at = _to_utc_naive(item.get("created_at"))
+        if created_at is None:
+            continue
+        if created_at >= cutoff:
+            recent.append(item)
+
+    last_user_text = ""
+    last_assistant_text = ""
+
+    for item in reversed(recent):
+        role = str(item.get("role") or "").strip().lower()
+        content = str(item.get("content") or "").strip()
+        if not last_user_text and role == MessageRole.USER.value and content:
+            last_user_text = content
+        if not last_assistant_text and role == MessageRole.ASSISTANT.value and content:
+            last_assistant_text = content
+        if last_user_text and last_assistant_text:
+            break
+
+    context_used = bool(last_user_text or last_assistant_text)
+    return last_user_text, last_assistant_text, context_used
 
 
 def add_prescription_messages(
@@ -3643,6 +3702,24 @@ def send_message_with_attachment(
     if first_msg_count == 0:
         set_conversation_title_from_first_message(db, conv, question_for_ai)
 
+    last_user_text = ""
+    last_assistant_text = ""
+    context_used = False
+    if FAQ_ONLY_RUNTIME_MODE and not SYSTEM_REBUILD_MODE:
+        last_user_text, last_assistant_text, context_used = _extract_recent_runtime_context(
+            db,
+            conv,
+            ttl_minutes=15,
+        )
+        print(
+            "PATH=faq_runtime_context",
+            {
+                "ttl_minutes": 15,
+                "context_used": context_used,
+                "context_state": "used" if context_used else "expired_or_missing",
+            },
+        )
+
     # Persist plain user question (no attachment metadata in message bubble).
     user_msg = add_message(db, conversation_id, MessageRole.USER, question_for_ai)
     db.commit()
@@ -3654,6 +3731,8 @@ def send_message_with_attachment(
             question_for_ai,
             system_rebuild_mode=SYSTEM_REBUILD_MODE,
             faq_only_runtime_mode=FAQ_ONLY_RUNTIME_MODE,
+            last_user_text=last_user_text,
+            last_assistant_text=last_assistant_text,
         )
 
         logger.info(

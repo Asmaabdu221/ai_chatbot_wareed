@@ -42,6 +42,8 @@ def route_runtime_message(
     *,
     system_rebuild_mode: bool = False,
     faq_only_runtime_mode: bool = False,
+    last_user_text: str = "",
+    last_assistant_text: str = "",
 ) -> dict[str, Any]:
     """Route one runtime message according to the currently enabled stage.
 
@@ -66,7 +68,11 @@ def route_runtime_message(
         }
 
     if faq_only_runtime_mode:
-        faq_result = resolve_faq(text)
+        faq_result = resolve_faq(
+            text,
+            last_user_text=last_user_text,
+            last_assistant_text=last_assistant_text,
+        )
         if faq_result:
             logger.info(
                 "FAQ_ONLY_DEBUG | q=%s | selected_faq_id=%s | matched_text=%s | route=faq_only",
@@ -137,12 +143,16 @@ def route_runtime_reply(
     *,
     system_rebuild_mode: bool = False,
     faq_only_runtime_mode: bool = False,
+    last_user_text: str = "",
+    last_assistant_text: str = "",
 ) -> str:
     """Return only the final reply text for the current runtime stage."""
     result = route_runtime_message(
         user_text,
         system_rebuild_mode=system_rebuild_mode,
         faq_only_runtime_mode=faq_only_runtime_mode,
+        last_user_text=last_user_text,
+        last_assistant_text=last_assistant_text,
     )
     return _safe_str(result.get("reply"))
 

@@ -101,12 +101,16 @@ def _refine_faq_answer_style(user_text: str, answer: str, concepts: list[str]) -
     return f"لا، {body}"
 
 
-def _build_search_texts(user_text: str) -> tuple[dict[str, Any], list[str], FAQRewriteResult]:
+def _build_search_texts(
+    user_text: str,
+    last_user_text: str = "",
+    last_assistant_text: str = "",
+) -> tuple[dict[str, Any], list[str], FAQRewriteResult]:
     """Canonicalize user text (+ follow-up rewrite) and return search texts."""
     rewrite = rewrite_faq_query(
         user_text=user_text,
-        last_user_text="",
-        last_assistant_text="",
+        last_user_text=last_user_text,
+        last_assistant_text=last_assistant_text,
         last_resolved_intent="",
         last_resolved_entity="",
     )
@@ -225,7 +229,11 @@ def _should_block_branch_faq(raw_text: str, faq_id: str) -> bool:
     return faq_id == "faq::10" and is_branch_specific_query(raw_text)
 
 
-def resolve_faq(user_text: str) -> dict[str, Any] | None:
+def resolve_faq(
+    user_text: str,
+    last_user_text: str = "",
+    last_assistant_text: str = "",
+) -> dict[str, Any] | None:
     """Resolve user text to a confident FAQ match, or return None."""
     raw_text = _safe_str(user_text)
     if not raw_text:
@@ -252,7 +260,11 @@ def resolve_faq(user_text: str) -> dict[str, Any] | None:
         )
         return None
 
-    canon, search_texts, rewrite = _build_search_texts(raw_text)
+    canon, search_texts, rewrite = _build_search_texts(
+        raw_text,
+        last_user_text=last_user_text,
+        last_assistant_text=last_assistant_text,
+    )
     if not search_texts:
         logger.info(
             "FAQ_RESOLVER_DEBUG | query=%s | normalized=%s | candidate_texts=[] | selected_faq_id=none | matched_text=none | route=faq_only_no_match_no_search_texts",
@@ -359,9 +371,17 @@ def resolve_faq(user_text: str) -> dict[str, Any] | None:
     return result
 
 
-def resolve_faq_answer(user_text: str) -> str | None:
+def resolve_faq_answer(
+    user_text: str,
+    last_user_text: str = "",
+    last_assistant_text: str = "",
+) -> str | None:
     """Resolve user text and return only FAQ answer text when matched."""
-    result = resolve_faq(user_text)
+    result = resolve_faq(
+        user_text,
+        last_user_text=last_user_text,
+        last_assistant_text=last_assistant_text,
+    )
     if not result:
         return None
 
