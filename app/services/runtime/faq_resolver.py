@@ -10,6 +10,7 @@ from app.services.runtime.faq_canonicalizer import (
     canonicalize_faq_query,
     is_branch_specific_query,
 )
+from app.services.runtime.faq_followup_rewriter import FAQRewriteResult, rewrite_faq_query
 from app.services.runtime.faq_loader import load_faq_records
 from app.services.runtime.faq_matcher import find_best_faq_match
 from app.services.runtime.text_normalizer import normalize_arabic
@@ -100,8 +101,15 @@ def _refine_faq_answer_style(user_text: str, answer: str, concepts: list[str]) -
     return f"لا، {body}"
 
 
-def _build_search_texts(user_text: str) -> tuple[dict[str, Any], list[str]]:
-    """Canonicalize user text and return canonical data plus search texts."""
+def _build_search_texts(user_text: str) -> tuple[dict[str, Any], list[str], FAQRewriteResult]:
+    """Canonicalize user text (+ follow-up rewrite) and return search texts."""
+    rewrite = rewrite_faq_query(
+        user_text=user_text,
+        last_user_text="",
+        last_assistant_text="",
+        last_resolved_intent="",
+        last_resolved_entity="",
+    )
     canon = canonicalize_faq_query(user_text)
 
     # Keep user-derived texts first (normalized + variants).
@@ -110,6 +118,11 @@ def _build_search_texts(user_text: str) -> tuple[dict[str, Any], list[str]]:
     search_texts = _unique_keep_order(
         [_safe_str(canon.get("normalized"))]
         + [_safe_str(v) for v in _safe_list(canon.get("variants"))]
+        + [
+            _safe_str(rewrite.resolved_query),
+            _safe_str(rewrite.rewritten_query),
+            _safe_str(rewrite.intent_hint).replace("_", " "),
+        ]
     )
 
     # Add only high-confidence canonical question hints.
@@ -128,7 +141,7 @@ def _build_search_texts(user_text: str) -> tuple[dict[str, Any], list[str]]:
         fallback_text = _safe_str(user_text)
         search_texts = [fallback_text] if fallback_text else []
 
-    return canon, search_texts
+    return canon, search_texts, rewrite
 
 
 def _unique_keep_order(values: list[str]) -> list[str]:
@@ -239,7 +252,7 @@ def resolve_faq(user_text: str) -> dict[str, Any] | None:
         )
         return None
 
-    canon, search_texts = _build_search_texts(raw_text)
+    canon, search_texts, rewrite = _build_search_texts(raw_text)
     if not search_texts:
         logger.info(
             "FAQ_RESOLVER_DEBUG | query=%s | normalized=%s | candidate_texts=[] | selected_faq_id=none | matched_text=none | route=faq_only_no_match_no_search_texts",
@@ -255,9 +268,12 @@ def resolve_faq(user_text: str) -> dict[str, Any] | None:
     best, best_search_text = _pick_best_match(search_texts, faq_records)
     if not best:
         logger.info(
-            "FAQ_RESOLVER_DEBUG | query=%s | normalized=%s | candidate_texts=%s | selected_faq_id=none | matched_text=none | route=faq_only_no_match",
+            "FAQ_RESOLVER_DEBUG | query=%s | normalized=%s | rewritten=%s | rewrite_intent=%s | rewrite_confidence=%.2f | candidate_texts=%s | selected_faq_id=none | matched_text=none | route=faq_only_no_match",
             _escape_debug(raw_text),
             _escape_debug(canon.get("normalized")),
+            _escape_debug(rewrite.rewritten_query),
+            _escape_debug(rewrite.intent_hint),
+            float(rewrite.confidence),
             [_escape_debug(x) for x in search_texts],
         )
         print(
@@ -265,6 +281,10 @@ def resolve_faq(user_text: str) -> dict[str, Any] | None:
             {
                 "query": _escape_debug(raw_text),
                 "normalized": _escape_debug(canon.get("normalized")),
+                "rewrite_resolved": _escape_debug(rewrite.resolved_query),
+                "rewrite_rewritten": _escape_debug(rewrite.rewritten_query),
+                "rewrite_intent": _escape_debug(rewrite.intent_hint),
+                "rewrite_confidence": float(rewrite.confidence),
                 "candidate_texts": [_escape_debug(x) for x in search_texts],
                 "selected_faq_id": "",
                 "matched_text": "",
@@ -280,9 +300,12 @@ def resolve_faq(user_text: str) -> dict[str, Any] | None:
     # Guard: keep defensive check for generic branches FAQ too.
     if _should_block_branch_faq(raw_text, faq_id):
         logger.info(
-            "FAQ_RESOLVER_DEBUG | query=%s | normalized=%s | candidate_texts=%s | selected_faq_id=%s | matched_text=%s | route=faq_only_no_match_blocked_generic_branch",
+            "FAQ_RESOLVER_DEBUG | query=%s | normalized=%s | rewritten=%s | rewrite_intent=%s | rewrite_confidence=%.2f | candidate_texts=%s | selected_faq_id=%s | matched_text=%s | route=faq_only_no_match_blocked_generic_branch",
             _escape_debug(raw_text),
             _escape_debug(canon.get("normalized")),
+            _escape_debug(rewrite.rewritten_query),
+            _escape_debug(rewrite.intent_hint),
+            float(rewrite.confidence),
             [_escape_debug(x) for x in search_texts],
             faq_id,
             _escape_debug(best_search_text),
@@ -308,9 +331,12 @@ def resolve_faq(user_text: str) -> dict[str, Any] | None:
         "source": "faq",
     }
     logger.info(
-        "FAQ_RESOLVER_DEBUG | query=%s | normalized=%s | candidate_texts=%s | selected_faq_id=%s | matched_text=%s | route=faq_only",
+        "FAQ_RESOLVER_DEBUG | query=%s | normalized=%s | rewritten=%s | rewrite_intent=%s | rewrite_confidence=%.2f | candidate_texts=%s | selected_faq_id=%s | matched_text=%s | route=faq_only",
         _escape_debug(raw_text),
         _escape_debug(canon.get("normalized")),
+        _escape_debug(rewrite.rewritten_query),
+        _escape_debug(rewrite.intent_hint),
+        float(rewrite.confidence),
         [_escape_debug(x) for x in search_texts],
         faq_id,
         _escape_debug(result.get("matched_text")),
@@ -320,6 +346,10 @@ def resolve_faq(user_text: str) -> dict[str, Any] | None:
         {
             "query": _escape_debug(raw_text),
             "normalized": _escape_debug(canon.get("normalized")),
+            "rewrite_resolved": _escape_debug(rewrite.resolved_query),
+            "rewrite_rewritten": _escape_debug(rewrite.rewritten_query),
+            "rewrite_intent": _escape_debug(rewrite.intent_hint),
+            "rewrite_confidence": float(rewrite.confidence),
             "candidate_texts": [_escape_debug(x) for x in search_texts],
             "selected_faq_id": faq_id,
             "matched_text": _escape_debug(result.get("matched_text")),
