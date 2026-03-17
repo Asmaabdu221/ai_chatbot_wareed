@@ -3460,12 +3460,12 @@ def _to_utc_naive(dt: datetime | None) -> datetime | None:
     return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
 
-def _extract_recent_runtime_context(
+def _extract_recent_runtime_messages(
     db: Session,
     conversation: Conversation,
     ttl_minutes: int = 15,
-) -> tuple[str, str, bool]:
-    """Return last user/assistant texts from recent history within TTL."""
+) -> tuple[list[dict[str, str]], bool]:
+    """Return recent conversation messages (role/content) within TTL."""
     now_utc = datetime.utcnow()
     cutoff = now_utc - timedelta(minutes=ttl_minutes)
     history = get_conversation_history_for_ai(
@@ -3475,29 +3475,20 @@ def _extract_recent_runtime_context(
         include_created_at=True,
     )
 
-    recent = []
+    recent: list[dict[str, str]] = []
     for item in history:
         created_at = _to_utc_naive(item.get("created_at"))
         if created_at is None:
             continue
         if created_at >= cutoff:
-            recent.append(item)
+            role = str(item.get("role") or "").strip().lower()
+            content = str(item.get("content") or "").strip()
+            if not role or not content:
+                continue
+            recent.append({"role": role, "content": content})
 
-    last_user_text = ""
-    last_assistant_text = ""
-
-    for item in reversed(recent):
-        role = str(item.get("role") or "").strip().lower()
-        content = str(item.get("content") or "").strip()
-        if not last_user_text and role == MessageRole.USER.value and content:
-            last_user_text = content
-        if not last_assistant_text and role == MessageRole.ASSISTANT.value and content:
-            last_assistant_text = content
-        if last_user_text and last_assistant_text:
-            break
-
-    context_used = bool(last_user_text or last_assistant_text)
-    return last_user_text, last_assistant_text, context_used
+    context_used = bool(recent)
+    return recent, context_used
 
 
 def add_prescription_messages(
@@ -3702,11 +3693,10 @@ def send_message_with_attachment(
     if first_msg_count == 0:
         set_conversation_title_from_first_message(db, conv, question_for_ai)
 
-    last_user_text = ""
-    last_assistant_text = ""
+    recent_runtime_messages: list[dict[str, str]] = []
     context_used = False
     if FAQ_ONLY_RUNTIME_MODE and not SYSTEM_REBUILD_MODE:
-        last_user_text, last_assistant_text, context_used = _extract_recent_runtime_context(
+        recent_runtime_messages, context_used = _extract_recent_runtime_messages(
             db,
             conv,
             ttl_minutes=15,
@@ -3717,6 +3707,7 @@ def send_message_with_attachment(
                 "ttl_minutes": 15,
                 "context_used": context_used,
                 "context_state": "used" if context_used else "expired_or_missing",
+                "message_count": len(recent_runtime_messages),
             },
         )
 
@@ -3731,8 +3722,7 @@ def send_message_with_attachment(
             question_for_ai,
             system_rebuild_mode=SYSTEM_REBUILD_MODE,
             faq_only_runtime_mode=FAQ_ONLY_RUNTIME_MODE,
-            last_user_text=last_user_text,
-            last_assistant_text=last_assistant_text,
+            recent_runtime_messages=recent_runtime_messages,
         )
 
         logger.info(

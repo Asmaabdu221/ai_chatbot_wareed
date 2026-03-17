@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from app.services.runtime.text_normalizer import normalize_arabic
 
@@ -18,6 +19,7 @@ class FAQRewriteResult:
     confidence: float
     used_followup: bool
     followup_source_text: str
+    inferred_topic: str | None = None
     notes: list[str] = field(default_factory=list)
 
 
@@ -34,6 +36,9 @@ _FOLLOWUP_MARKERS = (
     "وينه",
     "ما رمزه",
     "كم يطلع",
+    "كم مدته",
+    "كيف استلمه",
+    "هل هو امن",
 )
 
 _BRANCH_CITY_HINTS = (
@@ -54,6 +59,38 @@ def _safe_str(value: object) -> str:
     return str(value or "").strip()
 
 
+_TOPIC_ENTITY_BY_INTENT: dict[str, str] = {
+    "hba1c_fasting": "تحليل السكر التراكمي",
+    "hba1c_code": "تحليل السكر التراكمي",
+    "thyroid_fasting": "تحليل الغدة الدرقية",
+    "branches_locations": "فروع مختبرات وريد",
+    "payment_methods": "طرق الدفع",
+    "results_turnaround": "نتائج التحاليل",
+    "electronic_results": "نتائج التحاليل",
+    "results_privacy": "سرية نتائج التحاليل",
+    "sensitive_tests_privacy": "خصوصية التحاليل الحساسة",
+    "safety_children_elderly": "أمان التحاليل للأطفال وكبار السن",
+    "home_visit": "الزيارات المنزلية",
+    "services_overview": "خدمات مختبر وريد",
+}
+
+
+def _safe_messages(value: Any) -> list[dict[str, str]]:
+    """Return recent runtime messages as safe role/content dictionaries."""
+    if not isinstance(value, list):
+        return []
+    out: list[dict[str, str]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        role = _safe_str(item.get("role")).lower()
+        content = _safe_str(item.get("content"))
+        if not role or not content:
+            continue
+        out.append({"role": role, "content": content})
+    return out
+
+
 def _is_followup_query(user_text: str) -> bool:
     """Return True when query likely depends on prior turn context."""
     n = normalize_arabic(user_text)
@@ -65,9 +102,22 @@ def _is_followup_query(user_text: str) -> bool:
         return True
     if len(tokens) <= 4 and any(marker in n for marker in _FOLLOWUP_MARKERS):
         return True
-    if any(marker in n for marker in ("هل هو", "هل هذا", "ما رمزه", "كيف طريقته", "كم سعره", "وينه")):
-        return True
-    return False
+    followup_phrases = (
+        "هل هو",
+        "هل هذا",
+        "ما رمزه",
+        "ايش رمزه",
+        "هل يحتاج صيام",
+        "هل هو امن",
+        "كيف استلمه",
+        "كيف استلمها",
+        "كيف طريقته",
+        "كم مدته",
+        "كم يطلع",
+        "كم سعره",
+        "وينه",
+    )
+    return any(marker in n for marker in followup_phrases)
 
 
 def _normalize_short_followup(user_text: str) -> str:
@@ -86,6 +136,7 @@ def _resolve_followup_entity(
     last_assistant_text: str,
     last_resolved_intent: str,
     last_resolved_entity: str,
+    recent_runtime_messages: list[dict[str, str]] | None = None,
 ) -> tuple[str, bool, str, list[str], float]:
     """Resolve follow-up shorthand into a fuller query using prior entity/intent."""
     notes: list[str] = []
@@ -94,6 +145,18 @@ def _resolve_followup_entity(
     entity = normalize_arabic(last_resolved_entity)
     intent = _safe_str(last_resolved_intent)
     followup_source = _safe_str(last_resolved_entity) or _safe_str(last_user_text) or _safe_str(last_assistant_text)
+
+    inferred_intent, inferred_entity, inferred_source = _infer_topic_from_recent_messages(
+        recent_runtime_messages
+    )
+    if not intent and inferred_intent:
+        intent = inferred_intent
+        notes.append(f"inferred_intent:{inferred_intent}")
+    if not entity and inferred_entity:
+        entity = normalize_arabic(inferred_entity)
+        notes.append(f"inferred_entity:{entity}")
+    if not followup_source and inferred_source:
+        followup_source = inferred_source
 
     if not _is_followup_query(original):
         return original, False, followup_source, notes, 0.66
@@ -126,6 +189,20 @@ def _resolve_followup_entity(
         return f"{cleaned} {entity}".strip(), True, followup_source, notes, 0.75
 
     if intent:
+        if intent in {"hba1c_fasting", "hba1c_code"} and ("رمز" in cleaned or "كود" in cleaned):
+            notes.append("followup_hba1c_code_from_history")
+            return "ما هو رمز تحليل السكر التراكمي", True, followup_source, notes, 0.90
+        if intent in {"hba1c_fasting", "hba1c_code"} and ("صيام" in cleaned or "يحتاج" in cleaned):
+            notes.append("followup_hba1c_fasting_from_history")
+            return "هل تحليل السكر التراكمي يحتاج صيام", True, followup_source, notes, 0.90
+        if intent == "thyroid_fasting" and ("صيام" in cleaned or "يحتاج" in cleaned):
+            notes.append("followup_thyroid_fasting_from_history")
+            return "هل تحليل الغدة الدرقية يحتاج صيام", True, followup_source, notes, 0.90
+        if intent in {"results_turnaround", "electronic_results"} and (
+            "كم مدته" in cleaned or "كم يطلع" in cleaned or "كم" in cleaned
+        ):
+            notes.append("followup_results_turnaround_from_history")
+            return "كم تستغرق نتائج التحاليل للظهور", True, followup_source, notes, 0.84
         if intent in {"hba1c_fasting", "thyroid_fasting", "fasting_general"} and (
             "صيام" in cleaned or "يحتاج" in cleaned
         ):
@@ -183,6 +260,31 @@ def _rewrite_to_canonical(resolved_query: str) -> tuple[str, str | None, float, 
     return resolved_query, None, 0.58, notes
 
 
+def _infer_topic_from_recent_messages(
+    recent_runtime_messages: list[dict[str, str]] | None,
+) -> tuple[str, str, str]:
+    """Infer recent topic/intent/entity by scanning recent messages backwards."""
+    recent = _safe_messages(recent_runtime_messages)
+    if not recent:
+        return "", "", ""
+
+    # Prefer latest user turns, then latest assistant turns.
+    for preferred_role in ("user", "assistant"):
+        for item in reversed(recent):
+            role = _safe_str(item.get("role")).lower()
+            if role != preferred_role:
+                continue
+            content = _safe_str(item.get("content"))
+            if not content:
+                continue
+            _, hint, confidence, _ = _rewrite_to_canonical(content)
+            if hint and confidence >= 0.72:
+                entity = _TOPIC_ENTITY_BY_INTENT.get(hint, "")
+                return hint, entity, content
+
+    return "", "", ""
+
+
 def _guess_intent_hint(rewritten_query: str, fallback_hint: str | None) -> str | None:
     """Infer intent hint from rewritten query when not already known."""
     if fallback_hint:
@@ -213,6 +315,7 @@ def rewrite_faq_query(
     last_assistant_text: str = "",
     last_resolved_intent: str = "",
     last_resolved_entity: str = "",
+    recent_runtime_messages: list[dict[str, Any]] | None = None,
 ) -> FAQRewriteResult:
     """Resolve follow-up ambiguity and rewrite to FAQ-style canonical query."""
     original = _safe_str(user_text)
@@ -222,6 +325,7 @@ def rewrite_faq_query(
         last_assistant_text,
         last_resolved_intent,
         last_resolved_entity,
+        recent_runtime_messages=_safe_messages(recent_runtime_messages),
     )
     rewritten, hint, rewrite_conf, rewrite_notes = _rewrite_to_canonical(resolved or original)
     notes.extend(rewrite_notes)
@@ -233,6 +337,12 @@ def rewrite_faq_query(
         rewritten = resolved or original
         confidence = min(confidence, 0.45)
 
+    inferred_topic = None
+    for note in notes:
+        if note.startswith("inferred_intent:"):
+            inferred_topic = note.split(":", 1)[1].strip() or None
+            break
+
     return FAQRewriteResult(
         original_query=original,
         resolved_query=resolved or original,
@@ -241,6 +351,7 @@ def rewrite_faq_query(
         confidence=confidence,
         used_followup=used_followup,
         followup_source_text=_safe_str(source_text),
+        inferred_topic=inferred_topic,
         notes=notes,
     )
 

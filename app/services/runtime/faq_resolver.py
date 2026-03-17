@@ -105,6 +105,7 @@ def _build_search_texts(
     user_text: str,
     last_user_text: str = "",
     last_assistant_text: str = "",
+    recent_runtime_messages: list[dict[str, Any]] | None = None,
 ) -> tuple[dict[str, Any], list[str], FAQRewriteResult]:
     """Canonicalize user text (+ follow-up rewrite) and return search texts."""
     rewrite = rewrite_faq_query(
@@ -113,6 +114,7 @@ def _build_search_texts(
         last_assistant_text=last_assistant_text,
         last_resolved_intent="",
         last_resolved_entity="",
+        recent_runtime_messages=recent_runtime_messages,
     )
     canon = canonicalize_faq_query(user_text)
 
@@ -233,6 +235,7 @@ def resolve_faq(
     user_text: str,
     last_user_text: str = "",
     last_assistant_text: str = "",
+    recent_runtime_messages: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
     """Resolve user text to a confident FAQ match, or return None."""
     raw_text = _safe_str(user_text)
@@ -264,6 +267,7 @@ def resolve_faq(
         raw_text,
         last_user_text=last_user_text,
         last_assistant_text=last_assistant_text,
+        recent_runtime_messages=recent_runtime_messages,
     )
     if not search_texts:
         logger.info(
@@ -280,11 +284,13 @@ def resolve_faq(
     best, best_search_text = _pick_best_match(search_texts, faq_records)
     if not best:
         logger.info(
-            "FAQ_RESOLVER_DEBUG | query=%s | normalized=%s | rewritten=%s | rewrite_intent=%s | rewrite_confidence=%.2f | candidate_texts=%s | selected_faq_id=none | matched_text=none | route=faq_only_no_match",
+            "FAQ_RESOLVER_DEBUG | query=%s | normalized=%s | rewritten=%s | rewrite_intent=%s | rewrite_followup=%s | rewrite_inferred_topic=%s | rewrite_confidence=%.2f | candidate_texts=%s | selected_faq_id=none | matched_text=none | route=faq_only_no_match",
             _escape_debug(raw_text),
             _escape_debug(canon.get("normalized")),
             _escape_debug(rewrite.rewritten_query),
             _escape_debug(rewrite.intent_hint),
+            bool(rewrite.used_followup),
+            _escape_debug(rewrite.inferred_topic),
             float(rewrite.confidence),
             [_escape_debug(x) for x in search_texts],
         )
@@ -296,6 +302,9 @@ def resolve_faq(
                 "rewrite_resolved": _escape_debug(rewrite.resolved_query),
                 "rewrite_rewritten": _escape_debug(rewrite.rewritten_query),
                 "rewrite_intent": _escape_debug(rewrite.intent_hint),
+                "rewrite_followup": bool(rewrite.used_followup),
+                "rewrite_inferred_topic": _escape_debug(rewrite.inferred_topic),
+                "rewrite_followup_source": _escape_debug(rewrite.followup_source_text),
                 "rewrite_confidence": float(rewrite.confidence),
                 "candidate_texts": [_escape_debug(x) for x in search_texts],
                 "selected_faq_id": "",
@@ -312,11 +321,13 @@ def resolve_faq(
     # Guard: keep defensive check for generic branches FAQ too.
     if _should_block_branch_faq(raw_text, faq_id):
         logger.info(
-            "FAQ_RESOLVER_DEBUG | query=%s | normalized=%s | rewritten=%s | rewrite_intent=%s | rewrite_confidence=%.2f | candidate_texts=%s | selected_faq_id=%s | matched_text=%s | route=faq_only_no_match_blocked_generic_branch",
+            "FAQ_RESOLVER_DEBUG | query=%s | normalized=%s | rewritten=%s | rewrite_intent=%s | rewrite_followup=%s | rewrite_inferred_topic=%s | rewrite_confidence=%.2f | candidate_texts=%s | selected_faq_id=%s | matched_text=%s | route=faq_only_no_match_blocked_generic_branch",
             _escape_debug(raw_text),
             _escape_debug(canon.get("normalized")),
             _escape_debug(rewrite.rewritten_query),
             _escape_debug(rewrite.intent_hint),
+            bool(rewrite.used_followup),
+            _escape_debug(rewrite.inferred_topic),
             float(rewrite.confidence),
             [_escape_debug(x) for x in search_texts],
             faq_id,
@@ -343,11 +354,13 @@ def resolve_faq(
         "source": "faq",
     }
     logger.info(
-        "FAQ_RESOLVER_DEBUG | query=%s | normalized=%s | rewritten=%s | rewrite_intent=%s | rewrite_confidence=%.2f | candidate_texts=%s | selected_faq_id=%s | matched_text=%s | route=faq_only",
+        "FAQ_RESOLVER_DEBUG | query=%s | normalized=%s | rewritten=%s | rewrite_intent=%s | rewrite_followup=%s | rewrite_inferred_topic=%s | rewrite_confidence=%.2f | candidate_texts=%s | selected_faq_id=%s | matched_text=%s | route=faq_only",
         _escape_debug(raw_text),
         _escape_debug(canon.get("normalized")),
         _escape_debug(rewrite.rewritten_query),
         _escape_debug(rewrite.intent_hint),
+        bool(rewrite.used_followup),
+        _escape_debug(rewrite.inferred_topic),
         float(rewrite.confidence),
         [_escape_debug(x) for x in search_texts],
         faq_id,
@@ -361,6 +374,9 @@ def resolve_faq(
             "rewrite_resolved": _escape_debug(rewrite.resolved_query),
             "rewrite_rewritten": _escape_debug(rewrite.rewritten_query),
             "rewrite_intent": _escape_debug(rewrite.intent_hint),
+            "rewrite_followup": bool(rewrite.used_followup),
+            "rewrite_inferred_topic": _escape_debug(rewrite.inferred_topic),
+            "rewrite_followup_source": _escape_debug(rewrite.followup_source_text),
             "rewrite_confidence": float(rewrite.confidence),
             "candidate_texts": [_escape_debug(x) for x in search_texts],
             "selected_faq_id": faq_id,
@@ -375,12 +391,14 @@ def resolve_faq_answer(
     user_text: str,
     last_user_text: str = "",
     last_assistant_text: str = "",
+    recent_runtime_messages: list[dict[str, Any]] | None = None,
 ) -> str | None:
     """Resolve user text and return only FAQ answer text when matched."""
     result = resolve_faq(
         user_text,
         last_user_text=last_user_text,
         last_assistant_text=last_assistant_text,
+        recent_runtime_messages=recent_runtime_messages,
     )
     if not result:
         return None
