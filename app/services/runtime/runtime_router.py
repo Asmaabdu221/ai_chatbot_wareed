@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from app.services.runtime.branches_resolver import resolve_branches_query
 from app.services.runtime.faq_resolver import resolve_faq
 from app.services.runtime.runtime_fallbacks import (
     get_faq_no_match_message,
@@ -25,6 +26,7 @@ from app.services.runtime.runtime_fallbacks import (
 )
 
 logger = logging.getLogger(__name__)
+ENABLE_BRANCHES_RUNTIME_AFTER_FAQ = True
 
 
 def _safe_str(value: Any) -> str:
@@ -96,6 +98,21 @@ def route_runtime_message(
             "faq_only no match | q=%s | route=faq_only_no_match",
             text,
         )
+        if ENABLE_BRANCHES_RUNTIME_AFTER_FAQ:
+            branches_result = resolve_branches_query(text)
+            if bool(branches_result.get("matched")):
+                logger.debug(
+                    "branches route matched after faq no match | q=%s | route=%s",
+                    text,
+                    _safe_str(branches_result.get("route")),
+                )
+                return {
+                    "reply": _safe_str(branches_result.get("answer")),
+                    "route": _safe_str(branches_result.get("route")) or "branches",
+                    "source": "branches",
+                    "matched": True,
+                    "meta": dict(branches_result.get("meta") or {}),
+                }
         return {
             "reply": get_faq_no_match_message(),
             "route": "faq_only_no_match",
