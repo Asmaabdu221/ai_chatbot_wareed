@@ -75,6 +75,18 @@ _TOPIC_ENTITY_BY_INTENT: dict[str, str] = {
     "services_overview": "خدمات مختبر وريد",
 }
 
+_INTENT_COMPAT_GROUPS: dict[str, set[str]] = {
+    "fasting_general": {"fasting_general", "hba1c_code", "hba1c_fasting", "thyroid_fasting"},
+    "payment_methods": {"payment_methods"},
+    "results_privacy": {"results_privacy", "sensitive_tests_privacy"},
+    "safety_children_elderly": {"safety_children_elderly"},
+    "consultation_after_results": {"consultation_after_results"},
+    "electronic_results": {"electronic_results", "results_turnaround"},
+    "home_visit": {"home_visit"},
+    "results_turnaround": {"results_turnaround", "electronic_results"},
+    "branches_locations": {"branches_locations"},
+}
+
 
 def _safe_messages(value: Any) -> list[dict[str, str]]:
     """Return recent runtime messages as safe role/content dictionaries."""
@@ -239,15 +251,52 @@ def _detect_strong_current_intent(user_text: str) -> tuple[str, str, float, str]
     if not n:
         return None
 
+    if any(p in n for p in ("يحتاج صيام", "هل يحتاج صيام", "صيام ولا", "صيام او لا")) and not any(
+        p in n for p in ("تراكمي", "hba1c", "غده", "درقيه", "درقية", "tsh")
+    ):
+        return ("fasting_general", "ما هي التحاليل التي تحتاج الي صيام", 0.88, "strong_intent_fasting")
     if any(p in n for p in ("كم مدته", "كم ياخذ", "متى تطلع", "متي تطلع", "كم تستغرق")):
         return ("results_turnaround", "كم تستغرق نتائج التحاليل للظهور", 0.92, "strong_intent_duration")
     if any(p in n for p in ("كيف ادفع", "كيف اقدر ادفع", "طرق الدفع", "طريقه الدفع")):
         return ("payment_methods", "ما هي طرق الدفع المتاحة", 0.92, "strong_intent_payment")
+    if any(p in n for p in ("استشاره", "استشارة")) and any(p in n for p in ("بعد", "النتايج", "النتائج", "نتيجه")):
+        return (
+            "consultation_after_results",
+            "هل يوجد استشارة طبية بعد ظهور النتائج",
+            0.92,
+            "strong_intent_consultation",
+        )
+    if any(p in n for p in ("اونلاين", "الكترون", "واتساب", "ايميل", "ترسلون", "ارسال النتيجه", "ارسال النتائج")):
+        return (
+            "electronic_results",
+            "هل يتم ارسال نتائج التحاليل الكترونيا",
+            0.90,
+            "strong_intent_electronic_results",
+        )
+    if any(p in n for p in ("زياره منزليه", "زيارة منزلية", "سحب منزلي", "سحب من البيت", "زيارة", "زياره", "منزليه")):
+        return (
+            "home_visit",
+            "هل يوفر مختبر وريد خدمة الزيارات المنزلية",
+            0.90,
+            "strong_intent_home_visit",
+        )
     if any(p in n for p in ("هل سرية", "هل سريه", "احد يشوف", "محد يقدر يشوف", "احد يطلع")):
         return ("results_privacy", "هل نتائج التحاليل سريه", 0.90, "strong_intent_privacy")
     if "امن" in n and "هل" in n:
         return ("safety_children_elderly", "هل التحاليل امنه للاطفال وكبار السن", 0.86, "strong_intent_safety")
+    if any(p in n for p in ("فروعكم", "وين الفروع", "اقرب فرع", "فرع في", "فرع")):
+        return ("branches_locations", "اين تتواجد فروع مختبرات وريد", 0.86, "strong_intent_branches")
     return None
+
+
+def _is_history_intent_compatible(current_intent: str, history_intent: str) -> bool:
+    """Return True when history intent can safely specialize current intent."""
+    current = _safe_str(current_intent)
+    history = _safe_str(history_intent)
+    if not current or not history:
+        return False
+    compatible = _INTENT_COMPAT_GROUPS.get(current) or {current}
+    return history in compatible
 
 
 def _rewrite_to_canonical(resolved_query: str) -> tuple[str, str | None, float, list[str]]:
@@ -359,22 +408,31 @@ def rewrite_faq_query(
     original = _safe_str(user_text)
     notes: list[str] = []
 
+    inferred_intent, _, inferred_source = _infer_topic_from_recent_messages(_safe_messages(recent_runtime_messages))
+    history_intent = _safe_str(last_resolved_intent) or _safe_str(inferred_intent)
+
     strong_intent = _detect_strong_current_intent(original)
     if strong_intent:
         intent_hint, rewritten_query, confidence, note = strong_intent
-        notes.append(note)
-        return FAQRewriteResult(
-            original_query=original,
-            resolved_query=original,
-            rewritten_query=rewritten_query,
-            intent_hint=intent_hint,
-            confidence=confidence,
-            used_followup=_is_followup_query(original),
-            followup_source_text="",
-            intent_source="current_query",
-            inferred_topic=None,
-            notes=notes,
-        )
+        history_compatible = _is_history_intent_compatible(intent_hint, history_intent)
+
+        # Allow history specialization only for compatible fasting follow-up flows.
+        if not (intent_hint == "fasting_general" and history_compatible and _is_followup_query(original)):
+            notes.append(note)
+            if history_intent and not history_compatible:
+                notes.append(f"history_incompatible_blocked:{history_intent}->{intent_hint}")
+            return FAQRewriteResult(
+                original_query=original,
+                resolved_query=original,
+                rewritten_query=rewritten_query,
+                intent_hint=intent_hint,
+                confidence=confidence,
+                used_followup=_is_followup_query(original),
+                followup_source_text="" if not history_compatible else _safe_str(inferred_source),
+                intent_source="current_query",
+                inferred_topic=None,
+                notes=notes,
+            )
 
     resolved, used_followup, source_text, notes, followup_conf, history_used = _resolve_followup_entity(
         original,
