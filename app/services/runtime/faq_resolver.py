@@ -7,12 +7,16 @@ import logging
 from typing import Any
 
 from app.services.runtime.faq_canonicalizer import (
-    canonicalize_faq_query,
     is_branch_specific_query,
 )
 from app.services.runtime.faq_followup_rewriter import FAQRewriteResult, rewrite_faq_query
 from app.services.runtime.faq_loader import load_faq_records
 from app.services.runtime.faq_matcher import find_best_faq_match
+from app.services.runtime.faq_semantic_ranker import (
+    FAQ_ID_TO_CONCEPT,
+    rank_faq_candidates,
+    select_best_ranked_candidate,
+)
 from app.services.runtime.text_normalizer import normalize_arabic
 
 logger = logging.getLogger(__name__)
@@ -21,11 +25,6 @@ logger = logging.getLogger(__name__)
 def _safe_str(value: Any) -> str:
     """Convert any value to a safely stripped string."""
     return str(value or "").strip()
-
-
-def _safe_list(value: Any) -> list[Any]:
-    """Return value as list when possible, otherwise an empty list."""
-    return value if isinstance(value, list) else []
 
 
 def _escape_debug(value: Any) -> str:
@@ -101,13 +100,13 @@ def _refine_faq_answer_style(user_text: str, answer: str, concepts: list[str]) -
     return f"لا، {body}"
 
 
-def _build_search_texts(
+def _build_resolution_context(
     user_text: str,
     last_user_text: str = "",
     last_assistant_text: str = "",
     recent_runtime_messages: list[dict[str, Any]] | None = None,
-) -> tuple[dict[str, Any], list[str], FAQRewriteResult]:
-    """Canonicalize user text (+ follow-up rewrite) and return search texts."""
+) -> dict[str, Any]:
+    """Build conversation-aware rewrite context for FAQ ranking."""
     rewrite = rewrite_faq_query(
         user_text=user_text,
         last_user_text=last_user_text,
@@ -116,42 +115,16 @@ def _build_search_texts(
         last_resolved_entity="",
         recent_runtime_messages=recent_runtime_messages,
     )
-    canon = canonicalize_faq_query(user_text)
-
-    # Keep user-derived texts first (normalized + variants).
-    # Avoid blindly injecting all canonical candidate questions because
-    # low-confidence candidates can create false exact matches.
-    search_texts = _unique_keep_order(
-        [_safe_str(canon.get("normalized"))]
-        + [_safe_str(v) for v in _safe_list(canon.get("variants"))]
-        + [
-            _safe_str(rewrite.resolved_query),
-            _safe_str(rewrite.rewritten_query),
-            _safe_str(rewrite.intent_hint).replace("_", " "),
-        ]
-    )
-
-    # Add only high-confidence canonical question hints.
-    for candidate in _safe_list(canon.get("candidates")):
-        if not isinstance(candidate, dict):
-            continue
-        score = float(candidate.get("score") or 0.0)
-        if score < 0.50:
-            continue
-        canonical_q = _safe_str(candidate.get("canonical_question"))
-        if canonical_q:
-            search_texts.append(canonical_q)
-
-    search_texts = _unique_keep_order(search_texts)
-    if not search_texts:
-        fallback_text = _safe_str(user_text)
-        search_texts = [fallback_text] if fallback_text else []
-
-    return canon, search_texts, rewrite
+    return {
+        "normalized": normalize_arabic(user_text),
+        # Canonicalizer can produce large candidate expansions for some colloquial
+        # phrasings; keep resolver deterministic-first and lightweight here.
+        "canon": {},
+        "rewrite": rewrite,
+    }
 
 
 def _unique_keep_order(values: list[str]) -> list[str]:
-    """Return unique non-empty strings while preserving input order."""
     out: list[str] = []
     seen: set[str] = set()
     for value in values:
@@ -163,67 +136,100 @@ def _unique_keep_order(values: list[str]) -> list[str]:
     return out
 
 
-def _pick_best_match(
+def _build_deterministic_search_texts(
+    raw_text: str,
+    context: dict[str, Any],
+) -> list[str]:
+    """Build deterministic candidate texts for strong FAQ matching."""
+    canon = context.get("canon") or {}
+    rewrite: FAQRewriteResult = context["rewrite"]
+
+    search_texts = _unique_keep_order(
+        [
+            _safe_str(raw_text),
+            _safe_str(context.get("normalized")),
+            _safe_str(rewrite.resolved_query),
+            _safe_str(rewrite.rewritten_query),
+            _safe_str(rewrite.intent_hint).replace("_", " "),
+        ]
+        + [_safe_str(v) for v in (canon.get("variants") or [])]
+    )
+
+    for candidate in (canon.get("candidates") or []):
+        if not isinstance(candidate, dict):
+            continue
+        if float(candidate.get("score") or 0.0) < 0.50:
+            continue
+        q = _safe_str(candidate.get("canonical_question"))
+        if q:
+            search_texts.append(q)
+
+    norm = normalize_arabic(raw_text)
+    if norm:
+        # Deterministic anchor expansions for core standalone FAQ intents.
+        if ("متي" in norm or "متى" in norm or "كم" in norm) and (
+            "نتيجه" in norm or "نتيجه" in norm or "نتايج" in norm or "نتائج" in norm
+        ):
+            search_texts.append("كم تستغرق نتائج التحاليل للظهور")
+        if "تراكمي" in norm and ("صيام" in norm or "يحتاج" in norm):
+            search_texts.append("هل تحليل السكر التراكمي يحتاج صيام")
+        if ("احد" in norm or "غيري" in norm or "محد" in norm) and (
+            "يشوف" in norm or "يطلع" in norm or "نتيجه" in norm or "نتايج" in norm
+        ):
+            search_texts.append("هل نتائج التحاليل سريه")
+
+    return _unique_keep_order(search_texts)
+
+
+def _pick_deterministic_match(
     search_texts: list[str],
     faq_records: list[dict[str, Any]],
 ) -> tuple[dict[str, Any] | None, str]:
-    """Evaluate candidate search texts and return the best FAQ match plus matched search text."""
-    best_match: dict[str, Any] | None = None
+    """Pick strongest deterministic FAQ match across candidate texts."""
+    best: dict[str, Any] | None = None
+    best_text = ""
     best_score = -1.0
-    best_search_text = ""
 
-    for search_text in search_texts:
-        clean_text = _safe_str(search_text)
-        if not clean_text:
-            continue
-
+    for text in search_texts:
         match = find_best_faq_match(
-            clean_text,
+            text,
             faq_records,
-            min_score=0.78,
-            min_margin=0.03,
+            min_score=0.74,
+            min_margin=0.02,
         )
         if not match:
             continue
-
         score = float(match.get("score") or 0.0)
-
-        # Early stop for exact / near-exact match
-        if score >= 0.999:
-            return match, clean_text
-
         if score > best_score:
+            best = match
+            best_text = _safe_str(text)
             best_score = score
-            best_match = match
-            best_search_text = clean_text
+            if score >= 0.999:
+                break
 
-    return best_match, best_search_text
+    return best, best_text
 
 
-def _resolve_concepts_for_match(canon: dict[str, Any], faq_id: str) -> list[str]:
-    """Prefer concept(s) attached to the matched FAQ id, then fall back to canonical concepts."""
-    candidates = _safe_list(canon.get("candidates"))
-    matched_concepts: list[str] = []
+def _resolve_concepts_for_match(
+    faq_id: str,
+    ranked_pick: dict[str, Any] | None,
+    rewrite: FAQRewriteResult,
+) -> list[str]:
+    """Build concepts list from ranked concept and rewrite hint."""
+    concepts: list[str] = []
+    ranked_concept = _safe_str((ranked_pick or {}).get("concept"))
+    if ranked_concept:
+        concepts.append(ranked_concept)
 
-    for candidate in candidates:
-        if not isinstance(candidate, dict):
-            continue
-        if _safe_str(candidate.get("faq_id")) != faq_id:
-            continue
-        concept = _safe_str(candidate.get("concept"))
-        if concept and concept not in matched_concepts:
-            matched_concepts.append(concept)
+    map_concept = _safe_str(FAQ_ID_TO_CONCEPT.get(faq_id))
+    if map_concept and map_concept not in concepts:
+        concepts.append(map_concept)
 
-    if matched_concepts:
-        return matched_concepts
+    rewrite_hint = _safe_str(rewrite.intent_hint)
+    if rewrite_hint and rewrite_hint not in concepts:
+        concepts.append(rewrite_hint)
 
-    fallback_concepts = []
-    for concept in _safe_list(canon.get("concepts")):
-        clean = _safe_str(concept)
-        if clean and clean not in fallback_concepts:
-            fallback_concepts.append(clean)
-
-    return fallback_concepts
+    return concepts
 
 
 def _should_block_branch_faq(raw_text: str, faq_id: str) -> bool:
@@ -245,93 +251,144 @@ def resolve_faq(
     # Hard guard in FAQ-only phase:
     # branch/location-specific queries should not resolve to generic/unrelated FAQs.
     if is_branch_specific_query(raw_text):
-        logger.info(
-            "FAQ_RESOLVER_DEBUG | query=%s | normalized=%s | candidate_texts=[] | selected_faq_id=none | matched_text=none | route=faq_only_no_match_branch_specific",
+        logger.debug(
+            "faq_resolver no match branch specific | query=%s | normalized=%s | route=faq_only_no_match_branch_specific",
             _escape_debug(raw_text),
             _escape_debug(normalize_arabic(raw_text)),
         )
-        print(
-            "FAQ_RESOLVER_DEBUG",
-            {
-                "query": _escape_debug(raw_text),
-                "normalized": _escape_debug(normalize_arabic(raw_text)),
-                "candidate_texts": [],
-                "selected_faq_id": "",
-                "matched_text": "",
-                "route": "faq_only_no_match_branch_specific",
-            },
-        )
         return None
 
-    canon, search_texts, rewrite = _build_search_texts(
+    context = _build_resolution_context(
         raw_text,
         last_user_text=last_user_text,
         last_assistant_text=last_assistant_text,
         recent_runtime_messages=recent_runtime_messages,
     )
-    if not search_texts:
-        logger.info(
-            "FAQ_RESOLVER_DEBUG | query=%s | normalized=%s | candidate_texts=[] | selected_faq_id=none | matched_text=none | route=faq_only_no_match_no_search_texts",
-            _escape_debug(raw_text),
-            _escape_debug(canon.get("normalized")),
-        )
-        return None
+    rewrite: FAQRewriteResult = context["rewrite"]
+    normalized = _safe_str(context.get("normalized"))
 
     faq_records = load_faq_records()
     if not faq_records:
         return None
 
-    best, best_search_text = _pick_best_match(search_texts, faq_records)
-    if not best:
-        logger.info(
-            "FAQ_RESOLVER_DEBUG | query=%s | normalized=%s | rewritten=%s | rewrite_intent=%s | rewrite_followup=%s | rewrite_inferred_topic=%s | rewrite_confidence=%.2f | candidate_texts=%s | selected_faq_id=none | matched_text=none | route=faq_only_no_match",
+    deterministic_search_texts = _build_deterministic_search_texts(raw_text, context)
+    deterministic_best, deterministic_text = _pick_deterministic_match(
+        deterministic_search_texts,
+        faq_records,
+    )
+    deterministic_match_found = bool(deterministic_best)
+    deterministic_faq_id = _safe_str(
+        ((deterministic_best or {}).get("record") or {}).get("id")
+    )
+    ranker_used = False
+    ranker_top_faq_id = ""
+
+    if deterministic_best:
+        record = deterministic_best.get("record") or {}
+        faq_id = _safe_str(record.get("id"))
+        if _should_block_branch_faq(raw_text, faq_id):
+            logger.debug(
+                "faq_resolver blocked branch specific | query=%s | normalized=%s | deterministic_match_found=%s | deterministic_faq_id=%s | ranker_used=%s | ranker_top_faq_id=%s | final_route_decision=blocked_branch_specific",
+                _escape_debug(raw_text),
+                _escape_debug(normalized),
+                deterministic_match_found,
+                faq_id,
+                ranker_used,
+                ranker_top_faq_id,
+            )
+            return None
+
+        concepts = _resolve_concepts_for_match(faq_id, None, rewrite)
+        answer = _refine_faq_answer_style(
+            user_text=raw_text,
+            answer=_safe_str(record.get("answer")),
+            concepts=concepts,
+        )
+        result = {
+            "faq_id": faq_id,
+            "question": _safe_str(record.get("question")),
+            "answer": answer,
+            "score": float(deterministic_best.get("score") or 0.0),
+            "margin": float(deterministic_best.get("margin") or 0.0),
+            "matched_text": _safe_str(deterministic_text),
+            "concepts": concepts,
+            "canonical_candidates": [
+                _safe_str(x)
+                for x in [raw_text, rewrite.resolved_query, rewrite.rewritten_query]
+                if _safe_str(x)
+            ],
+            "matched_via": "faq_deterministic",
+            "source": "faq",
+        }
+        logger.debug(
+            "faq_resolver matched deterministic | query=%s | normalized=%s | deterministic_match_found=%s | deterministic_faq_id=%s | ranker_used=%s | ranker_top_faq_id=%s | final_route_decision=matched_deterministic",
             _escape_debug(raw_text),
-            _escape_debug(canon.get("normalized")),
+            _escape_debug(normalized),
+            deterministic_match_found,
+            faq_id,
+            ranker_used,
+            ranker_top_faq_id,
+        )
+        return result
+
+    ranker_used = True
+    ranked_result = rank_faq_candidates(
+        current_query=raw_text,
+        faq_records=faq_records,
+        recent_runtime_messages=recent_runtime_messages,
+        rewritten_query=rewrite.rewritten_query,
+        resolved_query=rewrite.resolved_query,
+        intent_hint=_safe_str(rewrite.intent_hint),
+        followup_detected=bool(rewrite.used_followup),
+    )
+    ranked_meta = ranked_result.get("meta") or {}
+    ranked_pick = select_best_ranked_candidate(
+        ranked_result,
+        min_score=0.72,
+        min_margin=0.015,
+    )
+    ranker_top_faq_id = _safe_str(((ranked_pick or {}).get("record") or {}).get("id"))
+    if not ranked_pick:
+        logger.debug(
+            "faq_resolver no match | query=%s | normalized=%s | is_followup=%s | inferred_topic=%s | rewritten=%s | rewrite_intent=%s | top_faq_id=none | top_score=%.3f | second_score=%.3f | margin=%.3f | deterministic_match_found=%s | deterministic_faq_id=%s | ranker_used=%s | ranker_top_faq_id=%s | final_route_decision=no_match",
+            _escape_debug(raw_text),
+            _escape_debug(normalized),
+            bool(ranked_meta.get("is_followup")),
+            _escape_debug((ranked_meta.get("inferred_topic") or {}).get("concept")),
             _escape_debug(rewrite.rewritten_query),
             _escape_debug(rewrite.intent_hint),
-            bool(rewrite.used_followup),
-            _escape_debug(rewrite.inferred_topic),
-            float(rewrite.confidence),
-            [_escape_debug(x) for x in search_texts],
-        )
-        print(
-            "FAQ_RESOLVER_DEBUG",
-            {
-                "query": _escape_debug(raw_text),
-                "normalized": _escape_debug(canon.get("normalized")),
-                "rewrite_resolved": _escape_debug(rewrite.resolved_query),
-                "rewrite_rewritten": _escape_debug(rewrite.rewritten_query),
-                "rewrite_intent": _escape_debug(rewrite.intent_hint),
-                "rewrite_followup": bool(rewrite.used_followup),
-                "rewrite_inferred_topic": _escape_debug(rewrite.inferred_topic),
-                "rewrite_followup_source": _escape_debug(rewrite.followup_source_text),
-                "rewrite_confidence": float(rewrite.confidence),
-                "candidate_texts": [_escape_debug(x) for x in search_texts],
-                "selected_faq_id": "",
-                "matched_text": "",
-                "route": "faq_only_no_match",
-            },
+            float(ranked_meta.get("top_score") or 0.0),
+            float(ranked_meta.get("second_score") or 0.0),
+            float(ranked_meta.get("margin") or 0.0),
+            deterministic_match_found,
+            deterministic_faq_id,
+            ranker_used,
+            ranker_top_faq_id,
         )
         return None
 
-    record = best.get("record") or {}
+    record = ranked_pick.get("record") or {}
     faq_id = _safe_str(record.get("id"))
-    concepts = _resolve_concepts_for_match(canon, faq_id)
+    concepts = _resolve_concepts_for_match(faq_id, ranked_pick, rewrite)
 
     # Guard: keep defensive check for generic branches FAQ too.
     if _should_block_branch_faq(raw_text, faq_id):
-        logger.info(
-            "FAQ_RESOLVER_DEBUG | query=%s | normalized=%s | rewritten=%s | rewrite_intent=%s | rewrite_followup=%s | rewrite_inferred_topic=%s | rewrite_confidence=%.2f | candidate_texts=%s | selected_faq_id=%s | matched_text=%s | route=faq_only_no_match_blocked_generic_branch",
+        logger.debug(
+            "faq_resolver blocked branch specific | query=%s | normalized=%s | is_followup=%s | inferred_topic=%s | rewritten=%s | rewrite_intent=%s | top_faq_id=%s | top_score=%.3f | second_score=%.3f | margin=%.3f | deterministic_match_found=%s | deterministic_faq_id=%s | ranker_used=%s | ranker_top_faq_id=%s | final_route_decision=blocked_branch_specific",
             _escape_debug(raw_text),
-            _escape_debug(canon.get("normalized")),
+            _escape_debug(normalized),
+            bool(ranked_meta.get("is_followup")),
+            _escape_debug((ranked_meta.get("inferred_topic") or {}).get("concept")),
             _escape_debug(rewrite.rewritten_query),
             _escape_debug(rewrite.intent_hint),
-            bool(rewrite.used_followup),
-            _escape_debug(rewrite.inferred_topic),
-            float(rewrite.confidence),
-            [_escape_debug(x) for x in search_texts],
             faq_id,
-            _escape_debug(best_search_text),
+            float(ranked_pick.get("score") or 0.0),
+            float(ranked_pick.get("second_score") or 0.0),
+            float(ranked_pick.get("margin") or 0.0),
+            deterministic_match_found,
+            deterministic_faq_id,
+            ranker_used,
+            ranker_top_faq_id,
         )
         return None
 
@@ -345,44 +402,34 @@ def resolve_faq(
         "faq_id": faq_id,
         "question": _safe_str(record.get("question")),
         "answer": answer,
-        "score": float(best.get("score") or 0.0),
-        "margin": float(best.get("margin") or 0.0),
-        "matched_text": _safe_str(best.get("matched_text")) or best_search_text,
+        "score": float(ranked_pick.get("score") or 0.0),
+        "margin": float(ranked_pick.get("margin") or 0.0),
+        "matched_text": _safe_str(record.get("q_norm")) or _safe_str(record.get("question")),
         "concepts": concepts,
-        "canonical_candidates": [_safe_str(x) for x in search_texts if _safe_str(x)],
-        "matched_via": "faq",
+        "canonical_candidates": [
+            _safe_str(x)
+            for x in [raw_text, rewrite.resolved_query, rewrite.rewritten_query]
+            if _safe_str(x)
+        ],
+        "matched_via": "faq_ranker_fallback",
         "source": "faq",
     }
-    logger.info(
-        "FAQ_RESOLVER_DEBUG | query=%s | normalized=%s | rewritten=%s | rewrite_intent=%s | rewrite_followup=%s | rewrite_inferred_topic=%s | rewrite_confidence=%.2f | candidate_texts=%s | selected_faq_id=%s | matched_text=%s | route=faq_only",
+    logger.debug(
+        "faq_resolver matched ranker | query=%s | normalized=%s | is_followup=%s | inferred_topic=%s | rewritten=%s | rewrite_intent=%s | top_faq_id=%s | top_score=%.3f | second_score=%.3f | margin=%.3f | deterministic_match_found=%s | deterministic_faq_id=%s | ranker_used=%s | ranker_top_faq_id=%s | final_route_decision=matched_ranker",
         _escape_debug(raw_text),
-        _escape_debug(canon.get("normalized")),
+        _escape_debug(normalized),
+        bool(ranked_meta.get("is_followup")),
+        _escape_debug((ranked_meta.get("inferred_topic") or {}).get("concept")),
         _escape_debug(rewrite.rewritten_query),
         _escape_debug(rewrite.intent_hint),
-        bool(rewrite.used_followup),
-        _escape_debug(rewrite.inferred_topic),
-        float(rewrite.confidence),
-        [_escape_debug(x) for x in search_texts],
         faq_id,
-        _escape_debug(result.get("matched_text")),
-    )
-    print(
-        "FAQ_RESOLVER_DEBUG",
-        {
-            "query": _escape_debug(raw_text),
-            "normalized": _escape_debug(canon.get("normalized")),
-            "rewrite_resolved": _escape_debug(rewrite.resolved_query),
-            "rewrite_rewritten": _escape_debug(rewrite.rewritten_query),
-            "rewrite_intent": _escape_debug(rewrite.intent_hint),
-            "rewrite_followup": bool(rewrite.used_followup),
-            "rewrite_inferred_topic": _escape_debug(rewrite.inferred_topic),
-            "rewrite_followup_source": _escape_debug(rewrite.followup_source_text),
-            "rewrite_confidence": float(rewrite.confidence),
-            "candidate_texts": [_escape_debug(x) for x in search_texts],
-            "selected_faq_id": faq_id,
-            "matched_text": _escape_debug(result.get("matched_text")),
-            "route": "faq_only",
-        },
+        float(ranked_pick.get("score") or 0.0),
+        float(ranked_pick.get("second_score") or 0.0),
+        float(ranked_pick.get("margin") or 0.0),
+        deterministic_match_found,
+        deterministic_faq_id,
+        ranker_used,
+        ranker_top_faq_id,
     )
     return result
 

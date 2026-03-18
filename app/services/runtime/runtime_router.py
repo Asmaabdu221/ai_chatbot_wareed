@@ -32,11 +32,6 @@ def _safe_str(value: Any) -> str:
     return str(value or "").strip()
 
 
-def _escape_debug(value: Any) -> str:
-    """Return unicode-escaped debug-safe text."""
-    return _safe_str(value).encode("unicode_escape").decode()
-
-
 def route_runtime_message(
     user_text: str,
     *,
@@ -76,20 +71,11 @@ def route_runtime_message(
             recent_runtime_messages=recent_runtime_messages,
         )
         if faq_result:
-            logger.info(
-                "FAQ_ONLY_DEBUG | q=%s | selected_faq_id=%s | matched_text=%s | route=faq_only",
+            logger.debug(
+                "faq_only route matched | q=%s | selected_faq_id=%s | matched_text=%s | route=faq_only",
                 text,
                 _safe_str(faq_result.get("faq_id")),
                 _safe_str(faq_result.get("matched_text")),
-            )
-            print(
-                "FAQ_ONLY_DEBUG",
-                {
-                    "query": _escape_debug(text),
-                    "selected_faq_id": _safe_str(faq_result.get("faq_id")),
-                    "matched_text": _escape_debug(faq_result.get("matched_text")),
-                    "route": "faq_only",
-                },
             )
             return {
                 "reply": _safe_str(faq_result.get("answer")),
@@ -106,18 +92,9 @@ def route_runtime_message(
                 },
             }
 
-        logger.info(
-            "FAQ_ONLY_DEBUG | q=%s | selected_faq_id=none | matched_text=none | route=faq_only_no_match",
+        logger.debug(
+            "faq_only no match | q=%s | route=faq_only_no_match",
             text,
-        )
-        print(
-            "FAQ_ONLY_DEBUG",
-            {
-                "query": _escape_debug(text),
-                "selected_faq_id": "",
-                "matched_text": "",
-                "route": "faq_only_no_match",
-            },
         )
         return {
             "reply": get_faq_no_match_message(),

@@ -100,6 +100,8 @@ def _is_followup_query(user_text: str) -> bool:
     tokens = [t for t in n.split(" ") if t]
     if len(tokens) <= 2:
         return True
+    if len(tokens) <= 6 and tokens and tokens[0] in {"و", "يعني", "طيب"}:
+        return True
     if len(tokens) <= 4 and any(marker in n for marker in _FOLLOWUP_MARKERS):
         return True
     followup_phrases = (
@@ -189,6 +191,18 @@ def _resolve_followup_entity(
         return f"{cleaned} {entity}".strip(), True, followup_source, notes, 0.75
 
     if intent:
+        if intent in {"results_privacy", "sensitive_tests_privacy"} and any(
+            key in cleaned for key in ("سري", "يشوف", "يطلع", "محد", "احد", "خصوص")
+        ):
+            notes.append("followup_privacy_from_history")
+            if intent == "sensitive_tests_privacy":
+                return "كيف اضمن خصوصيه التحاليل الحساسه", True, followup_source, notes, 0.88
+            return "هل نتائج التحاليل سريه", True, followup_source, notes, 0.88
+        if intent in {"electronic_results", "results_turnaround"} and any(
+            key in cleaned for key in ("واتساب", "ايميل", "الكترون", "استلم")
+        ):
+            notes.append("followup_electronic_results_from_history")
+            return "هل يتم ارسال نتائج التحاليل الكترونيا", True, followup_source, notes, 0.88
         if intent in {"hba1c_fasting", "hba1c_code"} and ("رمز" in cleaned or "كود" in cleaned):
             notes.append("followup_hba1c_code_from_history")
             return "ما هو رمز تحليل السكر التراكمي", True, followup_source, notes, 0.90
@@ -213,7 +227,7 @@ def _resolve_followup_entity(
             return "ما هو رمز تحليل السكر التراكمي", True, followup_source, notes, 0.74
 
     notes.append("followup_unclear")
-    return original, False, followup_source, notes, 0.45
+    return original, True, followup_source, notes, 0.45
 
 
 def _rewrite_to_canonical(resolved_query: str) -> tuple[str, str | None, float, list[str]]:
@@ -227,7 +241,7 @@ def _rewrite_to_canonical(resolved_query: str) -> tuple[str, str | None, float, 
         return "ما هي الخدمات التي يقدمها مختبر وريد", "services_overview", 0.95, ["canonical_services"]
     if ("سحب" in n and ("المنزل" in n or "البيت" in n)) or "الزيارات المنزليه" in n:
         return "هل يوفر مختبر وريد خدمة الزيارات المنزلية", "home_visit", 0.94, ["canonical_home_visit"]
-    if ("متى" in n or "كم" in n) and ("نتيجه" in n or "النتائج" in n):
+    if ("متى" in n or "كم" in n) and ("نتيجه" in n or "النتائج" in n or "نتايج" in n):
         return "كم تستغرق نتائج التحاليل للظهور", "results_turnaround", 0.90, ["canonical_results_turnaround"]
     if "طرق" in n and "الدفع" in n or ("ادفع" in n and "كيف" in n):
         return "ما هي طرق الدفع المتاحة", "payment_methods", 0.95, ["canonical_payment_methods"]
@@ -241,9 +255,11 @@ def _rewrite_to_canonical(resolved_query: str) -> tuple[str, str | None, float, 
         return "هل توجد عروض او تخفيضات حاليا", "current_offers", 0.92, ["canonical_current_offers"]
     if ("امن" in n or "امنه" in n or "خطوره" in n) and ("اطفال" in n or "كبار السن" in n):
         return "هل التحاليل امنه للاطفال وكبار السن", "safety_children_elderly", 0.93, ["canonical_safety"]
-    if "خصوص" in n and ("نتائج" in n or "تحليل" in n):
+    if "خصوص" in n and ("نتائج" in n or "نتايج" in n or "تحليل" in n):
         if "حساس" in n:
             return "كيف اضمن خصوصيه التحاليل الحساسه", "sensitive_tests_privacy", 0.93, ["canonical_sensitive_privacy"]
+        return "هل نتائج التحاليل سريه", "results_privacy", 0.90, ["canonical_results_privacy"]
+    if ("نتائج" in n or "نتايج" in n or "نتيجه" in n) and ("سري" in n or "خصوص" in n):
         return "هل نتائج التحاليل سريه", "results_privacy", 0.90, ["canonical_results_privacy"]
     if ("سكر" in n and "تراكمي" in n) and ("صيام" in n or "يحتاج" in n):
         return "هل تحليل السكر التراكمي يحتاج صيام", "hba1c_fasting", 0.96, ["canonical_hba1c_fasting"]
@@ -253,7 +269,9 @@ def _rewrite_to_canonical(resolved_query: str) -> tuple[str, str | None, float, 
         return "هل تحليل الغدة الدرقية يحتاج صيام", "thyroid_fasting", 0.95, ["canonical_thyroid_fasting"]
     if "صيام" in n and ("تحليل" in n or "تحاليل" in n):
         return "ما هي التحاليل التي تحتاج الي صيام", "fasting_general", 0.87, ["canonical_fasting_general"]
-    if ("النتائج" in n or "نتيجه" in n) and ("الكترون" in n or "واتساب" in n or "ايميل" in n):
+    if ("النتائج" in n or "نتايج" in n or "نتيجه" in n) and ("استلم" in n or "كيف" in n):
+        return "هل يتم ارسال نتائج التحاليل الكترونيا", "electronic_results", 0.82, ["canonical_electronic_results"]
+    if ("النتائج" in n or "نتايج" in n or "نتيجه" in n) and ("الكترون" in n or "واتساب" in n or "ايميل" in n):
         return "هل يتم ارسال نتائج التحاليل الكترونيا", "electronic_results", 0.88, ["canonical_electronic_results"]
 
     notes.append("canonical_uncertain_passthrough")
