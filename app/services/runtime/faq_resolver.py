@@ -21,6 +21,24 @@ from app.services.runtime.text_normalizer import normalize_arabic
 
 logger = logging.getLogger(__name__)
 
+_INTENT_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "consultation_after_results": ("استشاره", "استشارة"),
+    "home_visit": ("زياره", "زيارة", "منزلي", "منزليه", "منزليه"),
+    "electronic_results": ("اونلاين", "الكترون", "واتساب", "ايميل", "ترسلون", "ارسال"),
+    "results_turnaround": ("كم مدته", "كم ياخذ", "متي تطلع", "متى تطلع"),
+    "payment_methods": ("دفع", "ادفع"),
+    "results_privacy": ("سري", "سرية", "يشوفها", "يشوف", "محد"),
+}
+
+_INTENT_ANCHORS: dict[str, str] = {
+    "consultation_after_results": "هل يوفر المختبر استشارة طبية بعد ظهور النتائج",
+    "home_visit": "هل يوفر مختبر وريد خدمة الزيارات المنزلية",
+    "electronic_results": "هل يتم ارسال نتائج التحاليل الكترونيا",
+    "results_turnaround": "كم تستغرق نتائج التحاليل للظهور",
+    "payment_methods": "ما هي طرق الدفع المتاحة",
+    "results_privacy": "هل نتائج التحاليل سريه",
+}
+
 
 def _safe_str(value: Any) -> str:
     """Convert any value to a safely stripped string."""
@@ -115,13 +133,39 @@ def _build_resolution_context(
         last_resolved_entity="",
         recent_runtime_messages=recent_runtime_messages,
     )
+    detected_intent = _detect_anchor_intent(user_text)
     return {
         "normalized": normalize_arabic(user_text),
         # Canonicalizer can produce large candidate expansions for some colloquial
         # phrasings; keep resolver deterministic-first and lightweight here.
         "canon": {},
         "rewrite": rewrite,
+        "detected_intent": detected_intent,
+        "detected_anchor": _safe_str(_INTENT_ANCHORS.get(detected_intent)),
     }
+
+
+def _detect_anchor_intent(user_text: str) -> str:
+    """Detect strong query intent for deterministic FAQ anchoring."""
+    n = normalize_arabic(user_text)
+    if not n:
+        return ""
+
+    if any(k in n for k in _INTENT_KEYWORDS["consultation_after_results"]) and (
+        "نتايج" in n or "نتائج" in n or "نتيجه" in n or "بعد" in n
+    ):
+        return "consultation_after_results"
+    if any(k in n for k in _INTENT_KEYWORDS["home_visit"]):
+        return "home_visit"
+    if any(k in n for k in _INTENT_KEYWORDS["electronic_results"]):
+        return "electronic_results"
+    if any(k in n for k in _INTENT_KEYWORDS["results_turnaround"]):
+        return "results_turnaround"
+    if any(k in n for k in _INTENT_KEYWORDS["payment_methods"]):
+        return "payment_methods"
+    if any(k in n for k in _INTENT_KEYWORDS["results_privacy"]):
+        return "results_privacy"
+    return ""
 
 
 def _unique_keep_order(values: list[str]) -> list[str]:
@@ -143,17 +187,29 @@ def _build_deterministic_search_texts(
     """Build deterministic candidate texts for strong FAQ matching."""
     canon = context.get("canon") or {}
     rewrite: FAQRewriteResult = context["rewrite"]
+    detected_intent = _safe_str(context.get("detected_intent"))
+    detected_anchor = _safe_str(context.get("detected_anchor"))
+    prefer_current_intent = _safe_str(getattr(rewrite, "intent_source", "")) == "current_query"
 
-    search_texts = _unique_keep_order(
-        [
+    ordered = [
+        _safe_str(raw_text),
+        _safe_str(context.get("normalized")),
+        _safe_str(rewrite.resolved_query),
+        _safe_str(rewrite.rewritten_query),
+        _safe_str(rewrite.intent_hint).replace("_", " "),
+    ]
+    if prefer_current_intent:
+        ordered = [
+            _safe_str(rewrite.rewritten_query),
+            _safe_str(rewrite.resolved_query),
+            _safe_str(rewrite.intent_hint).replace("_", " "),
             _safe_str(raw_text),
             _safe_str(context.get("normalized")),
-            _safe_str(rewrite.resolved_query),
-            _safe_str(rewrite.rewritten_query),
-            _safe_str(rewrite.intent_hint).replace("_", " "),
         ]
-        + [_safe_str(v) for v in (canon.get("variants") or [])]
-    )
+    if detected_anchor:
+        ordered = [detected_anchor, detected_intent.replace("_", " ")] + ordered
+
+    search_texts = _unique_keep_order(ordered + [_safe_str(v) for v in (canon.get("variants") or [])])
 
     for candidate in (canon.get("candidates") or []):
         if not isinstance(candidate, dict):
@@ -207,6 +263,42 @@ def _pick_deterministic_match(
             if score >= 0.999:
                 break
 
+    return best, best_text
+
+
+def _pick_intent_concept_match(
+    detected_intent: str,
+    search_texts: list[str],
+    faq_records: list[dict[str, Any]],
+) -> tuple[dict[str, Any] | None, str]:
+    """Prefer FAQs matching detected concept intent before global matching."""
+    intent = _safe_str(detected_intent)
+    if not intent:
+        return None, ""
+
+    concept_records = [
+        record for record in faq_records if _safe_str(FAQ_ID_TO_CONCEPT.get(_safe_str(record.get("id")))) == intent
+    ]
+    if not concept_records:
+        return None, ""
+
+    best: dict[str, Any] | None = None
+    best_text = ""
+    best_score = -1.0
+    for text in search_texts:
+        match = find_best_faq_match(
+            text,
+            concept_records,
+            min_score=0.40,
+            min_margin=0.0,
+        )
+        if not match:
+            continue
+        score = float(match.get("score") or 0.0)
+        if score > best_score:
+            best = match
+            best_text = _safe_str(text)
+            best_score = score
     return best, best_text
 
 
@@ -265,6 +357,7 @@ def resolve_faq(
         recent_runtime_messages=recent_runtime_messages,
     )
     rewrite: FAQRewriteResult = context["rewrite"]
+    detected_intent = _safe_str(context.get("detected_intent"))
     normalized = _safe_str(context.get("normalized"))
 
     faq_records = load_faq_records()
@@ -272,10 +365,18 @@ def resolve_faq(
         return None
 
     deterministic_search_texts = _build_deterministic_search_texts(raw_text, context)
+    concept_best, concept_text = _pick_intent_concept_match(
+        detected_intent,
+        deterministic_search_texts,
+        faq_records,
+    )
     deterministic_best, deterministic_text = _pick_deterministic_match(
         deterministic_search_texts,
         faq_records,
     )
+    if concept_best:
+        deterministic_best = concept_best
+        deterministic_text = concept_text or deterministic_text
     deterministic_match_found = bool(deterministic_best)
     deterministic_faq_id = _safe_str(
         ((deterministic_best or {}).get("record") or {}).get("id")
@@ -321,9 +422,10 @@ def resolve_faq(
             "source": "faq",
         }
         logger.debug(
-            "faq_resolver matched deterministic | query=%s | normalized=%s | deterministic_match_found=%s | deterministic_faq_id=%s | ranker_used=%s | ranker_top_faq_id=%s | final_route_decision=matched_deterministic",
+            "faq_resolver matched deterministic | query=%s | normalized=%s | detected_intent=%s | deterministic_match_found=%s | deterministic_faq_id=%s | ranker_used=%s | ranker_top_faq_id=%s | final_route_decision=matched_deterministic",
             _escape_debug(raw_text),
             _escape_debug(normalized),
+            detected_intent,
             deterministic_match_found,
             faq_id,
             ranker_used,
@@ -350,9 +452,10 @@ def resolve_faq(
     ranker_top_faq_id = _safe_str(((ranked_pick or {}).get("record") or {}).get("id"))
     if not ranked_pick:
         logger.debug(
-            "faq_resolver no match | query=%s | normalized=%s | is_followup=%s | inferred_topic=%s | rewritten=%s | rewrite_intent=%s | top_faq_id=none | top_score=%.3f | second_score=%.3f | margin=%.3f | deterministic_match_found=%s | deterministic_faq_id=%s | ranker_used=%s | ranker_top_faq_id=%s | final_route_decision=no_match",
+            "faq_resolver no match | query=%s | normalized=%s | detected_intent=%s | is_followup=%s | inferred_topic=%s | rewritten=%s | rewrite_intent=%s | top_faq_id=none | top_score=%.3f | second_score=%.3f | margin=%.3f | deterministic_match_found=%s | deterministic_faq_id=%s | ranker_used=%s | ranker_top_faq_id=%s | final_route_decision=no_match",
             _escape_debug(raw_text),
             _escape_debug(normalized),
+            detected_intent,
             bool(ranked_meta.get("is_followup")),
             _escape_debug((ranked_meta.get("inferred_topic") or {}).get("concept")),
             _escape_debug(rewrite.rewritten_query),
@@ -415,9 +518,10 @@ def resolve_faq(
         "source": "faq",
     }
     logger.debug(
-        "faq_resolver matched ranker | query=%s | normalized=%s | is_followup=%s | inferred_topic=%s | rewritten=%s | rewrite_intent=%s | top_faq_id=%s | top_score=%.3f | second_score=%.3f | margin=%.3f | deterministic_match_found=%s | deterministic_faq_id=%s | ranker_used=%s | ranker_top_faq_id=%s | final_route_decision=matched_ranker",
+        "faq_resolver matched ranker | query=%s | normalized=%s | detected_intent=%s | is_followup=%s | inferred_topic=%s | rewritten=%s | rewrite_intent=%s | top_faq_id=%s | top_score=%.3f | second_score=%.3f | margin=%.3f | deterministic_match_found=%s | deterministic_faq_id=%s | ranker_used=%s | ranker_top_faq_id=%s | final_route_decision=matched_ranker",
         _escape_debug(raw_text),
         _escape_debug(normalized),
+        detected_intent,
         bool(ranked_meta.get("is_followup")),
         _escape_debug((ranked_meta.get("inferred_topic") or {}).get("concept")),
         _escape_debug(rewrite.rewritten_query),

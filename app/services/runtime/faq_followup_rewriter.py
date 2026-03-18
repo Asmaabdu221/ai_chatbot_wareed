@@ -19,6 +19,7 @@ class FAQRewriteResult:
     confidence: float
     used_followup: bool
     followup_source_text: str
+    intent_source: str = "history"
     inferred_topic: str | None = None
     notes: list[str] = field(default_factory=list)
 
@@ -139,7 +140,7 @@ def _resolve_followup_entity(
     last_resolved_intent: str,
     last_resolved_entity: str,
     recent_runtime_messages: list[dict[str, str]] | None = None,
-) -> tuple[str, bool, str, list[str], float]:
+) -> tuple[str, bool, str, list[str], float, bool]:
     """Resolve follow-up shorthand into a fuller query using prior entity/intent."""
     notes: list[str] = []
     original = _safe_str(user_text)
@@ -160,19 +161,21 @@ def _resolve_followup_entity(
     if not followup_source and inferred_source:
         followup_source = inferred_source
 
+    history_used = bool(intent or entity or followup_source)
+
     if not _is_followup_query(original):
-        return original, False, followup_source, notes, 0.66
+        return original, False, followup_source, notes, 0.66, history_used
 
     if entity:
         if "رمز" in cleaned or "كود" in cleaned:
             notes.append("followup_entity_code")
-            return f"ما هو رمز {entity}", True, followup_source, notes, 0.93
+            return f"ما هو رمز {entity}", True, followup_source, notes, 0.93, True
         if "صيام" in cleaned or "يحتاج" in cleaned:
             notes.append("followup_entity_fasting")
-            return f"هل {entity} يحتاج صيام او لا", True, followup_source, notes, 0.92
+            return f"هل {entity} يحتاج صيام او لا", True, followup_source, notes, 0.92, True
         if "سعر" in cleaned:
             notes.append("followup_entity_price_wording")
-            return f"كم سعر {entity}", True, followup_source, notes, 0.84
+            return f"كم سعر {entity}", True, followup_source, notes, 0.84, True
         if ("وين" in cleaned or "اين" in cleaned) and ("فرع" in entity or "فروع" in entity):
             city_hint = ""
             for city in _BRANCH_CITY_HINTS:
@@ -181,14 +184,14 @@ def _resolve_followup_entity(
                     break
             notes.append("followup_entity_branch_location")
             if city_hint:
-                return f"وين اقرب فرع {city_hint}", True, followup_source, notes, 0.90
-            return "اين تتواجد فروع مختبرات وريد", True, followup_source, notes, 0.86
+                return f"وين اقرب فرع {city_hint}", True, followup_source, notes, 0.90, True
+            return "اين تتواجد فروع مختبرات وريد", True, followup_source, notes, 0.86, True
         if "امن" in cleaned or "امنه" in cleaned:
             notes.append("followup_entity_safety")
-            return f"هل {entity} امن", True, followup_source, notes, 0.82
+            return f"هل {entity} امن", True, followup_source, notes, 0.82, True
 
         notes.append("followup_entity_attached")
-        return f"{cleaned} {entity}".strip(), True, followup_source, notes, 0.75
+        return f"{cleaned} {entity}".strip(), True, followup_source, notes, 0.75, True
 
     if intent:
         if intent in {"results_privacy", "sensitive_tests_privacy"} and any(
@@ -196,38 +199,55 @@ def _resolve_followup_entity(
         ):
             notes.append("followup_privacy_from_history")
             if intent == "sensitive_tests_privacy":
-                return "كيف اضمن خصوصيه التحاليل الحساسه", True, followup_source, notes, 0.88
-            return "هل نتائج التحاليل سريه", True, followup_source, notes, 0.88
+                return "كيف اضمن خصوصيه التحاليل الحساسه", True, followup_source, notes, 0.88, True
+            return "هل نتائج التحاليل سريه", True, followup_source, notes, 0.88, True
         if intent in {"electronic_results", "results_turnaround"} and any(
             key in cleaned for key in ("واتساب", "ايميل", "الكترون", "استلم")
         ):
             notes.append("followup_electronic_results_from_history")
-            return "هل يتم ارسال نتائج التحاليل الكترونيا", True, followup_source, notes, 0.88
+            return "هل يتم ارسال نتائج التحاليل الكترونيا", True, followup_source, notes, 0.88, True
         if intent in {"hba1c_fasting", "hba1c_code"} and ("رمز" in cleaned or "كود" in cleaned):
             notes.append("followup_hba1c_code_from_history")
-            return "ما هو رمز تحليل السكر التراكمي", True, followup_source, notes, 0.90
+            return "ما هو رمز تحليل السكر التراكمي", True, followup_source, notes, 0.90, True
         if intent in {"hba1c_fasting", "hba1c_code"} and ("صيام" in cleaned or "يحتاج" in cleaned):
             notes.append("followup_hba1c_fasting_from_history")
-            return "هل تحليل السكر التراكمي يحتاج صيام", True, followup_source, notes, 0.90
+            return "هل تحليل السكر التراكمي يحتاج صيام", True, followup_source, notes, 0.90, True
         if intent == "thyroid_fasting" and ("صيام" in cleaned or "يحتاج" in cleaned):
             notes.append("followup_thyroid_fasting_from_history")
-            return "هل تحليل الغدة الدرقية يحتاج صيام", True, followup_source, notes, 0.90
+            return "هل تحليل الغدة الدرقية يحتاج صيام", True, followup_source, notes, 0.90, True
         if intent in {"results_turnaround", "electronic_results"} and (
             "كم مدته" in cleaned or "كم يطلع" in cleaned or "كم" in cleaned
         ):
             notes.append("followup_results_turnaround_from_history")
-            return "كم تستغرق نتائج التحاليل للظهور", True, followup_source, notes, 0.84
+            return "كم تستغرق نتائج التحاليل للظهور", True, followup_source, notes, 0.84, True
         if intent in {"hba1c_fasting", "thyroid_fasting", "fasting_general"} and (
             "صيام" in cleaned or "يحتاج" in cleaned
         ):
             notes.append("followup_intent_fasting")
-            return "هل التحليل يحتاج صيام", True, followup_source, notes, 0.72
+            return "هل التحليل يحتاج صيام", True, followup_source, notes, 0.72, True
         if intent == "hba1c_code" and ("رمز" in cleaned or "كود" in cleaned):
             notes.append("followup_intent_code")
-            return "ما هو رمز تحليل السكر التراكمي", True, followup_source, notes, 0.74
+            return "ما هو رمز تحليل السكر التراكمي", True, followup_source, notes, 0.74, True
 
     notes.append("followup_unclear")
-    return original, True, followup_source, notes, 0.45
+    return original, True, followup_source, notes, 0.45, history_used
+
+
+def _detect_strong_current_intent(user_text: str) -> tuple[str, str, float, str] | None:
+    """Detect strong current-query intent before history-based topic reuse."""
+    n = normalize_arabic(user_text)
+    if not n:
+        return None
+
+    if any(p in n for p in ("كم مدته", "كم ياخذ", "متى تطلع", "متي تطلع", "كم تستغرق")):
+        return ("results_turnaround", "كم تستغرق نتائج التحاليل للظهور", 0.92, "strong_intent_duration")
+    if any(p in n for p in ("كيف ادفع", "كيف اقدر ادفع", "طرق الدفع", "طريقه الدفع")):
+        return ("payment_methods", "ما هي طرق الدفع المتاحة", 0.92, "strong_intent_payment")
+    if any(p in n for p in ("هل سرية", "هل سريه", "احد يشوف", "محد يقدر يشوف", "احد يطلع")):
+        return ("results_privacy", "هل نتائج التحاليل سريه", 0.90, "strong_intent_privacy")
+    if "امن" in n and "هل" in n:
+        return ("safety_children_elderly", "هل التحاليل امنه للاطفال وكبار السن", 0.86, "strong_intent_safety")
+    return None
 
 
 def _rewrite_to_canonical(resolved_query: str) -> tuple[str, str | None, float, list[str]]:
@@ -337,7 +357,26 @@ def rewrite_faq_query(
 ) -> FAQRewriteResult:
     """Resolve follow-up ambiguity and rewrite to FAQ-style canonical query."""
     original = _safe_str(user_text)
-    resolved, used_followup, source_text, notes, followup_conf = _resolve_followup_entity(
+    notes: list[str] = []
+
+    strong_intent = _detect_strong_current_intent(original)
+    if strong_intent:
+        intent_hint, rewritten_query, confidence, note = strong_intent
+        notes.append(note)
+        return FAQRewriteResult(
+            original_query=original,
+            resolved_query=original,
+            rewritten_query=rewritten_query,
+            intent_hint=intent_hint,
+            confidence=confidence,
+            used_followup=_is_followup_query(original),
+            followup_source_text="",
+            intent_source="current_query",
+            inferred_topic=None,
+            notes=notes,
+        )
+
+    resolved, used_followup, source_text, notes, followup_conf, history_used = _resolve_followup_entity(
         original,
         last_user_text,
         last_assistant_text,
@@ -369,6 +408,7 @@ def rewrite_faq_query(
         confidence=confidence,
         used_followup=used_followup,
         followup_source_text=_safe_str(source_text),
+        intent_source="history" if history_used else "current_query",
         inferred_topic=inferred_topic,
         notes=notes,
     )
