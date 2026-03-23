@@ -27,8 +27,6 @@ _SPECIFIC_BRANCH_HINTS = (
     "الاقرب",
     "فرع",
     "فرع في",
-    "بال",
-    "في ",
 )
 _NEAREST_HINTS = ("اقرب", "الاقرب")
 _CITY_STOPWORDS = {
