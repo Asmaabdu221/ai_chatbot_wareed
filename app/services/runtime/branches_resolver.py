@@ -386,8 +386,33 @@ def _get_last_city_option(selection_number: int) -> dict[str, Any] | None:
     return options[index]
 
 
-def _is_numeric_selection_query(query_norm: str) -> bool:
-    return bool(re.fullmatch(r"\d{1,2}", _safe_str(query_norm)))
+def _parse_numeric_selection(text: str) -> int | None:
+    value = _safe_str(text)
+    if not value:
+        return None
+
+    normalized_digits = value.translate(
+        str.maketrans(
+            {
+                "٠": "0",
+                "١": "1",
+                "٢": "2",
+                "٣": "3",
+                "٤": "4",
+                "٥": "5",
+                "٦": "6",
+                "٧": "7",
+                "٨": "8",
+                "٩": "9",
+            }
+        )
+    )
+    if not re.fullmatch(r"\d{1,2}", normalized_digits):
+        return None
+    try:
+        return int(normalized_digits)
+    except ValueError:
+        return None
 
 
 def _format_generic_branches_reply() -> str:
@@ -407,11 +432,10 @@ def _format_city_reply(city: str, city_records: list[dict[str, Any]]) -> str:
         if name and name not in names:
             names.append(name)
             city_options.append(record)
-    city_options = city_options[:5]
     _set_last_city_options(city, city_options)
 
     lines = [f"أكيد، هذه الفروع المتاحة في {city}:"]
-    for idx, branch_name in enumerate(names[:5], start=1):
+    for idx, branch_name in enumerate(names, start=1):
         lines.append(f"{idx}) {branch_name}")
     lines.append("اختر الرقم الأقرب أو المناسب لك، وأرسل لك رابط الموقع.")
     return _normalize_reply_text(
@@ -442,7 +466,20 @@ def _format_direct_branch_reply(record: dict[str, Any]) -> str:
 
 
 def _format_selected_branch_reply(record: dict[str, Any]) -> str:
-    return _format_branch_card("هذا الفرع متوفر:", record)
+    name = _format_branch_name_for_reply(_safe_str(record.get("branch_name")))
+    city = _safe_str(record.get("city"))
+    hours = _safe_str(record.get("hours"))
+    map_url = _safe_str(record.get("map_url")) or _safe_str(record.get("maps_url"))
+    phone = _safe_str(record.get("contact_phone"))
+
+    lines = ["هذا الفرع:", f"{name} – {city}" if city else name]
+    if hours:
+        lines.append(f"الدوام: {hours}")
+    if map_url:
+        lines.append(f"الموقع: {map_url}")
+    if phone:
+        lines.append(f"رقم التواصل: {phone}")
+    return _normalize_reply_text("\n".join(lines))
 
 
 def _format_unknown_area_reply() -> str:
@@ -502,8 +539,9 @@ def resolve_branches_query(user_text: str) -> dict[str, Any]:
     requested_city_candidate = _extract_requested_city_candidate(query_norm)
     area_candidate = _extract_area_candidate(query_norm)
 
-    if _is_numeric_selection_query(query_norm):
-        selected = _get_last_city_option(int(query_norm))
+    numeric_selection = _parse_numeric_selection(query_norm)
+    if numeric_selection is not None:
+        selected = _get_last_city_option(numeric_selection)
         if selected:
             return {
                 "matched": True,
@@ -515,9 +553,12 @@ def resolve_branches_query(user_text: str) -> dict[str, Any]:
                     "district": _safe_str(selected.get("district")),
                     "branch_name": _safe_str(selected.get("branch_name")),
                     "map_url": _safe_str(selected.get("map_url")),
+                    "maps_url": _safe_str(selected.get("maps_url")),
+                    "contact_phone": _safe_str(selected.get("contact_phone")),
                     "latitude": selected.get("latitude"),
                     "longitude": selected.get("longitude"),
                     "from_city_numbered_selection": True,
+                    "selection_number": numeric_selection,
                 },
                 "route": "branches_city_number_selection",
             }
