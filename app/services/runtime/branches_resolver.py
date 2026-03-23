@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from difflib import SequenceMatcher
 from functools import lru_cache
 from pathlib import Path
@@ -48,6 +49,12 @@ _CITY_STOPWORDS = {
     "بال",
 }
 _DISTRICT_QUERY_HINTS = ("حي", "الحي", "منطقة", "منطقه", "قريب من", "قريبه من", "بحي")
+_CITY_SELECTION_TTL_SECONDS = 15 * 60
+_LAST_CITY_SELECTION: dict[str, Any] = {
+    "city": "",
+    "options": [],
+    "updated_at": 0.0,
+}
 
 
 def _safe_str(value: Any) -> str:
@@ -239,6 +246,8 @@ def _extract_requested_city_candidate(query_norm: str) -> str:
 def _format_branch_name_for_reply(name: str) -> str:
     """Normalize display-only branch naming quirks without changing source data."""
     value = _safe_str(name)
+    if value.startswith("فرع الرئيسي -"):
+        return value.replace("فرع الرئيسي -", "الفرع الرئيسي -", 1).strip()
     value_norm = normalize_arabic(value)
     if value_norm.startswith("فرع الرئيسي -") or value_norm.startswith("فرع الرييسي -"):
         tail = _safe_str(value.split("-", 1)[1] if "-" in value else "")
@@ -358,6 +367,29 @@ def _format_district_options(matches: list[dict[str, Any]]) -> str:
     )
 
 
+def _set_last_city_options(city: str, options: list[dict[str, Any]]) -> None:
+    _LAST_CITY_SELECTION["city"] = _safe_str(city)
+    _LAST_CITY_SELECTION["options"] = list(options or [])
+    _LAST_CITY_SELECTION["updated_at"] = time.time()
+
+
+def _get_last_city_option(selection_number: int) -> dict[str, Any] | None:
+    if selection_number < 1:
+        return None
+    updated_at = float(_LAST_CITY_SELECTION.get("updated_at") or 0.0)
+    if not updated_at or (time.time() - updated_at) > _CITY_SELECTION_TTL_SECONDS:
+        return None
+    options = list(_LAST_CITY_SELECTION.get("options") or [])
+    index = selection_number - 1
+    if index < 0 or index >= len(options):
+        return None
+    return options[index]
+
+
+def _is_numeric_selection_query(query_norm: str) -> bool:
+    return bool(re.fullmatch(r"\d{1,2}", _safe_str(query_norm)))
+
+
 def _format_generic_branches_reply() -> str:
     return _normalize_reply_text(
         (
@@ -369,16 +401,21 @@ def _format_generic_branches_reply() -> str:
 
 def _format_city_reply(city: str, city_records: list[dict[str, Any]]) -> str:
     names: list[str] = []
+    city_options: list[dict[str, Any]] = []
     for record in city_records:
         name = _format_branch_name_for_reply(_safe_str(record.get("branch_name")))
         if name and name not in names:
             names.append(name)
-    examples = "، ".join(names[:5])
+            city_options.append(record)
+    city_options = city_options[:5]
+    _set_last_city_options(city, city_options)
+
+    lines = [f"أكيد، هذه الفروع المتاحة في {city}:"]
+    for idx, branch_name in enumerate(names[:5], start=1):
+        lines.append(f"{idx}) {branch_name}")
+    lines.append("اختر الرقم الأقرب أو المناسب لك، وأرسل لك رابط الموقع.")
     return _normalize_reply_text(
-        (
-            f"أكيد، عندنا عدة فروع في {city}، مثل: {examples}.\n\n"
-            "إذا تعطيني اسم الحي أو موقعك التقريبي أساعدك بأقرب فرع."
-        )
+        "\n".join(lines)
     )
 
 
@@ -402,6 +439,17 @@ def _format_city_not_found_reply() -> str:
 
 def _format_direct_branch_reply(record: dict[str, Any]) -> str:
     return _format_branch_card("نعم، هذا الفرع متوفر:", record)
+
+
+def _format_selected_branch_reply(record: dict[str, Any]) -> str:
+    return _format_branch_card("هذا الفرع متوفر:", record)
+
+
+def _format_unknown_area_reply() -> str:
+    return _normalize_reply_text(
+        "لا يوجد لدينا فرع مطابق بهذا الاسم في البيانات الحالية.\n"
+        "إذا ممكن تعطيني اسم المدينة التي أنت فيها، أقدر أرسل لك الفروع المتاحة فيها."
+    )
 
 
 def _match_specific_branch(query_norm: str, records: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -452,6 +500,27 @@ def resolve_branches_query(user_text: str) -> dict[str, Any]:
     generic = _is_generic_branches_query(query_norm)
     nearest = _is_nearest_query(query_norm)
     requested_city_candidate = _extract_requested_city_candidate(query_norm)
+    area_candidate = _extract_area_candidate(query_norm)
+
+    if _is_numeric_selection_query(query_norm):
+        selected = _get_last_city_option(int(query_norm))
+        if selected:
+            return {
+                "matched": True,
+                "answer": _format_selected_branch_reply(selected),
+                "meta": {
+                    "id": _safe_str(selected.get("id")),
+                    "source": _safe_str(selected.get("source")),
+                    "city": _safe_str(selected.get("city")),
+                    "district": _safe_str(selected.get("district")),
+                    "branch_name": _safe_str(selected.get("branch_name")),
+                    "map_url": _safe_str(selected.get("map_url")),
+                    "latitude": selected.get("latitude"),
+                    "longitude": selected.get("longitude"),
+                    "from_city_numbered_selection": True,
+                },
+                "route": "branches_city_number_selection",
+            }
 
     # 1) Generic branches query.
     if generic and not city_records and not district_norm and not nearest:
@@ -497,7 +566,7 @@ def resolve_branches_query(user_text: str) -> dict[str, Any]:
 
     # 4) City-only request.
     city_request_tokens = ("فرع" in query_norm or "فروع" in query_norm or "مدينه" in query_norm or "مدينة" in query_norm)
-    if city_records and (city_request_tokens or specific or generic):
+    if city_records and (city_request_tokens or specific or generic or query_norm == city_norm):
         city = _safe_str(city_records[0].get("city"))
         return {
             "matched": True,
@@ -507,7 +576,7 @@ def resolve_branches_query(user_text: str) -> dict[str, Any]:
         }
 
     # 5) District-like request.
-    district_like = district_norm or any(hint in query_norm for hint in _DISTRICT_QUERY_HINTS)
+    district_like = district_norm or any(hint in query_norm for hint in _DISTRICT_QUERY_HINTS) or bool(area_candidate)
     if district_like:
         scoped_records = city_records if city_records else records
         district_matches = _find_district_matches(district_norm, scoped_records) if district_norm else []
@@ -540,6 +609,12 @@ def resolve_branches_query(user_text: str) -> dict[str, Any]:
                 },
                 "route": "branches_district_options",
             }
+        return {
+            "matched": True,
+            "answer": _format_unknown_area_reply(),
+            "meta": {"reason": "unknown_area_or_district"},
+            "route": "branches_unknown_area",
+        }
 
     # City not found fallback for branch/city intents.
     branch_city_intent = specific or generic or nearest or "فرع" in query_norm or "فروع" in query_norm
