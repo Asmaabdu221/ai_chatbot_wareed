@@ -563,18 +563,7 @@ def resolve_branches_query(user_text: str) -> dict[str, Any]:
                 "route": "branches_city_number_selection",
             }
 
-    # 1) Generic branches query.
-    if generic and not city_records and not district_norm and not nearest:
-        return {
-            "matched": True,
-            "answer": _format_generic_branches_reply(),
-            "meta": {
-                "cities_count": len({_safe_str(r.get("city")) for r in records if _safe_str(r.get("city"))}),
-            },
-            "route": "branches_generic",
-        }
-
-    # 2) Direct branch-name query.
+    # 1) Direct branch-name query.
     matched_branch = None
     if "فرع" in query_norm or specific:
         matched_branch = _match_specific_branch(query_norm, city_records or records)
@@ -595,28 +584,7 @@ def resolve_branches_query(user_text: str) -> dict[str, Any]:
                 "route": "branches_specific",
             }
 
-    # 3) Nearest in city with no district/location.
-    if city_records and nearest and not district_norm:
-        city = _safe_str(city_records[0].get("city"))
-        return {
-            "matched": True,
-            "answer": _format_nearest_city_clarification(city),
-            "meta": {"city": city, "count": len(city_records), "nearest_requested": True},
-            "route": "branches_city_list",
-        }
-
-    # 4) City-only request.
-    city_request_tokens = ("فرع" in query_norm or "فروع" in query_norm or "مدينه" in query_norm or "مدينة" in query_norm)
-    if city_records and (city_request_tokens or specific or generic or query_norm == city_norm):
-        city = _safe_str(city_records[0].get("city"))
-        return {
-            "matched": True,
-            "answer": _format_city_reply(city, city_records),
-            "meta": {"city": city, "count": len(city_records), "nearest_requested": nearest},
-            "route": "branches_city_list",
-        }
-
-    # 5) District-like request.
+    # 2) District-like request.
     district_like = district_norm or any(hint in query_norm for hint in _DISTRICT_QUERY_HINTS) or bool(area_candidate)
     if district_like:
         scoped_records = city_records if city_records else records
@@ -657,7 +625,28 @@ def resolve_branches_query(user_text: str) -> dict[str, Any]:
             "route": "branches_unknown_area",
         }
 
-    # City not found fallback for branch/city intents.
+    # 3) Nearest in city with no district/location.
+    if city_records and nearest and not district_norm:
+        city = _safe_str(city_records[0].get("city"))
+        return {
+            "matched": True,
+            "answer": _format_nearest_city_clarification(city),
+            "meta": {"city": city, "count": len(city_records), "nearest_requested": True},
+            "route": "branches_city_list",
+        }
+
+    # 4) City-only request.
+    city_request_tokens = ("فرع" in query_norm or "فروع" in query_norm or "مدينه" in query_norm or "مدينة" in query_norm)
+    if city_records and (city_request_tokens or specific or generic or query_norm == city_norm):
+        city = _safe_str(city_records[0].get("city"))
+        return {
+            "matched": True,
+            "answer": _format_city_reply(city, city_records),
+            "meta": {"city": city, "count": len(city_records), "nearest_requested": nearest},
+            "route": "branches_city_list",
+        }
+
+    # 5) City not found fallback for branch/city intents.
     branch_city_intent = specific or generic or nearest or "فرع" in query_norm or "فروع" in query_norm
     if branch_city_intent and not city_records and requested_city_candidate and requested_city_candidate not in {"", "حي", "منطقه", "منطقة"}:
         return {
@@ -667,7 +656,7 @@ def resolve_branches_query(user_text: str) -> dict[str, Any]:
             "route": "branches_city_not_found",
         }
 
-    # Keep existing safe clarification behavior for branch-intent queries.
+    # 6) Keep existing safe clarification behavior for branch-intent queries.
     if specific:
         return {
             "matched": False,
@@ -676,8 +665,8 @@ def resolve_branches_query(user_text: str) -> dict[str, Any]:
             "route": "branches_clarify",
         }
 
-    # Generic branches fallback.
-    if generic:
+    # 7) Generic branches fallback (broad overview only).
+    if generic and not district_like and not city_records and not nearest:
         return {
             "matched": True,
             "answer": _format_generic_branches_reply(),
