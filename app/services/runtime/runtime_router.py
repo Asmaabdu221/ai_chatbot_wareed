@@ -70,6 +70,30 @@ def _looks_like_branch_query(text: str) -> bool:
     )
     return any(h in n for h in hints)
 
+
+def _looks_like_package_query(text: str) -> bool:
+    n = normalize_arabic(text)
+    if not n:
+        return False
+    if _looks_like_branch_query(n):
+        return False
+
+    # Strong package signals first.
+    if any(token in n for token in ("باقه", "باقات", "package")):
+        return True
+    if any(token in n for token in ("well dna", "nifty", "genetic package", "genetic_test")):
+        return True
+
+    # Category/product phrasing (deterministic, conservative).
+    has_test_word = any(token in n for token in ("تحليل", "تحاليل"))
+    has_package_category = any(token in n for token in ("جيني", "جينية", "رمضان", "ذاتية", "self collection"))
+    has_price_word = any(token in n for token in ("كم سعر", "بكم", "سعر"))
+    if has_test_word and has_package_category:
+        return True
+    if has_price_word and ("باقه" in n or "package" in n):
+        return True
+    return False
+
 def route_runtime_message(
     user_text: str,
     *,
@@ -104,10 +128,11 @@ def route_runtime_message(
     if faq_only_runtime_mode:
         # Strong branch guard before FAQ:
         # - numeric selection (1-2 digits) should be branch-first
-        # - explicit branch/location phrasing should bypass FAQ
+        # - explicit branch/location or package phrasing should bypass FAQ
         is_numeric = _is_numeric_selection_query(text)
         is_branch_like = _looks_like_branch_query(text)
-        if is_numeric or is_branch_like:
+        is_package_like = _looks_like_package_query(text)
+        if is_numeric or is_branch_like or is_package_like:
             branches_result = resolve_branches_query(text)
             if bool(branches_result.get("matched")):
                 logger.debug(
@@ -125,23 +150,43 @@ def route_runtime_message(
                     "meta": dict(branches_result.get("meta") or {}),
                 }
 
+            packages_result = resolve_packages_query(text)
+            if bool(packages_result.get("matched")):
+                logger.debug(
+                    "packages pre-faq guard matched | q=%s | numeric=%s | branch_like=%s | package_like=%s | route=%s",
+                    text,
+                    is_numeric,
+                    is_branch_like,
+                    is_package_like,
+                    _safe_str(packages_result.get("route")),
+                )
+                return {
+                    "reply": _safe_str(packages_result.get("answer")),
+                    "route": _safe_str(packages_result.get("route")) or "packages",
+                    "source": "packages",
+                    "matched": True,
+                    "meta": dict(packages_result.get("meta") or {}),
+                }
+
             logger.debug(
-                "branches pre-faq guard no match | q=%s | numeric=%s | branch_like=%s | route=branches_pre_faq_no_match",
+                "domains pre-faq guard no match | q=%s | numeric=%s | branch_like=%s | package_like=%s | route=domains_pre_faq_no_match",
                 text,
                 is_numeric,
                 is_branch_like,
+                is_package_like,
             )
-            # Do not let FAQ or other domains hijack numeric/branch/location queries.
+            # Do not let FAQ hijack numeric/branch/location/package queries.
             return {
                 "reply": get_faq_no_match_message(),
-                "route": "faq_only_no_match_branch_prefilter",
+                "route": "faq_only_no_match_domains_prefilter",
                 "source": "runtime_fallback",
                 "matched": False,
                 "meta": {
                     "mode": "faq_only",
-                    "branch_prefilter": True,
+                    "domains_prefilter": True,
                     "numeric_query": is_numeric,
                     "branch_like_query": is_branch_like,
+                    "package_like_query": is_package_like,
                 },
             }
 
