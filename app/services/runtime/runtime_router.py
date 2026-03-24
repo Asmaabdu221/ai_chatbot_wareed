@@ -15,6 +15,7 @@ Future stages:
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from app.services.runtime.branches_resolver import resolve_branches_query
@@ -29,6 +30,7 @@ from app.services.runtime.runtime_fallbacks import (
     get_out_of_scope_message,
     get_rebuild_mode_message,
 )
+from app.services.runtime.text_normalizer import normalize_arabic
 
 logger = logging.getLogger(__name__)
 ENABLE_BRANCHES_RUNTIME_AFTER_FAQ = True
@@ -39,6 +41,34 @@ def _safe_str(value: Any) -> str:
     """Convert any value to a safely stripped string."""
     return str(value or "").strip()
 
+
+def _is_numeric_selection_query(text: str) -> bool:
+    value = _safe_str(text).translate(
+        str.maketrans({"٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4", "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9"})
+    )
+    return bool(re.fullmatch(r"\d{1,2}", value))
+
+def _looks_like_branch_query(text: str) -> bool:
+    n = normalize_arabic(text)
+    if not n:
+        return False
+    hints = (
+        "فرع",
+        "فروع",
+        "موقع",
+        "حي",
+        "اقرب",
+        "العنوان",
+        "في الرياض",
+        "بالرياض",
+        "في جدة",
+        "بجدة",
+        "في مكة",
+        "بمكة",
+        "في مكه",
+        "بمكه",
+    )
+    return any(h in n for h in hints)
 
 def route_runtime_message(
     user_text: str,
@@ -72,6 +102,49 @@ def route_runtime_message(
         }
 
     if faq_only_runtime_mode:
+        # Strong branch guard before FAQ:
+        # - numeric selection (1-2 digits) should be branch-first
+        # - explicit branch/location phrasing should bypass FAQ
+        is_numeric = _is_numeric_selection_query(text)
+        is_branch_like = _looks_like_branch_query(text)
+        if is_numeric or is_branch_like:
+            branches_result = resolve_branches_query(text)
+            if bool(branches_result.get("matched")):
+                logger.debug(
+                    "branches pre-faq guard matched | q=%s | numeric=%s | branch_like=%s | route=%s",
+                    text,
+                    is_numeric,
+                    is_branch_like,
+                    _safe_str(branches_result.get("route")),
+                )
+                return {
+                    "reply": _safe_str(branches_result.get("answer")),
+                    "route": _safe_str(branches_result.get("route")) or "branches",
+                    "source": "branches",
+                    "matched": True,
+                    "meta": dict(branches_result.get("meta") or {}),
+                }
+
+            logger.debug(
+                "branches pre-faq guard no match | q=%s | numeric=%s | branch_like=%s | route=branches_pre_faq_no_match",
+                text,
+                is_numeric,
+                is_branch_like,
+            )
+            # Do not let FAQ or other domains hijack numeric/branch/location queries.
+            return {
+                "reply": get_faq_no_match_message(),
+                "route": "faq_only_no_match_branch_prefilter",
+                "source": "runtime_fallback",
+                "matched": False,
+                "meta": {
+                    "mode": "faq_only",
+                    "branch_prefilter": True,
+                    "numeric_query": is_numeric,
+                    "branch_like_query": is_branch_like,
+                },
+            }
+
         faq_result = resolve_faq(
             text,
             last_user_text=last_user_text,
@@ -225,3 +298,4 @@ if __name__ == "__main__":
     )
     print(f"ROUTE : {result.get('route')}")
     print(f"REPLY : {result.get('reply')}")
+
