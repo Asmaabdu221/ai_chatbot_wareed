@@ -47,11 +47,41 @@ _CITY_STOPWORDS = {
     "بال",
 }
 _DISTRICT_QUERY_HINTS = ("حي", "الحي", "منطقة", "منطقه", "قريب من", "قريبه من", "بحي")
+_CITY_CANONICAL_ALIASES = {
+    "الرياض": "الرياض",
+    "رياض": "الرياض",
+    "جده": "جدة",
+    "جدة": "جدة",
+    "مكه": "مكة المكرمة",
+    "مكة": "مكة المكرمة",
+    "مكه المكرمه": "مكة المكرمة",
+    "مكة المكرمة": "مكة المكرمة",
+    "الطايف": "الطائف",
+    "الطائف": "الطائف",
+}
+_CITY_ALIAS_NORMS = {
+    normalize_arabic(alias) for alias in _CITY_CANONICAL_ALIASES.keys()
+} | {
+    normalize_arabic(city) for city in _CITY_CANONICAL_ALIASES.values()
+}
 _CITY_SELECTION_TTL_SECONDS = 15 * 60
 _LAST_CITY_SELECTION: dict[str, Any] = {
     "city": "",
     "options": [],
     "updated_at": 0.0,
+}
+
+_BRANCH_QUERY_TYPES = {
+    "numeric_selection",
+    "direct_branch",
+    "district_query",
+    "unknown_branch_area",
+    "nearest_city",
+    "city_query",
+    "city_not_found",
+    "specific_clarify",
+    "generic_overview",
+    "no_match",
 }
 
 
@@ -78,6 +108,54 @@ def _extract_city_from_section(section: str) -> str:
     if len(tokens) >= 2 and tokens[0] == "مكه" and tokens[1] == "المكرمه":
         return "مكه المكرمه"
     return tokens[-1]
+
+
+def _normalize_city_token(token: str) -> str:
+    """Normalize one city-like token with conservative Arabic preposition stripping."""
+    value = normalize_arabic(_safe_str(token))
+    if not value:
+        return ""
+
+    if value.startswith("بال") and len(value) > 3:
+        value = value[3:]
+    elif value.startswith("ب") and len(value) > 2 and value[1] != "ا":
+        value = value[1:]
+    elif value.startswith("في") and len(value) > 3:
+        value = value[2:]
+
+    value = value.strip()
+    canonical = _safe_str(_CITY_CANONICAL_ALIASES.get(value, value))
+    return normalize_arabic(canonical)
+
+
+def _build_city_lookup(records: list[dict[str, Any]]) -> dict[str, str]:
+    """Build normalized city alias lookup -> dataset city_norm."""
+    lookup: dict[str, str] = {}
+    for record in records:
+        city = _safe_str(record.get("city"))
+        city_norm = _safe_str(record.get("city_norm"))
+        if not city_norm:
+            continue
+
+        keys = {
+            city_norm,
+            _normalize_city_token(city),
+        }
+        if city_norm.startswith("ال") and len(city_norm) > 2:
+            keys.add(city_norm[2:])
+
+        for alias_key, canonical_city in _CITY_CANONICAL_ALIASES.items():
+            alias_norm = normalize_arabic(alias_key)
+            canonical_norm = normalize_arabic(canonical_city)
+            if canonical_norm == city_norm:
+                keys.add(alias_norm)
+                keys.add(_normalize_city_token(alias_norm))
+
+        for key in keys:
+            clean = _safe_str(key)
+            if clean:
+                lookup[clean] = city_norm
+    return lookup
 
 
 def _infer_district_from_branch_name(branch_name: str) -> str:
@@ -196,6 +274,16 @@ def _is_nearest_query(query_norm: str) -> bool:
 
 
 def _detect_city(query_norm: str, records: list[dict[str, Any]]) -> str:
+    lookup = _build_city_lookup(records)
+
+    # 1) direct lookup key containment with boundaries.
+    for key, city_norm in sorted(lookup.items(), key=lambda x: len(x[0]), reverse=True):
+        if not key:
+            continue
+        if query_norm == key or f" {key} " in f" {query_norm} ":
+            return city_norm
+
+    # 2) fallback full-city containment (existing behavior).
     cities = sorted(
         {_safe_str(r.get("city_norm")) for r in records if _safe_str(r.get("city_norm"))},
         key=len,
@@ -204,6 +292,20 @@ def _detect_city(query_norm: str, records: list[dict[str, Any]]) -> str:
     for city in cities:
         if city and city in query_norm:
             return city
+
+    # 3) token and bigram-based city candidate matching.
+    tokens = [t for t in query_norm.split() if t]
+    for token in tokens:
+        normalized_token = _normalize_city_token(token)
+        if normalized_token in lookup:
+            return lookup[normalized_token]
+
+    for i in range(len(tokens) - 1):
+        bigram = f"{tokens[i]} {tokens[i + 1]}"
+        normalized_bigram = _normalize_city_token(bigram)
+        if normalized_bigram in lookup:
+            return lookup[normalized_bigram]
+
     return ""
 
 
@@ -213,30 +315,36 @@ def _extract_requested_city_candidate(query_norm: str) -> str:
     if not tokens:
         return ""
 
+    # Attached prepositions: بالرياض / بجدة / بالمدينه / بمكة
+    for token in tokens:
+        normalized_token = _normalize_city_token(token)
+        if normalized_token and normalized_token != normalize_arabic(token):
+            return normalized_token
+
     if "بال" in tokens:
         idx = tokens.index("بال")
         if idx + 1 < len(tokens):
-            return tokens[idx + 1]
+            return _normalize_city_token(tokens[idx + 1]) or tokens[idx + 1]
 
     if "في" in tokens:
         idx = tokens.index("في")
         if idx + 1 < len(tokens):
             nxt = tokens[idx + 1]
             if nxt in {"مدينة", "مدينه"} and idx + 2 < len(tokens):
-                return tokens[idx + 2]
-            return nxt
+                return _normalize_city_token(tokens[idx + 2]) or tokens[idx + 2]
+            return _normalize_city_token(nxt) or nxt
 
     if "فرع" in tokens:
         idx = tokens.index("فرع")
         if idx + 1 < len(tokens):
             nxt = tokens[idx + 1]
             if nxt not in _CITY_STOPWORDS:
-                return nxt
+                return _normalize_city_token(nxt) or nxt
 
     if any(h in query_norm for h in ("مدينة", "بمدينة")):
         cleaned = [t for t in tokens if t not in _CITY_STOPWORDS]
         if cleaned:
-            return cleaned[-1]
+            return _normalize_city_token(cleaned[-1]) or cleaned[-1]
 
     return ""
 
@@ -286,6 +394,8 @@ def _detect_district(query_norm: str, records: list[dict[str, Any]]) -> str:
 
     candidate = _extract_area_candidate(query_norm)
     if not candidate:
+        return ""
+    if normalize_arabic(_normalize_city_token(candidate)) in _CITY_ALIAS_NORMS:
         return ""
 
     for district in districts:
@@ -487,6 +597,50 @@ def _format_unknown_area_reply() -> str:
     )
 
 
+def classify_branch_query_type(
+    *,
+    numeric_selection: int | None,
+    has_numeric_option: bool,
+    has_direct_branch_match: bool,
+    district_like: bool,
+    district_match_count: int,
+    has_city_records: bool,
+    nearest: bool,
+    city_query_like: bool,
+    generic: bool,
+    specific: bool,
+    has_requested_city_candidate: bool,
+) -> str:
+    """Classify branch query into one explicit deterministic query type."""
+    if numeric_selection is not None and has_numeric_option:
+        return "numeric_selection"
+
+    if has_direct_branch_match:
+        return "direct_branch"
+
+    if district_like:
+        if district_match_count > 0:
+            return "district_query"
+        return "unknown_branch_area"
+
+    if has_city_records and nearest:
+        return "nearest_city"
+
+    if has_city_records and (city_query_like or specific or generic):
+        return "city_query"
+
+    if (specific or generic or nearest or city_query_like) and (not has_city_records) and has_requested_city_candidate:
+        return "city_not_found"
+
+    if specific:
+        return "specific_clarify"
+
+    if generic and (not district_like) and (not has_city_records) and (not nearest):
+        return "generic_overview"
+
+    return "no_match"
+
+
 def _match_specific_branch(query_norm: str, records: list[dict[str, Any]]) -> dict[str, Any] | None:
     # Deterministic contains checks first.
     for r in records:
@@ -536,57 +690,94 @@ def resolve_branches_query(user_text: str) -> dict[str, Any]:
     nearest = _is_nearest_query(query_norm)
     requested_city_candidate = _extract_requested_city_candidate(query_norm)
     area_candidate = _extract_area_candidate(query_norm)
+    area_candidate_norm = _normalize_city_token(area_candidate)
+    area_candidate_is_city = bool(area_candidate_norm and area_candidate_norm in _CITY_ALIAS_NORMS)
 
     numeric_selection = _parse_numeric_selection(query_norm)
-    if numeric_selection is not None:
-        selected = _get_last_city_option(numeric_selection)
-        if selected:
-            return {
-                "matched": True,
-                "answer": _format_selected_branch_reply(selected),
-                "meta": {
-                    "id": _safe_str(selected.get("id")),
-                    "source": _safe_str(selected.get("source")),
-                    "city": _safe_str(selected.get("city")),
-                    "district": _safe_str(selected.get("district")),
-                    "branch_name": _safe_str(selected.get("branch_name")),
-                    "map_url": _safe_str(selected.get("map_url")),
-                    "maps_url": _safe_str(selected.get("maps_url")),
-                    "contact_phone": _safe_str(selected.get("contact_phone")),
-                    "latitude": selected.get("latitude"),
-                    "longitude": selected.get("longitude"),
-                    "from_city_numbered_selection": True,
-                    "selection_number": numeric_selection,
-                },
-                "route": "branches_city_number_selection",
-            }
+    selected = _get_last_city_option(numeric_selection) if numeric_selection is not None else None
 
-    # 1) Direct branch-name query.
     matched_branch = None
     if "فرع" in query_norm or specific:
-        matched_branch = _match_specific_branch(query_norm, city_records or records)
-        if matched_branch and _safe_str(matched_branch.get("branch_norm")) in query_norm:
-            return {
-                "matched": True,
-                "answer": _format_direct_branch_reply(matched_branch),
-                "meta": {
-                    "id": _safe_str(matched_branch.get("id")),
-                    "source": _safe_str(matched_branch.get("source")),
-                    "city": _safe_str(matched_branch.get("city")),
-                    "district": _safe_str(matched_branch.get("district")),
-                    "branch_name": _safe_str(matched_branch.get("branch_name")),
-                    "map_url": _safe_str(matched_branch.get("map_url")),
-                    "latitude": matched_branch.get("latitude"),
-                    "longitude": matched_branch.get("longitude"),
-                },
-                "route": "branches_specific",
-            }
+        candidate_branch = _match_specific_branch(query_norm, city_records or records)
+        if candidate_branch and _safe_str(candidate_branch.get("branch_norm")) in query_norm:
+            matched_branch = candidate_branch
 
-    # 2) District-like request.
-    district_like = district_norm or any(hint in query_norm for hint in _DISTRICT_QUERY_HINTS) or bool(area_candidate)
-    if district_like:
-        scoped_records = city_records if city_records else records
-        district_matches = _find_district_matches(district_norm, scoped_records) if district_norm else []
+    district_like = (
+        district_norm
+        or (
+            (any(hint in query_norm for hint in _DISTRICT_QUERY_HINTS) or bool(area_candidate))
+            and not area_candidate_is_city
+        )
+    )
+    scoped_records = city_records if city_records else records
+    district_matches = _find_district_matches(district_norm, scoped_records) if district_like and district_norm else []
+
+    city_query_like = (
+        "فرع" in query_norm
+        or "فروع" in query_norm
+        or "مدينه" in query_norm
+        or "مدينة" in query_norm
+        or query_norm == city_norm
+        or _normalize_city_token(query_norm) == city_norm
+    )
+
+    query_type = classify_branch_query_type(
+        numeric_selection=numeric_selection,
+        has_numeric_option=selected is not None,
+        has_direct_branch_match=matched_branch is not None,
+        district_like=bool(district_like),
+        district_match_count=len(district_matches),
+        has_city_records=bool(city_records),
+        nearest=bool(nearest),
+        city_query_like=bool(city_query_like),
+        generic=bool(generic),
+        specific=bool(specific),
+        has_requested_city_candidate=bool(
+            requested_city_candidate and requested_city_candidate not in {"", "حي", "منطقه", "منطقة"}
+        ),
+    )
+
+    if query_type == "numeric_selection" and selected is not None:
+        return {
+            "matched": True,
+            "answer": _format_selected_branch_reply(selected),
+            "meta": {
+                "id": _safe_str(selected.get("id")),
+                "source": _safe_str(selected.get("source")),
+                "city": _safe_str(selected.get("city")),
+                "district": _safe_str(selected.get("district")),
+                "branch_name": _safe_str(selected.get("branch_name")),
+                "map_url": _safe_str(selected.get("map_url")),
+                "maps_url": _safe_str(selected.get("maps_url")),
+                "contact_phone": _safe_str(selected.get("contact_phone")),
+                "latitude": selected.get("latitude"),
+                "longitude": selected.get("longitude"),
+                "from_city_numbered_selection": True,
+                "selection_number": numeric_selection,
+                "query_type": query_type,
+            },
+            "route": "branches_city_number_selection",
+        }
+
+    if query_type == "direct_branch" and matched_branch is not None:
+        return {
+            "matched": True,
+            "answer": _format_direct_branch_reply(matched_branch),
+            "meta": {
+                "id": _safe_str(matched_branch.get("id")),
+                "source": _safe_str(matched_branch.get("source")),
+                "city": _safe_str(matched_branch.get("city")),
+                "district": _safe_str(matched_branch.get("district")),
+                "branch_name": _safe_str(matched_branch.get("branch_name")),
+                "map_url": _safe_str(matched_branch.get("map_url")),
+                "latitude": matched_branch.get("latitude"),
+                "longitude": matched_branch.get("longitude"),
+                "query_type": query_type,
+            },
+            "route": "branches_specific",
+        }
+
+    if query_type == "district_query":
         if len(district_matches) == 1:
             record = district_matches[0]
             return {
@@ -602,6 +793,7 @@ def resolve_branches_query(user_text: str) -> dict[str, Any]:
                     "latitude": record.get("latitude"),
                     "longitude": record.get("longitude"),
                     "from_district_match": True,
+                    "query_type": query_type,
                 },
                 "route": "branches_district_match",
             }
@@ -613,68 +805,74 @@ def resolve_branches_query(user_text: str) -> dict[str, Any]:
                     "count": len(district_matches),
                     "district_norm": district_norm,
                     "city": _safe_str(city_records[0].get("city")) if city_records else "",
+                    "query_type": query_type,
                 },
                 "route": "branches_district_options",
             }
+
+    if query_type == "unknown_branch_area":
         return {
             "matched": True,
             "answer": _format_unknown_area_reply(),
-            "meta": {"reason": "unknown_area_or_district"},
+            "meta": {"reason": "unknown_area_or_district", "query_type": query_type},
             "route": "branches_unknown_area",
         }
 
-    # 3) Nearest in city with no district/location.
-    if city_records and nearest and not district_norm:
+    if query_type == "nearest_city" and city_records:
         city = _safe_str(city_records[0].get("city"))
         return {
             "matched": True,
             "answer": _format_nearest_city_clarification(city),
-            "meta": {"city": city, "count": len(city_records), "nearest_requested": True},
+            "meta": {"city": city, "count": len(city_records), "nearest_requested": True, "query_type": query_type},
             "route": "branches_city_list",
         }
 
-    # 4) City-only request.
-    city_request_tokens = ("فرع" in query_norm or "فروع" in query_norm or "مدينه" in query_norm or "مدينة" in query_norm)
-    if city_records and (city_request_tokens or specific or generic or query_norm == city_norm):
+    if query_type == "city_query" and city_records:
         city = _safe_str(city_records[0].get("city"))
         return {
             "matched": True,
             "answer": _format_city_reply(city, city_records),
-            "meta": {"city": city, "count": len(city_records), "nearest_requested": nearest},
+            "meta": {"city": city, "count": len(city_records), "nearest_requested": nearest, "query_type": query_type},
             "route": "branches_city_list",
         }
 
-    # 5) City not found fallback for branch/city intents.
-    branch_city_intent = specific or generic or nearest or "فرع" in query_norm or "فروع" in query_norm
-    if branch_city_intent and not city_records and requested_city_candidate and requested_city_candidate not in {"", "حي", "منطقه", "منطقة"}:
+    if query_type == "city_not_found":
         return {
             "matched": True,
             "answer": _format_city_not_found_reply(),
-            "meta": {"requested_city": requested_city_candidate, "reason": "city_not_found"},
+            "meta": {
+                "requested_city": requested_city_candidate,
+                "reason": "city_not_found",
+                "query_type": query_type,
+            },
             "route": "branches_city_not_found",
         }
 
-    # 6) Keep existing safe clarification behavior for branch-intent queries.
-    if specific:
+    if query_type == "specific_clarify":
         return {
             "matched": False,
             "answer": "أقدر أساعدك بفروع المختبر. اذكر المدينة أو الحي (مثال: الرياض - العليا) عشان أعرض الفروع المتاحة.",
-            "meta": {"reason": "needs_city_or_district"},
+            "meta": {"reason": "needs_city_or_district", "query_type": query_type},
             "route": "branches_clarify",
         }
 
-    # 7) Generic branches fallback (broad overview only).
-    if generic and not district_like and not city_records and not nearest:
+    if query_type == "generic_overview":
         return {
             "matched": True,
             "answer": _format_generic_branches_reply(),
             "meta": {
                 "cities_count": len({_safe_str(r.get("city")) for r in records if _safe_str(r.get("city"))}),
+                "query_type": query_type,
             },
             "route": "branches_generic",
         }
 
-    return {"matched": False, "answer": "", "meta": {"reason": "not_branches_intent"}, "route": "branches_no_match"}
+    return {
+        "matched": False,
+        "answer": "",
+        "meta": {"reason": "not_branches_intent", "query_type": query_type},
+        "route": "branches_no_match",
+    }
 
 
 if __name__ == "__main__":
