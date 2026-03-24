@@ -18,7 +18,12 @@ import logging
 from typing import Any
 
 from app.services.runtime.branches_resolver import resolve_branches_query
+from app.services.runtime.branches_semantic_intent import (
+    detect_branch_semantic_intent,
+    is_confident_branch_intent,
+)
 from app.services.runtime.faq_resolver import resolve_faq
+from app.services.runtime.packages_resolver import resolve_packages_query
 from app.services.runtime.runtime_fallbacks import (
     get_faq_no_match_message,
     get_out_of_scope_message,
@@ -27,6 +32,7 @@ from app.services.runtime.runtime_fallbacks import (
 
 logger = logging.getLogger(__name__)
 ENABLE_BRANCHES_RUNTIME_AFTER_FAQ = True
+ENABLE_PACKAGES_RUNTIME_AFTER_BRANCHES = True
 
 
 def _safe_str(value: Any) -> str:
@@ -98,21 +104,52 @@ def route_runtime_message(
             "faq_only no match | q=%s | route=faq_only_no_match",
             text,
         )
+        semantic_intent = ""
+        semantic_score = 0.0
+        semantic_routing_used = False
         if ENABLE_BRANCHES_RUNTIME_AFTER_FAQ:
+            semantic_result = detect_branch_semantic_intent(text)
+            semantic_intent = _safe_str(semantic_result.get("intent"))
+            semantic_score = float(semantic_result.get("score") or 0.0)
+            semantic_routing_used = is_confident_branch_intent(semantic_result)
+
             branches_result = resolve_branches_query(text)
             if bool(branches_result.get("matched")):
                 logger.debug(
-                    "branches route matched after faq no match | q=%s | route=%s",
+                    "branches route matched after faq no match | q=%s | route=%s | semantic_intent=%s | semantic_score=%.4f | semantic_routing_used=%s",
                     text,
                     _safe_str(branches_result.get("route")),
+                    semantic_intent,
+                    semantic_score,
+                    semantic_routing_used,
                 )
+                meta = dict(branches_result.get("meta") or {})
+                meta["semantic_intent"] = semantic_intent
+                meta["semantic_score"] = semantic_score
+                meta["semantic_routing_used"] = semantic_routing_used
                 return {
                     "reply": _safe_str(branches_result.get("answer")),
                     "route": _safe_str(branches_result.get("route")) or "branches",
                     "source": "branches",
                     "matched": True,
-                    "meta": dict(branches_result.get("meta") or {}),
+                    "meta": meta,
                 }
+
+            if ENABLE_PACKAGES_RUNTIME_AFTER_BRANCHES:
+                packages_result = resolve_packages_query(text)
+                if bool(packages_result.get("matched")):
+                    logger.debug(
+                        "packages route matched after faq/branches no match | q=%s | route=%s",
+                        text,
+                        _safe_str(packages_result.get("route")),
+                    )
+                    return {
+                        "reply": _safe_str(packages_result.get("answer")),
+                        "route": _safe_str(packages_result.get("route")) or "packages",
+                        "source": "packages",
+                        "matched": True,
+                        "meta": dict(packages_result.get("meta") or {}),
+                    }
         return {
             "reply": get_faq_no_match_message(),
             "route": "faq_only_no_match",
@@ -120,6 +157,9 @@ def route_runtime_message(
             "matched": False,
             "meta": {
                 "mode": "faq_only",
+                "semantic_intent": semantic_intent,
+                "semantic_score": semantic_score,
+                "semantic_routing_used": semantic_routing_used,
             },
         }
 
