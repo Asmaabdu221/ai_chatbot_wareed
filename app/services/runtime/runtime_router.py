@@ -30,6 +30,7 @@ from app.services.runtime.runtime_fallbacks import (
     get_out_of_scope_message,
     get_rebuild_mode_message,
 )
+from app.services.runtime.tests_business_engine import resolve_tests_business_query
 from app.services.runtime.tests_resolver import resolve_tests_query
 from app.services.runtime.text_normalizer import normalize_arabic
 
@@ -37,6 +38,14 @@ logger = logging.getLogger(__name__)
 ENABLE_BRANCHES_RUNTIME_AFTER_FAQ = True
 ENABLE_PACKAGES_RUNTIME_AFTER_BRANCHES = True
 ENABLE_TESTS_RUNTIME_AFTER_PACKAGES = True
+_BUSINESS_TEST_QUERY_TYPES = {
+    "test_fasting_query",
+    "test_preparation_query",
+    "test_symptoms_query",
+    "test_complementary_query",
+    "test_alternative_query",
+    "test_sample_type_query",
+}
 
 
 def _safe_str(value: Any) -> str:
@@ -126,6 +135,25 @@ def _tests_meta(meta: dict[str, Any] | None) -> dict[str, Any]:
     payload.setdefault("preparation_available", None)
     return payload
 
+
+def _tests_business_meta(meta: dict[str, Any] | None) -> dict[str, Any]:
+    payload = dict(meta or {})
+    query_type = _safe_str(payload.get("query_type"))
+    payload["business_query_type"] = query_type
+    payload.setdefault("matched_test_id", "")
+    payload.setdefault("matched_test_name", "")
+    return payload
+
+
+def _is_supported_tests_business_result(result: dict[str, Any] | None) -> bool:
+    if not isinstance(result, dict):
+        return False
+    if not bool(result.get("matched")):
+        return False
+    meta = result.get("meta") or {}
+    query_type = _safe_str(meta.get("query_type"))
+    return query_type in _BUSINESS_TEST_QUERY_TYPES
+
 def route_runtime_message(
     user_text: str,
     *,
@@ -166,24 +194,25 @@ def route_runtime_message(
         is_package_like = _looks_like_package_query(text)
         is_tests_like = _looks_like_tests_query(text)
         if is_numeric or is_branch_like or is_package_like or is_tests_like:
-            branches_result = resolve_branches_query(text)
-            if bool(branches_result.get("matched")):
-                logger.debug(
-                    "branches pre-faq guard matched | q=%s | numeric=%s | branch_like=%s | route=%s",
-                    text,
-                    is_numeric,
-                    is_branch_like,
-                    _safe_str(branches_result.get("route")),
-                )
-                return {
-                    "reply": _safe_str(branches_result.get("answer")),
-                    "route": _safe_str(branches_result.get("route")) or "branches",
-                    "source": "branches",
-                    "matched": True,
-                    "meta": dict(branches_result.get("meta") or {}),
-                }
+            if is_numeric or is_branch_like:
+                branches_result = resolve_branches_query(text)
+                if bool(branches_result.get("matched")):
+                    logger.debug(
+                        "branches pre-faq guard matched | q=%s | numeric=%s | branch_like=%s | route=%s",
+                        text,
+                        is_numeric,
+                        is_branch_like,
+                        _safe_str(branches_result.get("route")),
+                    )
+                    return {
+                        "reply": _safe_str(branches_result.get("answer")),
+                        "route": _safe_str(branches_result.get("route")) or "branches",
+                        "source": "branches",
+                        "matched": True,
+                        "meta": dict(branches_result.get("meta") or {}),
+                    }
 
-            if ENABLE_PACKAGES_RUNTIME_AFTER_BRANCHES:
+            if is_package_like and ENABLE_PACKAGES_RUNTIME_AFTER_BRANCHES:
                 packages_result = resolve_packages_query(text)
                 if bool(packages_result.get("matched")):
                     logger.debug(
@@ -203,7 +232,26 @@ def route_runtime_message(
                         "meta": dict(packages_result.get("meta") or {}),
                     }
 
-            if ENABLE_TESTS_RUNTIME_AFTER_PACKAGES:
+            if is_tests_like and ENABLE_TESTS_RUNTIME_AFTER_PACKAGES:
+                tests_business_result = resolve_tests_business_query(text)
+                if _is_supported_tests_business_result(tests_business_result):
+                    logger.debug(
+                        "tests business pre-faq guard matched | q=%s | numeric=%s | branch_like=%s | package_like=%s | tests_like=%s | route=%s",
+                        text,
+                        is_numeric,
+                        is_branch_like,
+                        is_package_like,
+                        is_tests_like,
+                        _safe_str(tests_business_result.get("route")),
+                    )
+                    return {
+                        "reply": _safe_str(tests_business_result.get("answer")),
+                        "route": _safe_str(tests_business_result.get("route")) or "tests_business",
+                        "source": "tests_business",
+                        "matched": True,
+                        "meta": _tests_business_meta(tests_business_result.get("meta") or {}),
+                    }
+
                 tests_result = resolve_tests_query(text)
                 if bool(tests_result.get("matched")):
                     logger.debug(
@@ -326,6 +374,21 @@ def route_runtime_message(
                         "meta": dict(packages_result.get("meta") or {}),
                     }
             if ENABLE_TESTS_RUNTIME_AFTER_PACKAGES:
+                tests_business_result = resolve_tests_business_query(text)
+                if _is_supported_tests_business_result(tests_business_result):
+                    logger.debug(
+                        "tests business route matched after faq/branches/packages no match | q=%s | route=%s",
+                        text,
+                        _safe_str(tests_business_result.get("route")),
+                    )
+                    return {
+                        "reply": _safe_str(tests_business_result.get("answer")),
+                        "route": _safe_str(tests_business_result.get("route")) or "tests_business",
+                        "source": "tests_business",
+                        "matched": True,
+                        "meta": _tests_business_meta(tests_business_result.get("meta") or {}),
+                    }
+
                 tests_result = resolve_tests_query(text)
                 if bool(tests_result.get("matched")):
                     logger.debug(
