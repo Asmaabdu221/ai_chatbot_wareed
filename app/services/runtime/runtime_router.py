@@ -30,11 +30,13 @@ from app.services.runtime.runtime_fallbacks import (
     get_out_of_scope_message,
     get_rebuild_mode_message,
 )
+from app.services.runtime.tests_resolver import resolve_tests_query
 from app.services.runtime.text_normalizer import normalize_arabic
 
 logger = logging.getLogger(__name__)
 ENABLE_BRANCHES_RUNTIME_AFTER_FAQ = True
 ENABLE_PACKAGES_RUNTIME_AFTER_BRANCHES = True
+ENABLE_TESTS_RUNTIME_AFTER_PACKAGES = True
 
 
 def _safe_str(value: Any) -> str:
@@ -94,6 +96,36 @@ def _looks_like_package_query(text: str) -> bool:
         return True
     return False
 
+
+def _looks_like_tests_query(text: str) -> bool:
+    n = normalize_arabic(text)
+    if not n:
+        return False
+    if _looks_like_branch_query(n) or _looks_like_package_query(n):
+        return False
+    hints = (
+        "تحليل",
+        "تحاليل",
+        "فحص",
+        "اختبار",
+        "ana",
+        "nipt",
+        "hba1c",
+        "tsh",
+        "فيتامين",
+        "حديد",
+    )
+    return any(token in n for token in hints)
+
+
+def _tests_meta(meta: dict[str, Any] | None) -> dict[str, Any]:
+    payload = dict(meta or {})
+    payload.setdefault("query_type", "test_unknown")
+    payload.setdefault("matched_test_id", "")
+    payload.setdefault("matched_test_name", "")
+    payload.setdefault("preparation_available", None)
+    return payload
+
 def route_runtime_message(
     user_text: str,
     *,
@@ -128,11 +160,12 @@ def route_runtime_message(
     if faq_only_runtime_mode:
         # Strong branch guard before FAQ:
         # - numeric selection (1-2 digits) should be branch-first
-        # - explicit branch/location or package phrasing should bypass FAQ
+        # - explicit branch/location/package/tests phrasing should bypass FAQ
         is_numeric = _is_numeric_selection_query(text)
         is_branch_like = _looks_like_branch_query(text)
         is_package_like = _looks_like_package_query(text)
-        if is_numeric or is_branch_like or is_package_like:
+        is_tests_like = _looks_like_tests_query(text)
+        if is_numeric or is_branch_like or is_package_like or is_tests_like:
             branches_result = resolve_branches_query(text)
             if bool(branches_result.get("matched")):
                 logger.debug(
@@ -150,32 +183,55 @@ def route_runtime_message(
                     "meta": dict(branches_result.get("meta") or {}),
                 }
 
-            packages_result = resolve_packages_query(text)
-            if bool(packages_result.get("matched")):
-                logger.debug(
-                    "packages pre-faq guard matched | q=%s | numeric=%s | branch_like=%s | package_like=%s | route=%s",
-                    text,
-                    is_numeric,
-                    is_branch_like,
-                    is_package_like,
-                    _safe_str(packages_result.get("route")),
-                )
-                return {
-                    "reply": _safe_str(packages_result.get("answer")),
-                    "route": _safe_str(packages_result.get("route")) or "packages",
-                    "source": "packages",
-                    "matched": True,
-                    "meta": dict(packages_result.get("meta") or {}),
-                }
+            if ENABLE_PACKAGES_RUNTIME_AFTER_BRANCHES:
+                packages_result = resolve_packages_query(text)
+                if bool(packages_result.get("matched")):
+                    logger.debug(
+                        "packages pre-faq guard matched | q=%s | numeric=%s | branch_like=%s | package_like=%s | tests_like=%s | route=%s",
+                        text,
+                        is_numeric,
+                        is_branch_like,
+                        is_package_like,
+                        is_tests_like,
+                        _safe_str(packages_result.get("route")),
+                    )
+                    return {
+                        "reply": _safe_str(packages_result.get("answer")),
+                        "route": _safe_str(packages_result.get("route")) or "packages",
+                        "source": "packages",
+                        "matched": True,
+                        "meta": dict(packages_result.get("meta") or {}),
+                    }
+
+            if ENABLE_TESTS_RUNTIME_AFTER_PACKAGES:
+                tests_result = resolve_tests_query(text)
+                if bool(tests_result.get("matched")):
+                    logger.debug(
+                        "tests pre-faq guard matched | q=%s | numeric=%s | branch_like=%s | package_like=%s | tests_like=%s | route=%s",
+                        text,
+                        is_numeric,
+                        is_branch_like,
+                        is_package_like,
+                        is_tests_like,
+                        _safe_str(tests_result.get("route")),
+                    )
+                    return {
+                        "reply": _safe_str(tests_result.get("answer")),
+                        "route": _safe_str(tests_result.get("route")) or "tests",
+                        "source": "tests",
+                        "matched": True,
+                        "meta": _tests_meta(tests_result.get("meta") or {}),
+                    }
 
             logger.debug(
-                "domains pre-faq guard no match | q=%s | numeric=%s | branch_like=%s | package_like=%s | route=domains_pre_faq_no_match",
+                "domains pre-faq guard no match | q=%s | numeric=%s | branch_like=%s | package_like=%s | tests_like=%s | route=domains_pre_faq_no_match",
                 text,
                 is_numeric,
                 is_branch_like,
                 is_package_like,
+                is_tests_like,
             )
-            # Do not let FAQ hijack numeric/branch/location/package queries.
+            # Do not let FAQ hijack numeric/branch/location/package/tests queries.
             return {
                 "reply": get_faq_no_match_message(),
                 "route": "faq_only_no_match_domains_prefilter",
@@ -187,6 +243,7 @@ def route_runtime_message(
                     "numeric_query": is_numeric,
                     "branch_like_query": is_branch_like,
                     "package_like_query": is_package_like,
+                    "tests_like_query": is_tests_like,
                 },
             }
 
@@ -267,6 +324,21 @@ def route_runtime_message(
                         "source": "packages",
                         "matched": True,
                         "meta": dict(packages_result.get("meta") or {}),
+                    }
+            if ENABLE_TESTS_RUNTIME_AFTER_PACKAGES:
+                tests_result = resolve_tests_query(text)
+                if bool(tests_result.get("matched")):
+                    logger.debug(
+                        "tests route matched after faq/branches/packages no match | q=%s | route=%s",
+                        text,
+                        _safe_str(tests_result.get("route")),
+                    )
+                    return {
+                        "reply": _safe_str(tests_result.get("answer")),
+                        "route": _safe_str(tests_result.get("route")) or "tests",
+                        "source": "tests",
+                        "matched": True,
+                        "meta": _tests_meta(tests_result.get("meta") or {}),
                     }
         return {
             "reply": get_faq_no_match_message(),
