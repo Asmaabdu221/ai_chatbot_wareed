@@ -231,12 +231,19 @@ def _score_test_match(query_norm: str, record: dict[str, Any]) -> float:
 def _find_specific_test(query_norm: str, records: list[dict[str, Any]]) -> tuple[dict[str, Any] | None, float]:
     best: dict[str, Any] | None = None
     best_score = 0.0
+    second_best_score = 0.0
     for record in records:
         score = _score_test_match(query_norm, record)
         if score > best_score:
+            second_best_score = best_score
             best = record
             best_score = score
+        elif score > second_best_score:
+            second_best_score = score
     if best is None or best_score < 0.72:
+        return None, 0.0
+    # Safety: if more than one candidate is very close, force clarification path.
+    if second_best_score >= 0.72 and (best_score - second_best_score) <= 0.04:
         return None, 0.0
     return best, best_score
 
@@ -389,6 +396,17 @@ def resolve_tests_query(user_text: str) -> dict[str, Any]:
         }
 
     if general_like or ("تحليل" in query_norm or "تحاليل" in query_norm):
+        disambiguation_reply = _build_disambiguation_reply(query)
+        if disambiguation_reply:
+            return {
+                "matched": True,
+                "answer": disambiguation_reply,
+                "route": "tests_disambiguation",
+                "meta": {
+                    "query_type": "test_disambiguation",
+                    "disambiguation_used": True,
+                },
+            }
         return {
             "matched": True,
             "answer": _GENERAL_REPLY,

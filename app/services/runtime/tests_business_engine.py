@@ -207,14 +207,21 @@ def _find_target_test(query_norm: str, records: list[dict[str, Any]]) -> tuple[d
 
     best: dict[str, Any] | None = None
     best_score = 0.0
+    second_best_score = 0.0
     for r in records:
         score = _score_record_match(primary, r)
         # Secondary weak signal from full query.
         score = max(score, _score_record_match(query_norm, r) * 0.7)
         if score > best_score:
+            second_best_score = best_score
             best = r
             best_score = score
+        elif score > second_best_score:
+            second_best_score = score
     if best is None or best_score < 0.62:
+        return None, 0.0
+    # Safety: if more than one candidate is very close, force clarification path.
+    if second_best_score >= 0.62 and (best_score - second_best_score) <= 0.04:
         return None, 0.0
     return best, best_score
 
