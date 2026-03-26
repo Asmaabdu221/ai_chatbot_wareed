@@ -7,6 +7,11 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from app.services.runtime.tests_disambiguation import (
+    find_disambiguation_candidates,
+    format_disambiguation_reply,
+    set_tests_disambiguation_state,
+)
 from app.services.runtime.text_normalizer import normalize_arabic
 
 TESTS_JSONL_PATH = Path("app/data/runtime/rag/tests_clean.jsonl")
@@ -277,6 +282,17 @@ def _format_preparation(record: dict[str, Any]) -> str:
     return f"تحضير {name}:\n{snippet}"
 
 
+def _build_disambiguation_reply(query: str) -> str | None:
+    payload = find_disambiguation_candidates(query)
+    if not payload:
+        return None
+    candidates = _as_list_of_str(payload.get("candidate_tests"))
+    if not candidates:
+        return None
+    set_tests_disambiguation_state(candidates, query_type="test_preparation_query")
+    return format_disambiguation_reply(payload)
+
+
 def resolve_tests_query(user_text: str) -> dict[str, Any]:
     """Resolve test queries deterministically from runtime tests dataset."""
     query = _safe_str(user_text)
@@ -319,15 +335,17 @@ def resolve_tests_query(user_text: str) -> dict[str, Any]:
 
     if preparation_like:
         if specific_match is None:
+            disambiguation_reply = _build_disambiguation_reply(query)
             return {
                 "matched": True,
-                "answer": _TEST_NOT_FOUND_REPLY,
+                "answer": disambiguation_reply or _TEST_NOT_FOUND_REPLY,
                 "route": "tests_preparation",
                 "meta": {
                     "query_type": "test_preparation_query",
                     "matched_test_id": "",
                     "preparation_available": False,
                     "reason": "preparation_query_without_specific_test",
+                    "disambiguation_used": bool(disambiguation_reply),
                 },
             }
         answer = _format_preparation(specific_match)

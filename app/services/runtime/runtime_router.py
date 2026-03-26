@@ -24,6 +24,7 @@ from app.services.runtime.branches_semantic_intent import (
     is_confident_branch_intent,
 )
 from app.services.runtime.faq_resolver import resolve_faq
+from app.services.runtime.packages_business_engine import handle_packages_business_query
 from app.services.runtime.packages_resolver import resolve_packages_query
 from app.services.runtime.response_formatter import format_runtime_answer
 from app.services.runtime.runtime_fallbacks import (
@@ -33,6 +34,7 @@ from app.services.runtime.runtime_fallbacks import (
 )
 from app.services.runtime.symptoms_engine import handle_symptoms_query
 from app.services.runtime.tests_business_engine import resolve_tests_business_query
+from app.services.runtime.tests_disambiguation import resolve_tests_disambiguation_selection
 from app.services.runtime.tests_resolver import resolve_tests_query
 from app.services.runtime.text_normalizer import normalize_arabic
 
@@ -198,6 +200,24 @@ def _is_supported_tests_business_result(result: dict[str, Any] | None) -> bool:
     query_type = _safe_str(meta.get("query_type"))
     return query_type in _BUSINESS_TEST_QUERY_TYPES
 
+
+def _build_tests_selection_query(query_type: str, selected_test: str) -> str:
+    test_name = _safe_str(selected_test)
+    qtype = _safe_str(query_type)
+    if not test_name:
+        return ""
+    if qtype == "test_preparation_query":
+        return f"قبل تحليل {test_name}"
+    if qtype == "test_fasting_query":
+        return f"صيام {test_name}"
+    if qtype == "test_complementary_query":
+        return f"التحاليل المكملة {test_name}"
+    if qtype == "test_alternative_query":
+        return f"بديل {test_name}"
+    if qtype == "test_sample_type_query":
+        return f"نوع عينة {test_name}"
+    return test_name
+
 def route_runtime_message(
     user_text: str,
     *,
@@ -255,8 +275,45 @@ def route_runtime_message(
                         "matched": True,
                         "meta": dict(branches_result.get("meta") or {}),
                     }
+                if is_numeric:
+                    selected = resolve_tests_disambiguation_selection(text)
+                    if selected:
+                        selected_test = _safe_str(selected.get("selected_test"))
+                        selected_query_type = _safe_str(selected.get("query_type"))
+                        selected_query = _build_tests_selection_query(selected_query_type, selected_test)
+                        if selected_query:
+                            tests_business_selected = resolve_tests_business_query(selected_query)
+                            if _is_supported_tests_business_result(tests_business_selected):
+                                return {
+                                    "reply": format_runtime_answer(_safe_str(tests_business_selected.get("answer"))),
+                                    "route": _safe_str(tests_business_selected.get("route")) or "tests_business",
+                                    "source": "tests_business",
+                                    "matched": True,
+                                    "meta": _tests_business_meta(tests_business_selected.get("meta") or {}),
+                                }
+                            tests_selected = resolve_tests_query(selected_query)
+                            if bool(tests_selected.get("matched")):
+                                return {
+                                    "reply": format_runtime_answer(_safe_str(tests_selected.get("answer"))),
+                                    "route": _safe_str(tests_selected.get("route")) or "tests",
+                                    "source": "tests",
+                                    "matched": True,
+                                    "meta": _tests_meta(tests_selected.get("meta") or {}),
+                                }
 
             if is_package_like and ENABLE_PACKAGES_RUNTIME_AFTER_BRANCHES:
+                packages_business_result = handle_packages_business_query(text)
+                if bool(packages_business_result.get("matched")):
+                    return {
+                        "reply": format_runtime_answer(_safe_str(packages_business_result.get("answer"))),
+                        "route": "packages_business",
+                        "source": "packages_business",
+                        "matched": True,
+                        "meta": {
+                            "query_type": _safe_str(packages_business_result.get("query_type")),
+                            "results_count": len(list(packages_business_result.get("results") or [])),
+                        },
+                    }
                 packages_result = resolve_packages_query(text)
                 if bool(packages_result.get("matched")):
                     logger.debug(
@@ -395,6 +452,7 @@ def route_runtime_message(
             semantic_intent = _safe_str(semantic_result.get("intent"))
             semantic_score = float(semantic_result.get("score") or 0.0)
             semantic_routing_used = is_confident_branch_intent(semantic_result)
+            is_package_like = _looks_like_package_query(text)
 
             branches_result = resolve_branches_query(text)
             if bool(branches_result.get("matched")):
@@ -418,7 +476,19 @@ def route_runtime_message(
                     "meta": meta,
                 }
 
-            if ENABLE_PACKAGES_RUNTIME_AFTER_BRANCHES:
+            if is_package_like and ENABLE_PACKAGES_RUNTIME_AFTER_BRANCHES:
+                packages_business_result = handle_packages_business_query(text)
+                if bool(packages_business_result.get("matched")):
+                    return {
+                        "reply": format_runtime_answer(_safe_str(packages_business_result.get("answer"))),
+                        "route": "packages_business",
+                        "source": "packages_business",
+                        "matched": True,
+                        "meta": {
+                            "query_type": _safe_str(packages_business_result.get("query_type")),
+                            "results_count": len(list(packages_business_result.get("results") or [])),
+                        },
+                    }
                 packages_result = resolve_packages_query(text)
                 if bool(packages_result.get("matched")):
                     logger.debug(

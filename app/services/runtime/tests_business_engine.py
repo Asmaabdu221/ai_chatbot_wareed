@@ -8,6 +8,11 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from app.services.runtime.tests_disambiguation import (
+    find_disambiguation_candidates,
+    format_disambiguation_reply,
+    set_tests_disambiguation_state,
+)
 from app.services.runtime.text_normalizer import normalize_arabic
 
 TESTS_BUSINESS_JSONL_PATH = Path("app/data/runtime/rag/tests_business_clean.jsonl")
@@ -310,6 +315,17 @@ def _format_target_field(title: str, test_name: str, value: str) -> str:
     return f"{title} {test_name}:\n{value}"
 
 
+def _build_disambiguation_reply(query: str, query_type: str) -> str | None:
+    payload = find_disambiguation_candidates(query)
+    if not payload:
+        return None
+    candidates = _as_str_list(payload.get("candidate_tests"))
+    if not candidates:
+        return None
+    set_tests_disambiguation_state(candidates, query_type=query_type)
+    return format_disambiguation_reply(payload)
+
+
 def resolve_tests_business_query(user_text: str) -> dict[str, Any]:
     """Resolve business-support test queries deterministically."""
     query = _safe_str(user_text)
@@ -371,15 +387,17 @@ def resolve_tests_business_query(user_text: str) -> dict[str, Any]:
 
     target, score = _find_target_test(query_norm, records)
     if target is None:
+        disambiguation_reply = _build_disambiguation_reply(query, query_type=query_type)
         return {
             "matched": True,
-            "answer": _TEST_NOT_FOUND_MESSAGE,
+            "answer": disambiguation_reply or _TEST_NOT_FOUND_MESSAGE,
             "route": _TARGET_QUERY_ROUTE.get(query_type, "tests_business_no_match"),
             "meta": {
                 "query_type": query_type,
                 "matched_test_id": "",
                 "matched_test_name": "",
                 "score": 0.0,
+                "disambiguation_used": bool(disambiguation_reply),
             },
         }
 
