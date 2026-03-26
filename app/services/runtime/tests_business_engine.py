@@ -13,7 +13,30 @@ from app.services.runtime.text_normalizer import normalize_arabic
 TESTS_BUSINESS_JSONL_PATH = Path("app/data/runtime/rag/tests_business_clean.jsonl")
 
 _FASTING_HINTS = ("صيام", "صايم", "كم ساعه الصيام", "كم ساعة الصيام", "fasting")
-_PREPARATION_HINTS = ("تحضير", "استعداد", "استعد", "قبل التحليل", "المطلوب")
+_PREPARATION_HINTS = (
+    "تحضير",
+    "التحضير",
+    "استعداد",
+    "استعد",
+    "تجهيز",
+    "تجهيزات",
+    "تهيئة",
+    "تهيئه",
+    "قبل التحليل",
+    "قبل تحليل",
+    "قبل الفحص",
+    "قبل فحص",
+    "المطلوب",
+    "لازم",
+    "وش لازم",
+    "ايش لازم",
+    "ايش اسوي",
+    "وش اسوي",
+    "كيف استعد",
+    "كيف أستعد",
+    "كيف اتحضر",
+    "كيف أتحضر",
+)
 _SYMPTOMS_HINTS = ("اعراض", "أعراض", "مناسب", "المناسب", "لتساقط", "لأعراض", "للاعراض")
 _COMPLEMENTARY_HINTS = ("مكمله", "مكمله", "مكملة", "مكمل", "complementary")
 _ALTERNATIVE_HINTS = ("بديل", "بديله", "بديلة", "alternative", "قريب من", "مشابه")

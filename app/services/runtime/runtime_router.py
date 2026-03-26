@@ -25,11 +25,13 @@ from app.services.runtime.branches_semantic_intent import (
 )
 from app.services.runtime.faq_resolver import resolve_faq
 from app.services.runtime.packages_resolver import resolve_packages_query
+from app.services.runtime.response_formatter import format_runtime_answer
 from app.services.runtime.runtime_fallbacks import (
     get_faq_no_match_message,
     get_out_of_scope_message,
     get_rebuild_mode_message,
 )
+from app.services.runtime.symptoms_engine import handle_symptoms_query
 from app.services.runtime.tests_business_engine import resolve_tests_business_query
 from app.services.runtime.tests_resolver import resolve_tests_query
 from app.services.runtime.text_normalizer import normalize_arabic
@@ -127,6 +129,48 @@ def _looks_like_tests_query(text: str) -> bool:
     return any(token in n for token in hints)
 
 
+def _looks_like_symptoms_query(text: str) -> bool:
+    n = normalize_arabic(text)
+    if not n:
+        return False
+    hints = (
+        "اعراض",
+        "أعراض",
+        "اعاني",
+        "أعاني",
+        "عندي",
+        "احس",
+        "أحس",
+        "تعب",
+        "ارهاق",
+        "إرهاق",
+        "دوخه",
+        "دوخة",
+        "تساقط الشعر",
+        "فقر دم",
+        "نقص فيتامين",
+    )
+    return any(normalize_arabic(token) in n for token in hints)
+
+
+def _format_symptoms_suggestions_reply(payload: dict[str, Any]) -> str:
+    tests = [str(t).strip() for t in list(payload.get("tests") or []) if str(t).strip()]
+    packages = [str(p).strip() for p in list(payload.get("packages") or []) if str(p).strip()]
+
+    lines: list[str] = ["بناءً على الأعراض اللي ذكرتها، ممكن تعمل التحاليل التالية:", ""]
+    if tests:
+        for idx, test_name in enumerate(tests, start=1):
+            lines.append(f"{idx}. {test_name}")
+    else:
+        lines.append("لا توجد تحاليل مقترحة حالياً في البيانات المتاحة.")
+
+    if packages:
+        lines.extend(["", "أو تقدر تختار باقة:"])
+        for package_name in packages:
+            lines.append(f"- {package_name}")
+    return "\n".join(lines)
+
+
 def _tests_meta(meta: dict[str, Any] | None) -> dict[str, Any]:
     payload = dict(meta or {})
     payload.setdefault("query_type", "test_unknown")
@@ -176,7 +220,7 @@ def route_runtime_message(
 
     if system_rebuild_mode:
         return {
-            "reply": get_rebuild_mode_message(),
+            "reply": format_runtime_answer(get_rebuild_mode_message()),
             "route": "rebuild_mode",
             "source": "runtime_fallback",
             "matched": False,
@@ -205,7 +249,7 @@ def route_runtime_message(
                         _safe_str(branches_result.get("route")),
                     )
                     return {
-                        "reply": _safe_str(branches_result.get("answer")),
+                        "reply": format_runtime_answer(_safe_str(branches_result.get("answer"))),
                         "route": _safe_str(branches_result.get("route")) or "branches",
                         "source": "branches",
                         "matched": True,
@@ -225,7 +269,7 @@ def route_runtime_message(
                         _safe_str(packages_result.get("route")),
                     )
                     return {
-                        "reply": _safe_str(packages_result.get("answer")),
+                        "reply": format_runtime_answer(_safe_str(packages_result.get("answer"))),
                         "route": _safe_str(packages_result.get("route")) or "packages",
                         "source": "packages",
                         "matched": True,
@@ -245,7 +289,7 @@ def route_runtime_message(
                         _safe_str(tests_business_result.get("route")),
                     )
                     return {
-                        "reply": _safe_str(tests_business_result.get("answer")),
+                        "reply": format_runtime_answer(_safe_str(tests_business_result.get("answer"))),
                         "route": _safe_str(tests_business_result.get("route")) or "tests_business",
                         "source": "tests_business",
                         "matched": True,
@@ -264,7 +308,7 @@ def route_runtime_message(
                         _safe_str(tests_result.get("route")),
                     )
                     return {
-                        "reply": _safe_str(tests_result.get("answer")),
+                        "reply": format_runtime_answer(_safe_str(tests_result.get("answer"))),
                         "route": _safe_str(tests_result.get("route")) or "tests",
                         "source": "tests",
                         "matched": True,
@@ -281,7 +325,7 @@ def route_runtime_message(
             )
             # Do not let FAQ hijack numeric/branch/location/package/tests queries.
             return {
-                "reply": get_faq_no_match_message(),
+                "reply": format_runtime_answer(get_faq_no_match_message()),
                 "route": "faq_only_no_match_domains_prefilter",
                 "source": "runtime_fallback",
                 "matched": False,
@@ -294,6 +338,22 @@ def route_runtime_message(
                     "tests_like_query": is_tests_like,
                 },
             }
+
+        if _looks_like_symptoms_query(text):
+            symptoms_result = handle_symptoms_query(text)
+            if symptoms_result:
+                return {
+                    "reply": format_runtime_answer(_format_symptoms_suggestions_reply(symptoms_result)),
+                    "route": "symptoms_suggestions",
+                    "source": "symptoms_engine",
+                    "matched": True,
+                    "meta": {
+                        "query_type": "symptoms_query",
+                        "symptoms": list(symptoms_result.get("symptoms") or []),
+                        "tests_count": len(list(symptoms_result.get("tests") or [])),
+                        "packages_count": len(list(symptoms_result.get("packages") or [])),
+                    },
+                }
 
         faq_result = resolve_faq(
             text,
@@ -309,7 +369,7 @@ def route_runtime_message(
                 _safe_str(faq_result.get("matched_text")),
             )
             return {
-                "reply": _safe_str(faq_result.get("answer")),
+                "reply": format_runtime_answer(_safe_str(faq_result.get("answer"))),
                 "route": "faq_only",
                 "source": "faq",
                 "matched": True,
@@ -351,7 +411,7 @@ def route_runtime_message(
                 meta["semantic_score"] = semantic_score
                 meta["semantic_routing_used"] = semantic_routing_used
                 return {
-                    "reply": _safe_str(branches_result.get("answer")),
+                    "reply": format_runtime_answer(_safe_str(branches_result.get("answer"))),
                     "route": _safe_str(branches_result.get("route")) or "branches",
                     "source": "branches",
                     "matched": True,
@@ -367,7 +427,7 @@ def route_runtime_message(
                         _safe_str(packages_result.get("route")),
                     )
                     return {
-                        "reply": _safe_str(packages_result.get("answer")),
+                        "reply": format_runtime_answer(_safe_str(packages_result.get("answer"))),
                         "route": _safe_str(packages_result.get("route")) or "packages",
                         "source": "packages",
                         "matched": True,
@@ -382,7 +442,7 @@ def route_runtime_message(
                         _safe_str(tests_business_result.get("route")),
                     )
                     return {
-                        "reply": _safe_str(tests_business_result.get("answer")),
+                        "reply": format_runtime_answer(_safe_str(tests_business_result.get("answer"))),
                         "route": _safe_str(tests_business_result.get("route")) or "tests_business",
                         "source": "tests_business",
                         "matched": True,
@@ -397,14 +457,14 @@ def route_runtime_message(
                         _safe_str(tests_result.get("route")),
                     )
                     return {
-                        "reply": _safe_str(tests_result.get("answer")),
+                        "reply": format_runtime_answer(_safe_str(tests_result.get("answer"))),
                         "route": _safe_str(tests_result.get("route")) or "tests",
                         "source": "tests",
                         "matched": True,
                         "meta": _tests_meta(tests_result.get("meta") or {}),
                     }
         return {
-            "reply": get_faq_no_match_message(),
+            "reply": format_runtime_answer(get_faq_no_match_message()),
             "route": "faq_only_no_match",
             "source": "runtime_fallback",
             "matched": False,
@@ -417,7 +477,7 @@ def route_runtime_message(
         }
 
     return {
-        "reply": get_out_of_scope_message(),
+        "reply": format_runtime_answer(get_out_of_scope_message()),
         "route": "no_runtime_mode",
         "source": "runtime_fallback",
         "matched": False,
