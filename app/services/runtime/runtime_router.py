@@ -179,33 +179,50 @@ def _is_numeric_selection_query(text: str) -> bool:
     return bool(re.fullmatch(r"\d{1,2}", value))
 
 
-def _is_package_followup_shortcut_query(text: str) -> bool:
+_CONTEXT_DETAIL_FOLLOWUPS = (
+    "نعم",
+    "ايوا",
+    "ايوه",
+    "تمام",
+    "اوكي",
+    "ok",
+    "اشرح",
+    "شرح",
+    "وضح",
+    "فصّل",
+    "فصل",
+    "التفاصيل",
+    "تفاصيل",
+    "وش فيها",
+    "ايش فيها",
+    "وش تشمل",
+    "ايش تشمل",
+)
+_CONTEXT_PRICE_FOLLOWUPS = (
+    "السعر",
+    "سعر",
+    "بكم",
+    "كم سعرها",
+    "كم سعره",
+)
+_CONTEXT_BRANCH_FOLLOWUPS = (
+    "وينه",
+    "وين موقعه",
+    "الموقع",
+    "لوكيشن",
+    "location",
+)
+
+
+def _is_context_followup_query(text: str, triggers: tuple[str, ...]) -> bool:
     q = normalize_arabic(_safe_str(text))
     if not q:
         return False
-    hints = (
-        "نعم",
-        "ايوا",
-        "ايوه",
-        "اشرح",
-        "شرح",
-        "التفاصيل",
-        "تفاصيل",
-        "وش فيها",
-        "ايش فيها",
-        "وش تشمل",
-        "ايش تشمل",
-        "وضح",
-        "فصل",
-        "فصّل",
-        "بكم",
-        "السعر",
-        "سعر",
-        "كم سعرها",
-        "كم سعره",
-    )
-    normalized_hints = [normalize_arabic(v) for v in hints]
-    return any(q == h or h in q for h in normalized_hints if h)
+    words = [w for w in q.split() if w]
+    if not (1 <= len(words) <= 4):
+        return False
+    normalized_triggers = [normalize_arabic(v) for v in triggers]
+    return any(q == t or t in q for t in normalized_triggers if t)
 
 
 def _parse_numeric_selection(text: str) -> int | None:
@@ -675,11 +692,20 @@ def route_runtime_message(
         if conversation_id is not None:
             memory = load_entity_memory(conversation_id)
             last_intent = _safe_str(memory.get("last_intent"))
+            last_test = _safe_str((memory.get("last_test") or {}).get("label"))
             last_package = _safe_str((memory.get("last_package") or {}).get("label"))
+            last_branch = _safe_str((memory.get("last_branch") or {}).get("label"))
+            is_detail_followup = _is_context_followup_query(text, _CONTEXT_DETAIL_FOLLOWUPS)
+            is_price_followup = _is_context_followup_query(text, _CONTEXT_PRICE_FOLLOWUPS)
+            is_branch_followup = _is_context_followup_query(text, _CONTEXT_BRANCH_FOLLOWUPS)
+
+            # Context-first routing for short follow-ups (before fallback paths).
             if (
                 last_intent == "package"
                 and last_package
-                and _is_package_followup_shortcut_query(text)
+                and (is_detail_followup or is_price_followup)
+                and not is_tests_like
+                and not is_branch_like
             ):
                 packages_result = resolve_packages_query(text, conversation_id=conversation_id)
                 if bool(packages_result.get("matched")):
@@ -689,6 +715,50 @@ def route_runtime_message(
                         "source": "packages",
                         "matched": True,
                         "meta": dict(packages_result.get("meta") or {}),
+                    }
+            if (
+                last_intent == "test"
+                and last_test
+                and (is_detail_followup or is_price_followup)
+                and not is_package_like
+                and not is_branch_like
+            ):
+                tests_business_result = resolve_tests_business_query(
+                    text,
+                    conversation_id=conversation_id,
+                )
+                if _is_supported_tests_business_result(tests_business_result):
+                    return {
+                        "reply": format_runtime_answer(_safe_str(tests_business_result.get("answer"))),
+                        "route": _safe_str(tests_business_result.get("route")) or "tests_business",
+                        "source": "tests_business",
+                        "matched": True,
+                        "meta": _tests_business_meta(tests_business_result.get("meta") or {}),
+                    }
+                tests_result = resolve_tests_query(text, conversation_id=conversation_id)
+                if bool(tests_result.get("matched")):
+                    return {
+                        "reply": format_runtime_answer(_safe_str(tests_result.get("answer"))),
+                        "route": _safe_str(tests_result.get("route")) or "tests",
+                        "source": "tests",
+                        "matched": True,
+                        "meta": _tests_meta(tests_result.get("meta") or {}),
+                    }
+            if (
+                last_intent == "branch"
+                and last_branch
+                and is_branch_followup
+                and not is_package_like
+                and not is_tests_like
+            ):
+                branches_result = resolve_branches_query(text, conversation_id=conversation_id)
+                if bool(branches_result.get("matched")):
+                    return {
+                        "reply": format_runtime_answer(_safe_str(branches_result.get("answer"))),
+                        "route": _safe_str(branches_result.get("route")) or "branches",
+                        "source": "branches",
+                        "matched": True,
+                        "meta": dict(branches_result.get("meta") or {}),
                     }
 
         if looks_like_result_query(text) and not is_branch_like and not is_package_like and not is_symptoms_like:
