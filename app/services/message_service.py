@@ -3566,6 +3566,13 @@ def send_message_with_attachment(
         attachment_filename and attachment_filename.lower().endswith((".webm", ".wav", ".mp3", ".m4a", ".ogg"))
     )
     effective_content = (content or "").strip()
+    logger.info(
+        "attachment checkpoint | received=%s | filename=%s | attachment_type=%s | size_bytes=%s",
+        bool(attachment_content),
+        attachment_filename,
+        normalized_attachment_type,
+        len(attachment_content or b""),
+    )
 
     if attachment_content:
         if is_audio:
@@ -3587,6 +3594,12 @@ def send_message_with_attachment(
                 raise ValueError("No readable content could be extracted from the attached image.")
         else:
             extracted_context = extract_text_from_document(attachment_content, attachment_filename or "")
+    logger.info(
+        "attachment extraction checkpoint | extracted_present=%s | extracted_len=%s | extracted_preview=%s",
+        bool(extracted_context.strip()),
+        len(extracted_context or ""),
+        (extracted_context or "").replace("\n", " ")[:500],
+    )
 
     question_for_ai = effective_content or "Voice message"
     if SYSTEM_REBUILD_MODE:

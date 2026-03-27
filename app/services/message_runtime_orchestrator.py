@@ -73,10 +73,30 @@ def run_message_runtime_orchestration(
     deps: RuntimeOrchestrationDeps,
 ) -> Any:
     """Execute the existing runtime orchestration flow and return saved reply tuple."""
+    deps.logger.info(
+        "orchestration checkpoint | called=yes | runtime_mode_active=%s | has_attachment=%s | attachment_filename=%s | extracted_present=%s | extracted_len=%s",
+        bool(system_rebuild_mode or faq_only_runtime_mode),
+        bool(attachment_content),
+        attachment_filename,
+        bool((extracted_context or "").strip()),
+        len(extracted_context or ""),
+    )
     runtime_mode_active = system_rebuild_mode or faq_only_runtime_mode
     if runtime_mode_active:
+        deps.logger.info(
+            "report bridge checkpoint | entering_runtime_mode_bridge=%s | has_attachment=%s | extracted_present=%s | extracted_preview=%s",
+            True,
+            bool(attachment_content),
+            bool((extracted_context or "").strip()),
+            (extracted_context or "").replace("\n", " ")[:500],
+        )
         if attachment_content and extracted_context:
             bridged = interpret_uploaded_lab_report_text(extracted_context)
+            deps.logger.info(
+                "report bridge checkpoint | called=yes | matched=%s | items_count=%s",
+                bool(bridged.get("matched")),
+                len(bridged.get("items") or []),
+            )
             if bool(bridged.get("matched")):
                 deps.logger.info("report interpretation bridge matched in runtime mode | source=results_from_report_service")
                 return deps.save_assistant_reply(str(bridged.get("answer") or "").strip())

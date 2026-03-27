@@ -201,6 +201,13 @@ async def send_message(
             pass
 
     is_audio_attachment = bool(attachment and (attachment_type or "").lower() == "audio")
+    logger.info(
+        "attachment checkpoint | received=%s | filename=%s | form_attachment_type=%s | upload_content_type=%s",
+        bool(attachment),
+        getattr(attachment, "filename", None),
+        attachment_type,
+        getattr(attachment, "content_type", None),
+    )
     if not final_content:
         if attachment and not is_audio_attachment:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="يرجى كتابة سؤالك حول المرفق قبل الإرسال.")
