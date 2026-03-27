@@ -694,6 +694,8 @@ def _extract_best_for_topic(query: str) -> str:
                 break
 
     tokens = [t for t in _tokenize(clean) if t not in {"باقه", "باقة", "افضل", "أفضل", "احسن", "أنسب", "وش", "ايش", "تنصحني", "ابي", "ابغى"}]
+    if tokens and tokens[0].startswith("ل") and len(tokens[0]) > 1:
+        tokens[0] = tokens[0][1:]
     clean_topic = " ".join(tokens).strip()
     return clean_topic
 
@@ -701,11 +703,7 @@ def _extract_best_for_topic(query: str) -> str:
 def _format_best_for_options(query: str, rows: list[dict[str, Any]]) -> str:
     topic = _extract_best_for_topic(query)
     if topic:
-        topic_text = topic
-        if topic_text.startswith("ل"):
-            lines = [f"أفضل الباقات {topic_text}:"]
-        else:
-            lines = [f"أفضل الباقات لـ{topic_text}:"]
+        lines = [f"أفضل الباقات ل{topic}:"]
     else:
         lines = ["هذي أفضل الباقات المناسبة:"]
     for idx, row in enumerate(rows, start=1):
@@ -722,19 +720,25 @@ def _is_best_for_details_followup_query(query_norm: str) -> bool:
         "ايوه",
         "اشرح",
         "فصل",
+        "فصل",
         "فصل لي",
         "فصل اكثر",
+        "وضح",
+        "طيب وضح",
         "التفاصيل",
         "وش فيها",
+        "ايش فيها",
         "ايش تشمل",
+        "وش تشمل",
         "ايش التحاليل",
-        "التفاصيل",
+        "عطيني التفاصيل",
+        "ابغى التفاصيل",
     )
     return any(_norm(h) == query_norm or _norm(h) in query_norm for h in hints)
 
 
 def _is_best_for_price_followup_query(query_norm: str) -> bool:
-    hints = ("السعر", "سعر", "بكم", "كم سعرها", "كم سعره")
+    hints = ("السعر", "سعر", "سعرها", "بكم", "كم سعرها", "كم سعره")
     return any(_norm(h) == query_norm or _norm(h) in query_norm for h in hints)
 
 
@@ -755,12 +759,7 @@ def _format_best_for_selected_preview(record: dict[str, Any]) -> str:
     lines = [name]
     if short_desc:
         lines.extend(["", short_desc])
-    lines.extend([
-        "",
-        "إذا حاب أعرفك أكثر على التفاصيل أو التحاليل اللي تشملها، اكتب:",
-        "• التفاصيل",
-        "• وش فيها",
-    ])
+    lines.extend(["", "إذا حاب أعرفك أكثر على الباقة أو أوضح لك التحاليل اللي تشملها، أقدر أفصلها لك."])
     return "\n".join(lines)
 
 
@@ -770,24 +769,19 @@ def _format_best_for_long_details(record: dict[str, Any]) -> str:
     body = full_desc if full_desc and _norm(full_desc) != _norm(short_desc) else short_desc
     if not body:
         body = "ما عندي تفاصيل إضافية واضحة في البيانات الحالية."
-    lines = [
-        "تمام  خليني أفصل لك أكثر:",
-        "",
-        body,
-        "",
-        "إذا حاب تعرف السعر، اكتب:",
-        "• السعر",
-    ]
+    lines = [body, "", "إذا حاب بعده أعرفك على السعر أو أقارنها لك مع باقة ثانية، أقدر أوضح لك."]
     return "\n".join(lines)
 
 
 def _format_best_for_price(record: dict[str, Any]) -> str:
-    base = _format_package_price(record)
-    lines = [
-        base,
-        "",
-        "إذا حاب أقارنها لك مع باقة ثانية أو أرشح لك خيار أفضل، قل لي",
-    ]
+    name = _safe_str(record.get("package_name"))
+    currency = _safe_str(record.get("currency") or "ريال")
+    price = record.get("price_number")
+    if isinstance(price, (int, float)):
+        base = f"سعر {name}: {price:g} {currency}."
+    else:
+        base = _PRICE_NOT_AVAILABLE
+    lines = [base, "", "إذا حاب، أقدر أقارنها لك مع باقة ثانية أو أرشح لك خيار أقرب لاحتياجك."]
     return "\n".join(lines)
 
 
