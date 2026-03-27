@@ -759,8 +759,7 @@ def _format_best_for_selected_preview(record: dict[str, Any]) -> str:
     if not short_desc:
         full_desc = _safe_str(record.get("description_full"))
         if full_desc:
-            # Fallback: use first sentence from full description.
-            short_desc = re.split(r"[.!؟\n]+", full_desc, maxsplit=1)[0].strip()
+            short_desc = full_desc
     if short_desc:
         short_desc = re.sub(rf"^\s*{re.escape(name)}\s*[:\-–—]?\s*", "", short_desc, flags=re.IGNORECASE).strip()
     lines = [name]

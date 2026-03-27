@@ -179,6 +179,35 @@ def _is_numeric_selection_query(text: str) -> bool:
     return bool(re.fullmatch(r"\d{1,2}", value))
 
 
+def _is_package_followup_shortcut_query(text: str) -> bool:
+    q = normalize_arabic(_safe_str(text))
+    if not q:
+        return False
+    hints = (
+        "نعم",
+        "ايوا",
+        "ايوه",
+        "اشرح",
+        "شرح",
+        "التفاصيل",
+        "تفاصيل",
+        "وش فيها",
+        "ايش فيها",
+        "وش تشمل",
+        "ايش تشمل",
+        "وضح",
+        "فصل",
+        "فصّل",
+        "بكم",
+        "السعر",
+        "سعر",
+        "كم سعرها",
+        "كم سعره",
+    )
+    normalized_hints = [normalize_arabic(v) for v in hints]
+    return any(q == h or h in q for h in normalized_hints if h)
+
+
 def _parse_numeric_selection(text: str) -> int | None:
     value = _safe_str(text).translate(
         str.maketrans({"٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4", "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9"})
@@ -642,6 +671,25 @@ def route_runtime_message(
             )
             if selection_result is not None:
                 return selection_result
+
+        if conversation_id is not None:
+            memory = load_entity_memory(conversation_id)
+            last_intent = _safe_str(memory.get("last_intent"))
+            last_package = _safe_str((memory.get("last_package") or {}).get("label"))
+            if (
+                last_intent == "package"
+                and last_package
+                and _is_package_followup_shortcut_query(text)
+            ):
+                packages_result = resolve_packages_query(text, conversation_id=conversation_id)
+                if bool(packages_result.get("matched")):
+                    return {
+                        "reply": format_runtime_answer(_safe_str(packages_result.get("answer"))),
+                        "route": _safe_str(packages_result.get("route")) or "packages",
+                        "source": "packages",
+                        "matched": True,
+                        "meta": dict(packages_result.get("meta") or {}),
+                    }
 
         if looks_like_result_query(text) and not is_branch_like and not is_package_like and not is_symptoms_like:
             result_answer = _safe_str(interpret_result_query(text))
