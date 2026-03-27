@@ -23,7 +23,8 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from app.services.runtime.selection_state import save_selection_state
+from app.services.runtime.entity_memory import load_entity_memory
+from app.services.runtime.selection_state import load_selection_state, save_selection_state
 from app.services.runtime.text_normalizer import normalize_arabic
 
 PACKAGES_JSONL_PATH = Path("app/data/runtime/rag/packages_clean.jsonl")
@@ -671,38 +672,122 @@ def _extract_best_for_topic(query: str) -> str:
     text = _norm(query)
     if not text:
         return ""
-    lead_phrases = (
-        "ايش افضل", "ايش أفضل", "وش افضل", "وش أفضل",
-        "ايش احسن", "وش احسن", "ايش أنسب", "وش أنسب",
+    cleanup_phrases = (
+        "وش افضل", "وش أفضل", "ايش افضل", "ايش أفضل",
+        "وش احسن", "ايش احسن", "وش أنسب", "ايش أنسب",
         "وش تنصحني", "ايش تنصحني", "تنصحني",
         "وش مناسب", "ايش مناسب",
-        "وش الأفضل ل", "ايش الأفضل ل",
-        "احسن باقة ل", "افضل باقة ل",
-        "ابي شيء ل", "ابغى شيء ل", "ابي باقة ل", "ابغى باقة ل",
+        "ابي", "ابغى", "باقة", "باقه", "شيء", "شي",
+        "افضل", "أفضل", "احسن", "أنسب",
     )
-    for phrase in lead_phrases:
-        p = _norm(phrase)
-        if p and p in text:
-            tail = text.split(p, 1)[1].strip()
+    clean = text
+    for phrase in cleanup_phrases:
+        clean = clean.replace(_norm(phrase), " ")
+    clean = re.sub(r"\s+", " ", clean).strip()
+
+    # Prefer phrase after prep "لـ/لل"
+    for marker in (" ل", "لل"):
+        if marker in clean:
+            tail = clean.split(marker, 1)[1].strip()
             if tail:
-                return tail
-    if " ل" in text:
-        tail = text.split(" ل", 1)[1].strip()
-        if tail:
-            return tail
-    return ""
+                clean = tail
+                break
+
+    tokens = [t for t in _tokenize(clean) if t not in {"باقه", "باقة", "افضل", "أفضل", "احسن", "أنسب", "وش", "ايش", "تنصحني", "ابي", "ابغى"}]
+    clean_topic = " ".join(tokens).strip()
+    return clean_topic
 
 
 def _format_best_for_options(query: str, rows: list[dict[str, Any]]) -> str:
     topic = _extract_best_for_topic(query)
     if topic:
-        lines = [f"أفضل الباقات لـ{topic}:"]
+        topic_text = topic
+        if topic_text.startswith("ل"):
+            lines = [f"أفضل الباقات {topic_text}:"]
+        else:
+            lines = [f"أفضل الباقات لـ{topic_text}:"]
     else:
         lines = ["هذي أفضل الباقات المناسبة:"]
     for idx, row in enumerate(rows, start=1):
         lines.append(f"{idx}) {_safe_str(row.get('package_name'))}")
     lines.append("")
     lines.append("اختر رقم الباقة اللي حاب تعرف عنها أكثر.")
+    return "\n".join(lines)
+
+
+def _is_best_for_details_followup_query(query_norm: str) -> bool:
+    hints = (
+        "نعم",
+        "ايوا",
+        "ايوه",
+        "اشرح",
+        "فصل",
+        "فصل لي",
+        "فصل اكثر",
+        "التفاصيل",
+        "وش فيها",
+        "ايش تشمل",
+        "ايش التحاليل",
+        "التفاصيل",
+    )
+    return any(_norm(h) == query_norm or _norm(h) in query_norm for h in hints)
+
+
+def _is_best_for_price_followup_query(query_norm: str) -> bool:
+    hints = ("السعر", "سعر", "بكم", "كم سعرها", "كم سعره")
+    return any(_norm(h) == query_norm or _norm(h) in query_norm for h in hints)
+
+
+def _find_package_by_label(label: str, records: list[dict[str, Any]]) -> dict[str, Any] | None:
+    target = _norm(label)
+    if not target:
+        return None
+    for row in records:
+        row_name = _norm(_safe_str(row.get("package_name")))
+        if row_name and (row_name == target or row_name in target or target in row_name):
+            return row
+    return None
+
+
+def _format_best_for_selected_preview(record: dict[str, Any]) -> str:
+    name = _safe_str(record.get("package_name"))
+    short_desc = _safe_str(record.get("description_short"))
+    lines = [name]
+    if short_desc:
+        lines.extend(["", short_desc])
+    lines.extend([
+        "",
+        "إذا حاب أعرفك أكثر على التفاصيل أو التحاليل اللي تشملها، اكتب:",
+        "• التفاصيل",
+        "• وش فيها",
+    ])
+    return "\n".join(lines)
+
+
+def _format_best_for_long_details(record: dict[str, Any]) -> str:
+    full_desc = _safe_str(record.get("description_full"))
+    short_desc = _safe_str(record.get("description_short"))
+    body = full_desc if full_desc and _norm(full_desc) != _norm(short_desc) else short_desc
+    if not body:
+        body = "ما عندي تفاصيل إضافية واضحة في البيانات الحالية."
+    lines = [
+        "تمام  خليني أفصل لك أكثر:",
+        "",
+        body,
+        "",
+        "إذا حاب تعرف السعر، اكتب:",
+        "• السعر",
+    ]
+    return "\n".join(lines)
+
+
+def _format_best_for_price(record: dict[str, Any]) -> str:
+    base = _format_package_price(record)
+    lines = [
+        base,
+        "",
+        "إذا حاب أقارنها لك مع باقة ثانية أو أرشح لك خيار أفضل، قل لي",
+    ]
     return "\n".join(lines)
 
 
@@ -830,6 +915,33 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
             "meta": {"query_type": "no_match", "reason": "packages_data_unavailable"},
         }
 
+    best_for_context = False
+    remembered_package_label = ""
+    if conversation_id is not None:
+        state = load_selection_state(conversation_id)
+        best_for_context = _safe_str(state.get("query_type")) == "package_best_for"
+        memory = load_entity_memory(conversation_id)
+        if _safe_str(memory.get("last_intent")) == "package" and bool(memory.get("last_intent_has_entity")):
+            remembered_package_label = _safe_str((memory.get("last_package") or {}).get("label"))
+
+    if best_for_context and remembered_package_label:
+        remembered_record = _find_package_by_label(remembered_package_label, records)
+        if remembered_record is not None:
+            if _is_best_for_details_followup_query(query_norm):
+                return {
+                    "matched": True,
+                    "answer": _format_best_for_long_details(remembered_record),
+                    "route": "packages_best_for_details",
+                    "meta": {"query_type": "package_best_for_query"},
+                }
+            if _is_best_for_price_followup_query(query_norm):
+                return {
+                    "matched": True,
+                    "answer": _format_best_for_price(remembered_record),
+                    "route": "packages_best_for_price",
+                    "meta": {"query_type": "package_best_for_query"},
+                }
+
     category = _detect_category(query_norm, records)
     category_like = _is_category_like_query(query_norm, category)
     general_like = _is_general_query(query_norm)
@@ -911,6 +1023,17 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
 
     if price_query and specific_match is not None:
         package_id = _safe_str(specific_match.get("id"))
+        if best_for_context:
+            return {
+                "matched": True,
+                "answer": _format_best_for_price(specific_match),
+                "route": "packages_best_for_price",
+                "meta": {
+                    "query_type": "package_best_for_query",
+                    "matched_package_id": package_id,
+                    "matched_package_name": _safe_str(specific_match.get("package_name")),
+                },
+            }
         return {
             "matched": True,
             "answer": _format_package_price(specific_match),
@@ -926,6 +1049,30 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
 
     if specific_match is not None:
         package_id = _safe_str(specific_match.get("id"))
+        if best_for_context and not detail_query:
+            return {
+                "matched": True,
+                "answer": _format_best_for_selected_preview(specific_match),
+                "route": "packages_best_for_selected",
+                "meta": {
+                    "query_type": "package_best_for_query",
+                    "matched_package_id": package_id,
+                    "matched_package_name": _safe_str(specific_match.get("package_name")),
+                    "category": _safe_str(specific_match.get("main_category")),
+                },
+            }
+        if best_for_context and detail_query:
+            return {
+                "matched": True,
+                "answer": _format_best_for_long_details(specific_match),
+                "route": "packages_best_for_details",
+                "meta": {
+                    "query_type": "package_best_for_query",
+                    "matched_package_id": package_id,
+                    "matched_package_name": _safe_str(specific_match.get("package_name")),
+                    "category": _safe_str(specific_match.get("main_category")),
+                },
+            }
         return {
             "matched": True,
             "answer": _format_package_details(specific_match),
