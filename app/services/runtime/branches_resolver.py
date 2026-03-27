@@ -22,12 +22,22 @@ _GENERIC_BRANCHES_HINTS = (
     "فروع",
     "اين تتواجد",
     "وين فروع",
+    "ايش عندكم فروع",
+    "وش عندكم فروع",
+    "وين فروعكم",
 )
 _SPECIFIC_BRANCH_HINTS = (
     "اقرب",
     "الاقرب",
     "فرع",
     "فرع في",
+    "ابي اقرب فرع",
+    "ابغى اقرب فرع",
+    "وين اقرب فرع",
+    "عندكم فرع في",
+    "موقع فرع",
+    "دوام فرع",
+    "رقم فرع",
 )
 _NEAREST_HINTS = ("اقرب", "الاقرب")
 _CITY_STOPWORDS = {
@@ -527,8 +537,8 @@ def _parse_numeric_selection(text: str) -> int | None:
 def _format_generic_branches_reply() -> str:
     return _normalize_reply_text(
         (
-        "عندنا أكثر من 60 فرع حول المملكة في مدن مثل الرياض وجدة والشرقية والمدينة وغيرها.\n\n"
-        "إذا تعطيني اسم المدينة، أقدر أطلع لك الفروع المتاحة فيها."
+            "عندنا أكثر من 60 فرع حول المملكة في مدن مثل الرياض وجدة والشرقية والمدينة وغيرها.\n\n"
+            "إذا تعطيني اسم المدينة، أقدر أطلع لك الفروع المتاحة فيها."
         )
     )
 
@@ -561,9 +571,7 @@ def _format_city_reply(city: str, city_records: list[dict[str, Any]], conversati
     for idx, branch_name in enumerate(names, start=1):
         lines.append(f"{idx}) {branch_name}")
     lines.append("اختر الرقم الأقرب أو المناسب لك، وأرسل لك رابط الموقع.")
-    return _normalize_reply_text(
-        "\n".join(lines)
-    )
+    return _normalize_reply_text("\n".join(lines))
 
 
 def _format_nearest_city_clarification(city: str) -> str:
@@ -578,8 +586,8 @@ def _format_nearest_city_clarification(city: str) -> str:
 def _format_city_not_found_reply() -> str:
     return _normalize_reply_text(
         (
-        "بهذه المدينة مع الأسف لا يوجد لدينا فروع حاليًا.\n\n"
-        "اكتب لي اسم المدينة الأقرب لك، وأساعدك بتحديد أقرب فرع."
+            "بهذه المدينة مع الأسف لا يوجد لدينا فروع حاليًا.\n\n"
+            "اكتب لي اسم المدينة الأقرب لك، وأساعدك بتحديد أقرب فرع."
         )
     )
 

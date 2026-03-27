@@ -27,7 +27,28 @@ _GENERAL_HINTS = (
     "وش التحاليل الموجودة",
     "ايش التحاليل الموجودة",
 )
-_EXPLANATION_HINTS = ("ايش هو", "ما هو", "ماهي", "يعني ايش", "وش يعني", "اشرح", "تعريف")
+_EXPLANATION_HINTS = (
+    "ايش هو",
+    "ما هو",
+    "ماهي",
+    "وش هو",
+    "وش تحليل",
+    "ايش تحليل",
+    "ما تحليل",
+    "يعني ايش",
+    "وش يعني",
+    "اشرح",
+    "تعريف",
+)
+_EXPLANATION_CONTEXT_HINTS = (
+    "ايش يفحص",
+    "وش يفحص",
+    "ما يفحص",
+    "يفحص ايش",
+    "يفحص وش",
+    "يفيد في ايش",
+    "يفيد في وش",
+)
 _PREPARATION_HINTS = (
     "صيام",
     "يحتاج صيام",
@@ -150,7 +171,12 @@ def _is_general_only_query(query_norm: str) -> bool:
 
 
 def _is_explanation_query(query_norm: str) -> bool:
-    return any(_norm(h) in query_norm for h in _EXPLANATION_HINTS)
+    if any(_norm(h) in query_norm for h in _EXPLANATION_HINTS):
+        return True
+    has_test_context = any(token in query_norm for token in ("تحليل", "تحاليل", "فحص", "اختبار"))
+    if not has_test_context:
+        return False
+    return any(_norm(h) in query_norm for h in _EXPLANATION_CONTEXT_HINTS)
 
 
 def _is_preparation_query(query_norm: str) -> bool:

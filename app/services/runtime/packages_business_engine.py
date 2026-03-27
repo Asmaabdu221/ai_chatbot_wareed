@@ -47,6 +47,19 @@ _CATEGORY_HINTS = (
 )
 
 
+_SPECIFIC_PACKAGE_HINTS = (
+    "ابغى باقة",
+    "ابغي باقة",
+    "ابي باقة",
+    "أبي باقة",
+    "عندكم باقة",
+    "وش تشمل باقة",
+    "ايش تشمل باقة",
+    "ايش فيها باقة",
+    "وش فيها باقة",
+)
+
+
 def _safe_str(value: Any) -> str:
     return str(value or "").strip()
 
@@ -151,6 +164,9 @@ def detect_packages_query_type(query: str) -> str:
     if _has_any_hint(query_norm, _PRICE_HINTS):
         return "price_query"
 
+    if _has_any_hint(query_norm, _SPECIFIC_PACKAGE_HINTS):
+        return "specific_package_query"
+
     # Condition-style asks: "افضل باقة لتساقط الشعر", "باقة مناسبة للتعب".
     condition_markers = (
         "لت",
@@ -205,6 +221,17 @@ def extract_package_target(query: str) -> str:
         "أبي",
         "عندكم",
         "ل",
+        "باقاتكم",
+        "ابغى",
+        "ابغي",
+        "تشمل",
+        "يشمل",
+        "فيها",
+        "داخلها",
+        "داخل",
+        "محتواها",
+        "محتوى",
+        "مكوناتها",
     }
 
     tokens = [t for t in query_norm.split() if t]

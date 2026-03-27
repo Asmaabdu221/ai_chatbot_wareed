@@ -92,10 +92,56 @@ def _resolve_reference_rewrite(
     last_package = _safe_str((memory.get("last_package") or {}).get("label"))
     last_branch = _safe_str((memory.get("last_branch") or {}).get("label"))
 
-    price_refs = tuple(normalize_arabic(v) for v in ("سعرها", "سعره", "كم سعرها", "كم سعره", "بكم"))
-    package_include_refs = tuple(normalize_arabic(v) for v in ("وش تشمل", "ايش تشمل", "ماذا تشمل", "وش فيها", "ايش فيها"))
-    branch_location_refs = tuple(normalize_arabic(v) for v in ("وينه", "وينها", "موقعه", "موقعها", "وين موقعه", "وين موقعها"))
-    test_fasting_refs = tuple(normalize_arabic(v) for v in ("هل يحتاج صيام", "يحتاج صيام", "هل لازم صيام", "لازم صيام"))
+    price_refs = tuple(
+        normalize_arabic(v)
+        for v in (
+            "سعرها",
+            "سعره",
+            "كم سعرها",
+            "كم سعره",
+            "بكم",
+            "كم تكلف",
+            "كم تكلفه",
+            "تكلف كم",
+        )
+    )
+    package_include_refs = tuple(
+        normalize_arabic(v)
+        for v in (
+            "وش تشمل",
+            "ايش تشمل",
+            "ماذا تشمل",
+            "وش فيها",
+            "ايش فيها",
+            "تشمل ايش",
+            "فيها ايش",
+        )
+    )
+    branch_location_refs = tuple(
+        normalize_arabic(v)
+        for v in (
+            "وينه",
+            "وينها",
+            "موقعه",
+            "موقعها",
+            "وين موقعه",
+            "وين موقعها",
+            "وين الموقع",
+        )
+    )
+    test_fasting_refs = tuple(
+        normalize_arabic(v)
+        for v in (
+            "هل يحتاج صيام",
+            "يحتاج صيام",
+            "هل لازم صيام",
+            "لازم صيام",
+            "هل يبيله صيام",
+            "يبيله صيام",
+            "يحتاج صيام ولا لا",
+            "صيام ولا لا",
+        )
+    )
 
     if not last_intent or not last_intent_has_entity:
         return None
