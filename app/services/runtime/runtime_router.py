@@ -86,6 +86,8 @@ def _resolve_reference_rewrite(
         return None
 
     memory = load_entity_memory(conversation_id)
+    last_intent = _safe_str(memory.get("last_intent"))
+    last_intent_has_entity = bool(memory.get("last_intent_has_entity"))
     last_test = _safe_str((memory.get("last_test") or {}).get("label"))
     last_package = _safe_str((memory.get("last_package") or {}).get("label"))
     last_branch = _safe_str((memory.get("last_branch") or {}).get("label"))
@@ -95,17 +97,30 @@ def _resolve_reference_rewrite(
     branch_location_refs = tuple(normalize_arabic(v) for v in ("وينه", "وينها", "موقعه", "موقعها", "وين موقعه", "وين موقعها"))
     test_fasting_refs = tuple(normalize_arabic(v) for v in ("هل يحتاج صيام", "يحتاج صيام", "هل لازم صيام", "لازم صيام"))
 
-    if query_norm in price_refs and last_package:
-        return f"كم سعر {_ensure_package_label(last_package)}"
+    if not last_intent or not last_intent_has_entity:
+        return None
 
-    if query_norm in package_include_refs and last_package:
-        return f"ماذا تشمل {_ensure_package_label(last_package)}"
+    if query_norm in price_refs:
+        if last_intent == "package" and last_package:
+            return f"كم سعر {_ensure_package_label(last_package)}"
+        if last_intent == "test" and last_test:
+            return f"كم سعر تحليل {last_test}"
+        return None
 
-    if query_norm in branch_location_refs and last_branch:
-        return f"ما موقع {last_branch}"
+    if query_norm in package_include_refs:
+        if last_intent == "package" and last_package:
+            return f"ماذا تشمل {_ensure_package_label(last_package)}"
+        return None
 
-    if query_norm in test_fasting_refs and last_test:
-        return f"هل {last_test} يحتاج صيام"
+    if query_norm in branch_location_refs:
+        if last_intent == "branch" and last_branch:
+            return f"ما موقع {last_branch}"
+        return None
+
+    if query_norm in test_fasting_refs:
+        if last_intent == "test" and last_test:
+            return f"هل {last_test} يحتاج صيام"
+        return None
 
     return None
 

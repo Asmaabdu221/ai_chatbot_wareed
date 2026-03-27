@@ -25,6 +25,7 @@ def _utc_now() -> datetime:
 def _default_memory() -> dict[str, Any]:
     return {
         "last_intent": "",
+        "last_intent_has_entity": False,
         "last_test": {"id": "", "label": ""},
         "last_package": {"id": "", "label": ""},
         "last_branch": {"id": "", "label": "", "city": ""},
@@ -71,6 +72,10 @@ def update_entity_memory(
     last_branch: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     current = load_entity_memory(conversation_id)
+    updated_test = False
+    updated_package = False
+    updated_branch = False
+
     if _safe_str(last_intent):
         current["last_intent"] = _safe_str(last_intent)
     if isinstance(last_test, dict):
@@ -80,6 +85,7 @@ def update_entity_memory(
         }
         if next_test["id"] or next_test["label"]:
             current["last_test"] = next_test
+            updated_test = True
     if isinstance(last_package, dict):
         next_package = {
             "id": _safe_str(last_package.get("id")),
@@ -87,6 +93,7 @@ def update_entity_memory(
         }
         if next_package["id"] or next_package["label"]:
             current["last_package"] = next_package
+            updated_package = True
     if isinstance(last_branch, dict):
         next_branch = {
             "id": _safe_str(last_branch.get("id")),
@@ -95,4 +102,14 @@ def update_entity_memory(
         }
         if next_branch["id"] or next_branch["label"]:
             current["last_branch"] = next_branch
+            updated_branch = True
+
+    intent = _safe_str(current.get("last_intent"))
+    if intent == "test":
+        current["last_intent_has_entity"] = updated_test
+    elif intent == "package":
+        current["last_intent_has_entity"] = updated_package
+    elif intent == "branch":
+        current["last_intent_has_entity"] = updated_branch
+
     return save_entity_memory(conversation_id, current)
