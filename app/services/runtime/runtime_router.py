@@ -20,6 +20,7 @@ from typing import Any
 from uuid import UUID
 
 from app.services.runtime.branches_resolver import resolve_branches_query
+from app.services.runtime.entity_memory import load_entity_memory
 from app.services.runtime.branches_semantic_intent import (
     detect_branch_semantic_intent,
     is_confident_branch_intent,
@@ -59,6 +60,54 @@ _BUSINESS_TEST_QUERY_TYPES = {
 def _safe_str(value: Any) -> str:
     """Convert any value to a safely stripped string."""
     return str(value or "").strip()
+
+
+def _ensure_package_label(label: str) -> str:
+    value = _safe_str(label)
+    if not value:
+        return ""
+    n = normalize_arabic(value)
+    if "باقه" in n or "باقة" in value:
+        return value
+    return f"باقة {value}"
+
+
+def _resolve_reference_rewrite(
+    text: str,
+    *,
+    conversation_id: UUID | None,
+) -> str | None:
+    if conversation_id is None:
+        return None
+
+    query = _safe_str(text)
+    query_norm = normalize_arabic(query)
+    if not query_norm:
+        return None
+
+    memory = load_entity_memory(conversation_id)
+    last_test = _safe_str((memory.get("last_test") or {}).get("label"))
+    last_package = _safe_str((memory.get("last_package") or {}).get("label"))
+    last_branch = _safe_str((memory.get("last_branch") or {}).get("label"))
+
+    price_refs = tuple(normalize_arabic(v) for v in ("سعرها", "سعره", "كم سعرها", "كم سعره", "بكم"))
+    package_include_refs = tuple(normalize_arabic(v) for v in ("وش تشمل", "ايش تشمل", "ماذا تشمل", "وش فيها", "ايش فيها"))
+    branch_location_refs = tuple(normalize_arabic(v) for v in ("وينه", "وينها", "موقعه", "موقعها", "وين موقعه", "وين موقعها"))
+    test_fasting_refs = tuple(normalize_arabic(v) for v in ("هل يحتاج صيام", "يحتاج صيام", "هل لازم صيام", "لازم صيام"))
+
+    if query_norm in price_refs and last_package:
+        return f"كم سعر {_ensure_package_label(last_package)}"
+
+    if query_norm in package_include_refs and last_package:
+        return f"ماذا تشمل {_ensure_package_label(last_package)}"
+
+    if query_norm in branch_location_refs and last_branch:
+        return f"ما موقع {last_branch}"
+
+    if query_norm in test_fasting_refs and last_test:
+        return f"هل {last_test} يحتاج صيام"
+
+    return None
 
 
 def _is_numeric_selection_query(text: str) -> bool:
@@ -405,6 +454,9 @@ def route_runtime_message(
     - meta
     """
     text = _safe_str(user_text)
+    rewritten = _resolve_reference_rewrite(text, conversation_id=conversation_id)
+    if rewritten:
+        text = rewritten
 
     if system_rebuild_mode:
         return {

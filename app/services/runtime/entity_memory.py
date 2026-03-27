@@ -74,19 +74,25 @@ def update_entity_memory(
     if _safe_str(last_intent):
         current["last_intent"] = _safe_str(last_intent)
     if isinstance(last_test, dict):
-        current["last_test"] = {
+        next_test = {
             "id": _safe_str(last_test.get("id")),
             "label": _safe_str(last_test.get("label")),
         }
+        if next_test["id"] or next_test["label"]:
+            current["last_test"] = next_test
     if isinstance(last_package, dict):
-        current["last_package"] = {
+        next_package = {
             "id": _safe_str(last_package.get("id")),
             "label": _safe_str(last_package.get("label")),
         }
+        if next_package["id"] or next_package["label"]:
+            current["last_package"] = next_package
     if isinstance(last_branch, dict):
-        current["last_branch"] = {
+        next_branch = {
             "id": _safe_str(last_branch.get("id")),
             "label": _safe_str(last_branch.get("label")),
             "city": _safe_str(last_branch.get("city")),
         }
+        if next_branch["id"] or next_branch["label"]:
+            current["last_branch"] = next_branch
     return save_entity_memory(conversation_id, current)
