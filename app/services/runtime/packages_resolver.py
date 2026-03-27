@@ -1,13 +1,22 @@
 ﻿"""Deterministic runtime resolver for package queries.
 
-Rebuilt to use ONLY packages_clean.jsonl as the active runtime source of truth.
-Matching is corpus-driven from package_name/category/descriptions in the JSONL.
+Active runtime source of truth:
+- app/data/runtime/rag/packages_clean.jsonl
+
+This resolver is intentionally self-contained and UTF-8 clean.
+It supports:
+- general package listing queries
+- category/package-family listing queries
+- specific package lookup
+- package price queries
+- package detail/contents queries
+- Arabic + English keyword matching
+- partial/misspelled matching via normalization + weighted scoring
 """
 
 from __future__ import annotations
 
 import json
-import math
 import re
 from functools import lru_cache
 from pathlib import Path
@@ -20,144 +29,220 @@ from app.services.runtime.text_normalizer import normalize_arabic
 PACKAGES_JSONL_PATH = Path("app/data/runtime/rag/packages_clean.jsonl")
 
 _GENERAL_HINTS = (
-    "Ø¨Ø§Ù‚Ø§Øª",
-    "Ø¨Ø§Ù‚Ø§ØªÙƒÙ…",
-    "Ø¹Ù†Ø¯ÙƒÙ… Ø¨Ø§Ù‚Ø§Øª",
-    "ÙˆØ´ Ø¹Ù†Ø¯ÙƒÙ… Ø¨Ø§Ù‚Ø§Øª",
-    "Ø§ÙŠØ´ Ø¹Ù†Ø¯ÙƒÙ… Ø¨Ø§Ù‚Ø§Øª",
-    "Ø§Ù„Ø¨Ø§Ù‚Ø§Øª Ø§Ù„Ù…ØªÙˆÙØ±Ù‡",
-    "Ø§Ù„Ø¨Ø§Ù‚Ø§Øª Ø§Ù„Ù…ØªØ§Ø­Ø©",
-    "ÙˆØ´ Ø§Ù„Ø¨Ø§Ù‚Ø§Øª",
-    "Ø§ÙŠØ´ Ø§Ù„Ø¨Ø§Ù‚Ø§Øª",
-    "Ø§ÙŠØ´ Ø§Ù„Ø¨Ø§Ù‚Ø§Øª Ø§Ù„Ù…ØªÙˆÙØ±Ù‡",
-    "Ù…Ø§ Ù‡ÙŠ Ø§Ù„Ø¨Ø§Ù‚Ø§Øª",
-    "Ø§Ù„Ø¨Ø±Ø§Ù…Ø¬",
+    "باقات",
+    "باقاتكم",
+    "عندكم باقات",
+    "وش عندكم باقات",
+    "ايش عندكم باقات",
+    "الباقات المتوفرة",
+    "الباقات المتوفره",
+    "الباقات المتاحة",
+    "الباقات المتاحه",
+    "ما هي الباقات",
+    "ماهي الباقات",
+    "وش الباقات",
+    "وش هي الباقات",
+    "ايش الباقات",
+    "ايش الباقات المتوفرة",
+    "الباقات اللي عندكم",
+    "انواع الباقات",
+    "أنواع الباقات",
+    "البرامج",
     "packages",
     "package list",
+    "available packages",
 )
 
 _GENERAL_LISTING_HINTS = (
-    "ÙˆØ´ Ø§Ù„Ø¨Ø§Ù‚Ø§Øª",
-    "Ø§ÙŠØ´ Ø§Ù„Ø¨Ø§Ù‚Ø§Øª",
-    "Ù…Ø§Ù‡ÙŠ Ø§Ù„Ø¨Ø§Ù‚Ø§Øª",
-    "Ù…Ø§ Ù‡ÙŠ Ø§Ù„Ø¨Ø§Ù‚Ø§Øª",
-    "Ø§Ù†ÙˆØ§Ø¹ Ø§Ù„Ø¨Ø§Ù‚Ø§Øª",
-    "Ø§Ù„Ø¨Ø§Ù‚Ø§Øª Ø§Ù„Ù…ØªÙˆÙØ±Ø©",
-    "Ø§Ù„Ø¨Ø§Ù‚Ø§Øª Ø§Ù„Ù…ØªØ§Ø­Ø©",
-    "Ø§Ù„Ø¨Ø§Ù‚Ø§Øª Ø§Ù„Ù„ÙŠ Ø¹Ù†Ø¯ÙƒÙ…",
-    "Ø¹Ù†Ø¯ÙƒÙ… Ø¨Ø§Ù‚Ø§Øª",
+    "وش الباقات",
+    "وش هي الباقات",
+    "وش الباقات اللي عندكم",
+    "ايش الباقات",
+    "ايش الباقات المتوفرة",
+    "ماهي الباقات",
+    "ما هي الباقات",
+    "انواع الباقات",
+    "أنواع الباقات",
+    "الباقات المتوفرة",
+    "الباقات المتوفره",
+    "الباقات المتاحة",
+    "الباقات المتاحه",
+    "الباقات اللي عندكم",
+    "عندكم باقات",
+    "وش عندكم باقات",
+    "ايش عندكم باقات",
+    "available packages",
+    "package list",
 )
 
 _PRICE_HINTS = (
-    "ÙƒÙ… Ø³Ø¹Ø±",
-    "ÙƒÙ… Ø§Ø³Ø¹Ø§Ø±",
-    "Ø³Ø¹Ø±",
-    "Ø§Ø³Ø¹Ø§Ø±",
-    "Ø¨ÙƒÙ…",
-    "ÙƒÙ… ØªÙƒÙ„Ù",
-    "ØªÙƒÙ„Ù",
-    "ØªÙƒÙ„ÙØ©",
+    "كم سعر",
+    "كم اسعار",
+    "كم تكلف",
+    "كم تكلفه",
+    "كم تكلفها",
+    "سعر",
+    "اسعار",
+    "بكم",
+    "تكلف",
+    "تكلفة",
+    "كم سعرها",
+    "سعرها",
     "price",
     "cost",
+    "how much",
 )
 
 _DETAIL_HINTS = (
-    "ÙˆØ´ ØªØ´Ù…Ù„",
-    "Ø§ÙŠØ´ ØªØ´Ù…Ù„",
-    "ÙˆØ´ ÙÙŠÙ‡Ø§",
-    "Ø§ÙŠØ´ ÙÙŠÙ‡Ø§",
-    "ØªÙØ§ØµÙŠÙ„",
-    "Ù…Ø­ØªÙˆÙ‰",
-    "contains",
-    "details",
+    "وش تشمل",
+    "ايش تشمل",
+    "وش فيها",
+    "ايش فيها",
+    "ماذا تشمل",
+    "محتواها",
+    "تفاصيل",
+    "تفاصيلها",
+    "محتوى",
+    "وش هي",
+    "ايش هي",
     "what does it include",
+    "what is included",
     "include",
+    "includes",
+    "details",
 )
 
 _CATEGORY_HINTS: dict[str, tuple[str, ...]] = {
-    "Ø§Ù„Ø¨Ø§Ù‚Ø§Øª Ø§Ù„Ù…ØªØ®ØµØµØ©": ("Ø±Ù…Ø¶Ø§Ù†", "Ù…ØªØ®ØµØµÙ‡", "Ù…ØªØ®ØµØµØ©", "specialized"),
-    "Ø§Ù„Ø¨Ø§Ù‚Ø§Øª Ø§Ù„Ø¬ÙŠÙ†ÙŠØ© Ø§Ù„ØªØ´Ø®ÙŠØµÙŠØ©": ("Ø¬ÙŠÙ†ÙŠ", "ÙˆØ±Ø§Ø«ÙŠ", "ØªØ´Ø®ÙŠØµÙŠ", "diagnostic genetic"),
-    "Ø§Ù„Ø¨Ø§Ù‚Ø§Øª Ø§Ù„Ø¬ÙŠÙ†ÙŠØ© Ø§Ù„ÙˆÙ‚Ø§Ø¦ÙŠØ©": ("Ø¬ÙŠÙ†ÙŠ", "ÙˆØ±Ø§Ø«ÙŠ", "ÙˆÙ‚Ø§Ø¦ÙŠ", "preventive genetic"),
-    "Ø§Ù„ØªØ­Ø§Ù„ÙŠÙ„ Ø§Ù„Ù…Ø®Ø¨Ø±ÙŠØ© Ø§Ù„ÙØ±Ø¯ÙŠØ©": ("ØªØ­Ø§Ù„ÙŠÙ„ ÙØ±Ø¯ÙŠÙ‡", "ØªØ­Ø§Ù„ÙŠÙ„ ÙØ±Ø¯ÙŠØ©", "single test", "individual tests"),
-    "Ø§Ù„ØªØ­Ø§Ù„ÙŠÙ„ Ø§Ù„Ø°Ø§ØªÙŠØ©": ("Ø°Ø§ØªÙŠ", "Ø°Ø§ØªÙŠÙ‡", "self collection", "home collection"),
-    "Ø§Ù„ØªØ­Ø§Ù„ÙŠÙ„ Ø§Ù„Ø¬ÙŠÙ†ÙŠØ©": ("ØªØ­Ø§Ù„ÙŠÙ„ Ø¬ÙŠÙ†ÙŠÙ‡", "ØªØ­Ø§Ù„ÙŠÙ„ Ø¬ÙŠÙ†ÙŠØ©", "genetic tests"),
+    "الباقات المتخصصة": (
+        "رمضان",
+        "متخصصة",
+        "متخصصه",
+        "specialized",
+        "specialised",
+    ),
+    "الباقات الجينية التشخيصية": (
+        "جيني",
+        "جينيه",
+        "جينية",
+        "وراثي",
+        "وراثية",
+        "تشخيصي",
+        "تشخيصية",
+        "diagnostic genetic",
+        "genetic diagnostic",
+    ),
+    "الباقات الجينية الوقائية": (
+        "وقائي",
+        "وقائية",
+        "preventive genetic",
+        "genetic preventive",
+    ),
+    "التحاليل المخبرية الفردية": (
+        "تحاليل فردية",
+        "تحاليل فرديه",
+        "فردية",
+        "فرديه",
+        "single test",
+        "individual tests",
+    ),
+    "التحاليل الذاتية": (
+        "ذاتي",
+        "ذاتية",
+        "self collection",
+        "home collection",
+    ),
+    "التحاليل الجينية": (
+        "تحاليل جينية",
+        "تحاليل جينيه",
+        "genetic tests",
+        "dna",
+    ),
 }
 
-_PRICE_NOT_AVAILABLE = "Ø³Ø¹Ø± Ù‡Ø°Ù‡ Ø§Ù„Ø¨Ø§Ù‚Ø© ØºÙŠØ± Ù…ØªÙˆÙØ± Ø­Ø§Ù„ÙŠÙ‹Ø§ ÙÙŠ Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø­Ø§Ù„ÙŠØ©."
-_PACKAGE_NOT_FOUND = "Ù…Ø§ Ù‚Ø¯Ø±Øª Ø£Ø­Ø¯Ø¯ Ø¨Ø§Ù‚Ø© Ù…Ø­Ø¯Ø¯Ø© Ù…Ù† Ø³Ø¤Ø§Ù„Ùƒ. Ø§ÙƒØªØ¨ Ø§Ø³Ù… Ø§Ù„Ø¨Ø§Ù‚Ø© Ø¨Ø´ÙƒÙ„ Ø£ÙˆØ¶Ø­."
+_PRICE_NOT_AVAILABLE = "سعر هذه الباقة غير متوفر حاليًا في البيانات الحالية."
+_PACKAGE_NOT_FOUND = "ما قدرت أحدد باقة محددة من سؤالك. اكتب اسم الباقة بشكل أوضح."
 
 _STOPWORDS = {
-    "Ø¨Ø§Ù‚Ù‡", "Ø¨Ø§Ù‚Ø©", "Ø¨Ø§Ù‚Ø§Øª", "ØªØ­Ù„ÙŠÙ„", "ØªØ­Ø§Ù„ÙŠÙ„", "ÙØ­Øµ", "ØªÙØ§ØµÙŠÙ„", "Ø§Ù„ØªØ­Ø§Ù„ÙŠÙ„",
-    "Ø§Ø¨ÙŠ", "Ø§Ø¨ØºÙ‰", "Ø§Ø±ÙŠØ¯", "Ø¨Ø¯ÙŠ", "Ù…Ø­ØªØ§Ø¬", "Ø§Ø­ØªØ§Ø¬", "Ø¹Ù†Ø¯ÙŠ", "Ø´ÙŠØ¡", "Ø´ÙŠ", "Ø§Ø¨ÙŠÙ‡Ø§",
-    "ÙƒÙ…", "Ø³Ø¹Ø±", "Ø§Ø³Ø¹Ø§Ø±", "Ø¨ÙƒÙ…", "ÙˆØ´", "Ø§ÙŠØ´", "Ù…Ø§", "Ù…Ø§Ù‡Ùˆ", "Ù‡Ùˆ", "Ù‡ÙŠ", "ÙÙŠ", "Ø¹Ù†",
-    "Ù„", "Ù„Ù„", "Ø¹Ù„Ù‰", "Ù…Ù†", "Ù…Ø¹", "Ø§Ù„Ù‰", "Ø§Ùˆ", "Ùˆ", "Ø§Ùˆ", "Ø¨Ø¹Ø¯", "Ù‚Ø¨Ù„", "Ù‡Ø°Ù‡", "Ù‡Ø°Ø§",
+    "باقه", "باقة", "باقات", "برنامج", "برامج",
+    "تحليل", "تحاليل", "فحص", "فحوصات", "تفاصيل", "التحاليل",
+    "ابي", "ابغى", "أبغى", "اريد", "أريد", "بدي", "محتاج", "احتاج",
+    "عندي", "شيء", "شي", "ابيها", "اريدها", "ابا", "أبي",
+    "كم", "سعر", "اسعار", "بكم", "وش", "ايش", "إيش", "ما", "ماهو", "هو", "هي",
+    "في", "عن", "على", "من", "مع", "الى", "إلى", "او", "أو", "و",
+    "هذه", "هذا", "هذي", "هاذي", "هذيك", "ذلك", "تبع", "تبعها",
     "package", "packages", "price", "cost", "details", "detail", "include", "includes",
-    "the", "a", "an", "for", "of", "to", "and", "or",
+    "the", "a", "an", "for", "of", "to", "and", "or", "what", "is", "are",
 }
 
 _GENERIC_LOW_SIGNAL = {
-    "ØµØ­Ù‡", "ØµØ­Ø©", "ØªØ­Ø§Ù„ÙŠÙ„", "ØªØ­Ù„ÙŠÙ„", "ÙØ­Øµ", "ÙØ­ÙˆØµØ§Øª", "Ø´Ø§Ù…Ù„Ù‡", "Ø´Ø§Ù…Ù„Ø©", "Ù…ØªØ®ØµØµÙ‡", "Ù…ØªØ®ØµØµØ©",
-    "Ù…ØªØ§Ø¨Ø¹Ù‡", "Ù…ØªØ§Ø¨Ø¹Ø©", "Ø§Ù„ÙƒØ´Ù", "Ø§Ù„Ù…Ø¨ÙƒØ±", "ØªÙØ§ØµÙŠÙ„", "Ø¨Ø§Ù‚Ù‡", "Ø¨Ø§Ù‚Ø©", "package", "packages",
-    "test", "tests",
+    "صحه", "صحة", "تحاليل", "تحليل", "فحص", "فحوصات", "شامله", "شاملة",
+    "متخصصه", "متخصصة", "متابعه", "متابعة", "الكشف", "المبكر", "تفاصيل",
+    "باقه", "باقة", "برنامج", "package", "packages", "test", "tests",
 }
 
 _STRONG_KEYWORDS = {
-    "ØºØ¯Ù‡", "Ø¯Ø±Ù‚ÙŠÙ‡", "Ø¯Ø±Ù‚ÙŠØ©", "thyroid",
-    "Ø³ÙƒØ±ÙŠ", "Ø³ÙƒØ±", "glucose", "diabetes", "diabetic",
-    "Ø´Ø¹Ø±", "hair", "ØªØ³Ø§Ù‚Ø·", "alopecia",
-    "ÙÙŠØªØ§Ù…ÙŠÙ†", "ÙÙŠØªØ§Ù…ÙŠÙ†Ø§Øª", "vitamin", "vitamins",
-    "Ø­Ø¯ÙŠØ¯", "iron", "ÙÙ‚Ø±", "Ø§Ù†ÙŠÙ…ÙŠØ§", "anemia", "anaemia",
-    "Ù‡Ø±Ù…ÙˆÙ†", "Ù‡Ø±Ù…ÙˆÙ†Ø§Øª", "hormone", "hormonal",
-    "Ø§Ø·ÙØ§Ù„", "Ø·ÙÙ„", "children", "kids", "child",
-    "Ø±Ø¬Ø§Ù„", "men", "male", "man",
-    "Ù†Ø³Ø§Ø¡", "Ù…Ø±Ø§Ù‡", "Ù…Ø±Ø£Ø©", "woman", "women", "female",
-    "Ø±Ù…Ø¶Ø§Ù†", "ramadan",
-    "Ø§ÙƒØªØ¦Ø§Ø¨", "depression",
-    "ØµØ¯Ø§Ø¹", "migraine", "headache",
-    "Ø¹Ø¸Ø§Ù…", "bone", "bones",
-    "ÙƒØ¨Ø¯", "Ø§Ù„ÙƒØ¨Ø¯", "liver",
-    "ÙƒÙ„Ù‰", "Ø§Ù„ÙƒÙ„ÙŠ", "kidney", "renal",
-    "Ø­Ø³Ø§Ø³ÙŠÙ‡", "Ø­Ø³Ø§Ø³ÙŠØ©", "allergy", "allergies",
-    "Ù‚Ù…Ø­", "Ø¬Ù„ÙˆØªÙŠÙ†", "gluten", "wheat",
-    "Ø§ÙˆØ±Ø§Ù…", "Ø³Ø±Ø·Ø§Ù†", "tumor", "tumour", "cancer",
-    "Ù…Ø¹Ø¯ÙŠÙ‡", "Ù…Ø¹Ø¯ÙŠØ©", "pcr", "std", "infection", "infectious",
-    "Ù‚ÙˆÙ„ÙˆÙ†", "Ù‡Ø¶Ù…ÙŠ", "colon", "digestive", "gastro",
-    "ØªÙƒÙ…ÙŠÙ…", "ÙƒÙ…ÙŠÙ…", "sleeve",
-    "Ù…ÙˆÙ†Ø¬Ø§Ø±Ùˆ", "mounjaro",
-    "Ø±ÙˆÙƒØªØ§Ù†", "roaccutane", "accutane", "isotretinoin",
-    "Ø²ÙˆØ§Ø¬", "marriage", "premarital",
-    "Ø¬Ù‡Ø§Ø¶", "Ø¥Ø¬Ù‡Ø§Ø¶", "miscarriage",
-    "Ø±ÙŠØ§Ø¶ÙŠÙŠÙ†", "Ø±ÙŠØ§Ø¶ÙŠ", "athlete", "athletes",
-    "dna", "well", "silver", "gold", "platinum", "nifty", "gender", "Ø¬ÙŠÙ†ÙŠ", "ÙˆØ±Ø§Ø«ÙŠ",
-    "Ù…Ø¹Ø§Ø¯Ù†", "Ø§Ù…Ù„Ø§Ø­", "magnesium", "zinc", "calcium", "minerals",
-    "Ø¯Ù‡ÙˆÙ†", "cholesterol", "lipid", "lipids",
+    "غده", "درقيه", "درقية", "thyroid",
+    "سكري", "سكر", "glucose", "diabetes", "diabetic",
+    "شعر", "hair", "تساقط", "alopecia",
+    "فيتامين", "فيتامينات", "vitamin", "vitamins",
+    "حديد", "iron", "فريتين", "ferritin", "انيميا", "anemia", "anaemia",
+    "هرمون", "هرمونات", "hormone", "hormonal",
+    "اطفال", "طفل", "children", "kids", "child",
+    "رجال", "men", "male", "man",
+    "نساء", "مراه", "مرأة", "امرأة", "woman", "women", "female",
+    "رمضان", "ramadan",
+    "اكتئاب", "depression",
+    "صداع", "headache", "migraine",
+    "عظام", "bone", "bones",
+    "كبد", "الكبد", "liver",
+    "كلى", "الكلي", "kidney", "renal",
+    "حساسيه", "حساسية", "allergy", "allergies",
+    "قمح", "جلوتين", "gluten", "wheat",
+    "اورام", "أورام", "سرطان", "tumor", "tumour", "cancer",
+    "معديه", "معدية", "infection", "infectious",
+    "قولون", "هضمي", "colon", "digestive", "gastro",
+    "تكميم", "كميم", "sleeve", "bariatric",
+    "مونجارو", "mounjaro", "tirzepatide",
+    "روكتان", "roaccutane", "accutane", "isotretinoin",
+    "زواج", "marriage", "premarital",
+    "جهاض", "إجهاض", "miscarriage",
+    "رياضيين", "رياضي", "athlete", "athletes",
+    "جيني", "وراثي", "dna", "genetic", "nifty", "well", "gender", "silver", "gold", "platinum",
+    "معادن", "املاح", "أملاح", "minerals", "magnesium", "zinc", "calcium",
+    "دهون", "cholesterol", "lipid", "lipids",
+    "تخسيس", "وزن", "weight", "slimming",
+    "اطفال", "صحة", "children",
 }
 
 _SYNONYMS: dict[str, tuple[str, ...]] = {
-    "ØºØ¯Ù‡": ("ØºØ¯Ù‡", "Ø§Ù„ØºØ¯Ù‡", "ØºØ¯Ø¯", "Ø¯Ø±Ù‚ÙŠÙ‡", "Ø¯Ø±Ù‚ÙŠØ©", "thyroid", "thyroids", "tsh", "t3", "t4"),
-    "Ø³ÙƒØ±ÙŠ": ("Ø³ÙƒØ±ÙŠ", "Ø³ÙƒØ±", "glucose", "diabetes", "diabetic", "hba1c", "Ø§Ù†Ø³ÙˆÙ„ÙŠÙ†", "insulin", "homa", "homa-ir"),
-    "Ø´Ø¹Ø±": ("Ø´Ø¹Ø±", "hair", "ØªØ³Ø§Ù‚Ø·", "ØªÙ‚ØµÙ", "alopecia"),
-    "ÙÙŠØªØ§Ù…ÙŠÙ†": ("ÙÙŠØªØ§Ù…ÙŠÙ†", "ÙÙŠØªØ§Ù…ÙŠÙ†Ø§Øª", "vitamin", "vitamins", "vit d", "vitamin d", "b12"),
-    "Ø­Ø¯ÙŠØ¯": ("Ø­Ø¯ÙŠØ¯", "ÙØ±ÙŠØªÙŠÙ†", "Ù…Ø®Ø²ÙˆÙ†", "iron", "ferritin", "anaemia", "anemia", "ÙÙ‚Ø±", "Ø¯Ù…"),
-    "Ù‡Ø±Ù…ÙˆÙ†": ("Ù‡Ø±Ù…ÙˆÙ†", "Ù‡Ø±Ù…ÙˆÙ†Ø§Øª", "hormone", "hormonal", "testosterone", "estrogen", "prolactin", "lh", "fsh"),
-    "Ø§Ø·ÙØ§Ù„": ("Ø§Ø·ÙØ§Ù„", "Ø·ÙÙ„", "Ø£Ø·ÙØ§Ù„", "child", "children", "kids", "pediatric"),
-    "Ø±Ø¬Ø§Ù„": ("Ø±Ø¬Ø§Ù„", "Ù„Ù„Ø±Ø¬Ø§Ù„", "men", "male", "man"),
-    "Ù†Ø³Ø§Ø¡": ("Ù†Ø³Ø§Ø¡", "Ù„Ù„Ù†Ø³Ø§Ø¡", "Ù…Ø±Ø§Ù‡", "Ù…Ø±Ø£Ø©", "Ø§Ù…Ø±Ø£Ø©", "women", "woman", "female"),
-    "Ø±Ù…Ø¶Ø§Ù†": ("Ø±Ù…Ø¶Ø§Ù†", "ramadan", "ØµÙŠØ§Ù…", "ØµØ§Ø¦Ù…"),
-    "Ø§ÙƒØªØ¦Ø§Ø¨": ("Ø§ÙƒØªØ¦Ø§Ø¨", "depression", "mood", "Ù…Ø²Ø§Ø¬"),
-    "ØµØ¯Ø§Ø¹": ("ØµØ¯Ø§Ø¹", "headache", "migraine"),
-    "Ø¹Ø¸Ø§Ù…": ("Ø¹Ø¸Ø§Ù…", "bone", "bones", "calcium", "ÙÙŠØªØ§Ù…ÙŠÙ† Ø¯"),
-    "ÙƒØ¨Ø¯": ("ÙƒØ¨Ø¯", "Ø§Ù„ÙƒØ¨Ø¯", "liver", "alt", "ast", "ggt", "alp"),
-    "ÙƒÙ„Ù‰": ("ÙƒÙ„Ù‰", "Ø§Ù„ÙƒÙ„Ù‰", "ÙƒÙ„ÙŠÙ‡", "kidney", "renal", "creatinine", "egfr", "bun"),
-    "Ø­Ø³Ø§Ø³ÙŠÙ‡": ("Ø­Ø³Ø§Ø³ÙŠÙ‡", "Ø­Ø³Ø§Ø³ÙŠØ©", "allergy", "allergies", "gluten", "Ù‚Ù…Ø­"),
-    "Ø§ÙˆØ±Ø§Ù…": ("Ø§ÙˆØ±Ø§Ù…", "Ø§ÙˆØ±Ø§Ù…", "Ø³Ø±Ø·Ø§Ù†", "tumor", "tumour", "cancer", "marker"),
-    "Ù…Ø¹Ø¯ÙŠÙ‡": ("Ù…Ø¹Ø¯ÙŠÙ‡", "Ù…Ø¹Ø¯ÙŠØ©", "infection", "infectious", "pcr", "std", "urine"),
-    "Ù‚ÙˆÙ„ÙˆÙ†": ("Ù‚ÙˆÙ„ÙˆÙ†", "Ù‡Ø¶Ù…ÙŠ", "digestive", "gastro", "gluten", "Ø³ÙŠØ¨Ùˆ", "sibo"),
-    "ØªÙƒÙ…ÙŠÙ…": ("ØªÙƒÙ…ÙŠÙ…", "sleeve", "bariatric", "weight"),
-    "Ù…ÙˆÙ†Ø¬Ø§Ø±Ùˆ": ("Ù…ÙˆÙ†Ø¬Ø§Ø±Ùˆ", "mounjaro", "tirzepatide"),
-    "Ø±ÙˆÙƒØªØ§Ù†": ("Ø±ÙˆÙƒØªØ§Ù†", "roaccutane", "accutane", "isotretinoin"),
-    "Ø²ÙˆØ§Ø¬": ("Ø²ÙˆØ§Ø¬", "marriage", "premarital"),
-    "Ø¬ÙŠÙ†ÙŠ": ("Ø¬ÙŠÙ†ÙŠ", "ÙˆØ±Ø§Ø«ÙŠ", "dna", "genetic", "genetics", "nifty", "well", "gender"),
+    "غده": ("غده", "الغده", "غدد", "درقيه", "درقية", "thyroid", "tsh", "t3", "t4"),
+    "سكري": ("سكري", "سكر", "glucose", "diabetes", "diabetic", "hba1c", "انسولين", "insulin", "homa", "homa-ir", "fbs"),
+    "شعر": ("شعر", "hair", "تساقط", "تقصف", "alopecia"),
+    "فيتامين": ("فيتامين", "فيتامينات", "vitamin", "vitamins", "vit d", "vitamin d", "b12", "b6", "multi vitamins"),
+    "حديد": ("حديد", "مخزون", "فريتين", "iron", "ferritin", "anemia", "anaemia", "فقر", "دم"),
+    "هرمون": ("هرمون", "هرمونات", "hormone", "hormonal", "testosterone", "estrogen", "prolactin", "lh", "fsh"),
+    "اطفال": ("اطفال", "أطفال", "طفل", "child", "children", "kids", "pediatric"),
+    "رجال": ("رجال", "للرجال", "men", "male", "man"),
+    "نساء": ("نساء", "للنساء", "مراه", "مرأة", "امرأة", "women", "woman", "female"),
+    "رمضان": ("رمضان", "ramadan", "صيام", "صائم"),
+    "اكتئاب": ("اكتئاب", "depression", "mood", "مزاج"),
+    "صداع": ("صداع", "headache", "migraine"),
+    "عظام": ("عظام", "bone", "bones", "calcium", "فيتامين د"),
+    "كبد": ("كبد", "الكبد", "liver", "alt", "ast", "ggt", "alp"),
+    "كلى": ("كلى", "الكلى", "كليه", "kidney", "renal", "creatinine", "egfr", "bun"),
+    "حساسيه": ("حساسيه", "حساسية", "allergy", "allergies", "gluten", "قمح", "حساسية المستنشقات"),
+    "اورام": ("اورام", "أورام", "سرطان", "tumor", "tumour", "cancer", "marker"),
+    "معديه": ("معديه", "معدية", "infection", "infectious", "std", "pcr", "urine"),
+    "قولون": ("قولون", "هضمي", "digestive", "gastro", "colon", "gluten", "سيبو", "sibo"),
+    "تكميم": ("تكميم", "sleeve", "bariatric", "weight"),
+    "مونجارو": ("مونجارو", "mounjaro", "tirzepatide"),
+    "روكتان": ("روكتان", "roaccutane", "accutane", "isotretinoin"),
+    "زواج": ("زواج", "marriage", "premarital"),
+    "جهاض": ("جهاض", "إجهاض", "miscarriage"),
+    "جيني": ("جيني", "وراثي", "dna", "genetic", "genetics", "nifty", "well", "gender", "silver", "gold", "platinum"),
+    "معادن": ("معادن", "املاح", "أملاح", "minerals", "magnesium", "zinc", "calcium", "sodium", "potassium"),
+    "دهون": ("دهون", "cholesterol", "lipid", "lipids", "ldl", "hdl", "triglycerides", "tg"),
+    "تخسيس": ("تخسيس", "وزن", "weight", "slimming", "mounjaro"),
 }
 
 
@@ -170,15 +255,15 @@ def _base_norm(value: Any) -> str:
     if not text:
         return ""
     text = (
-        text.replace("Ø©", "Ù‡")
-        .replace("Ù‰", "ÙŠ")
-        .replace("Ø£", "Ø§")
-        .replace("Ø¥", "Ø§")
-        .replace("Ø¢", "Ø§")
-        .replace("Ø¤", "Ùˆ")
-        .replace("Ø¦", "ÙŠ")
-        .replace("Ú¾", "Ù‡")
-        .replace("Ù€", "")
+        text.replace("ة", "ه")
+        .replace("ى", "ي")
+        .replace("أ", "ا")
+        .replace("إ", "ا")
+        .replace("آ", "ا")
+        .replace("ؤ", "و")
+        .replace("ئ", "ي")
+        .replace("ھ", "ه")
+        .replace("ـ", "")
     )
     text = re.sub(r"[\u064B-\u065F\u0670]", "", text)
     text = re.sub(r"[^0-9a-zA-Z\u0600-\u06FF\s]+", " ", text)
@@ -194,26 +279,26 @@ def _light_stem(token: str) -> str:
     token = _base_norm(token)
     if not token:
         return ""
-    if token.startswith("Ø§Ù„") and len(token) > 3:
+    if token.startswith("ال") and len(token) > 3:
         token = token[2:]
-    if token.startswith("Ù„Ù„") and len(token) > 3:
+    if token.startswith("لل") and len(token) > 3:
         token = token[2:]
-    if token.endswith("ÙŠÙ‡") and len(token) > 4:
-        token = token[:-2] + "ÙŠ"
-    elif token.endswith("ÙŠÙ‡") and len(token) > 3:
+    if token.endswith("يات") and len(token) > 5:
+        token = token[:-3]
+    elif token.endswith("ات") and len(token) > 4:
+        token = token[:-2]
+    elif token.endswith("ون") and len(token) > 4:
+        token = token[:-2]
+    elif token.endswith("ين") and len(token) > 4:
+        token = token[:-2]
+    elif token.endswith("يه") and len(token) > 4:
+        token = token[:-2] + "ي"
+    elif token.endswith("ه") and len(token) > 3:
         token = token[:-1]
-    elif token.endswith("Ù‡") and len(token) > 3:
-        token = token[:-1]
-    elif token.endswith("Ø§Øª") and len(token) > 4:
-        token = token[:-2]
-    elif token.endswith("ÙˆÙ†") and len(token) > 4:
-        token = token[:-2]
-    elif token.endswith("ÙŠÙ†") and len(token) > 4:
-        token = token[:-2]
     return token.strip()
 
 
-def _english_alias_norms() -> dict[str, set[str]]:
+def _build_alias_map() -> dict[str, set[str]]:
     alias_map: dict[str, set[str]] = {}
     for canonical, values in _SYNONYMS.items():
         bag = {_base_norm(canonical), _light_stem(canonical)}
@@ -224,7 +309,7 @@ def _english_alias_norms() -> dict[str, set[str]]:
     return alias_map
 
 
-_ALIAS_MAP = _english_alias_norms()
+_ALIAS_MAP = _build_alias_map()
 
 
 def _tokenize(value: Any) -> list[str]:
@@ -275,58 +360,23 @@ def _to_float_or_none(value: Any) -> float | None:
     text = _safe_str(value)
     if not text:
         return None
+    text = text.replace(",", "")
+    match = re.search(r"\d+(?:\.\d+)?", text)
+    if not match:
+        return None
     try:
-        return float(text)
+        return float(match.group(0))
     except ValueError:
         return None
 
 
-def _query_without_price_words(query: str) -> str:
-    text = _base_norm(query)
-    if not text:
-        return ""
-    removal_phrases = (
-        "ÙƒÙ… Ø³Ø¹Ø±", "ÙƒÙ… Ø§Ø³Ø¹Ø§Ø±", "Ù…Ø§ Ø³Ø¹Ø±", "ÙˆØ´ Ø³Ø¹Ø±", "Ø§ÙŠØ´ Ø³Ø¹Ø±", "Ø¨ÙƒÙ…", "price", "cost",
-        "ÙˆØ´ ØªØ´Ù…Ù„", "Ø§ÙŠØ´ ØªØ´Ù…Ù„", "ÙˆØ´ ÙÙŠÙ‡Ø§", "Ø§ÙŠØ´ ÙÙŠÙ‡Ø§", "ØªÙØ§ØµÙŠÙ„",
-    )
-    for phrase in removal_phrases:
-        text = text.replace(_base_norm(phrase), " ")
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
-
-
-def _record_text_blob(item: dict[str, Any]) -> str:
-    return " | ".join(
-        part for part in (
-            _safe_str(item.get("package_name")),
-            _safe_str(item.get("main_category")),
-            _safe_str(item.get("offering_type")),
-            _safe_str(item.get("description_short")),
-            _safe_str(item.get("description_full")),
-        )
-        if part
-    )
-
-
-def _doc_frequency(records: list[dict[str, Any]]) -> dict[str, int]:
-    df: dict[str, int] = {}
-    for row in records:
-        seen = set(_tokenize(_record_text_blob(row)))
-        for token in seen:
-            df[token] = df.get(token, 0) + 1
-            stem = _light_stem(token)
-            if stem:
-                df[stem] = df.get(stem, 0) + 1
-    return df
-
-
 @lru_cache(maxsize=1)
 def load_packages_records() -> list[dict[str, Any]]:
-    """Load runtime package records from packages_clean.jsonl only."""
+    """Load package records from packages_clean.jsonl only."""
     if not PACKAGES_JSONL_PATH.exists():
         return []
 
-    base_rows: list[dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     with PACKAGES_JSONL_PATH.open("r", encoding="utf-8") as f:
         for raw_line in f:
             line = _safe_str(raw_line)
@@ -342,85 +392,40 @@ def load_packages_records() -> list[dict[str, Any]]:
             package_name = _safe_str(obj.get("package_name"))
             main_category = _safe_str(obj.get("main_category"))
             offering_type = _safe_str(obj.get("offering_type"))
-            if not package_name or not main_category or not offering_type:
+            if not package_name:
                 continue
 
             item = dict(obj)
             item["id"] = _safe_str(obj.get("id"))
             item["source"] = _safe_str(obj.get("source")) or "packages"
             item["main_category"] = main_category
-            item["offering_type"] = offering_type
+            item["offering_type"] = offering_type or "package"
             item["package_name"] = package_name
             item["description_short"] = _safe_str(obj.get("description_short"))
             item["description_full"] = _safe_str(obj.get("description_full"))
             item["price_raw"] = _safe_str(obj.get("price_raw"))
-            item["price_number"] = _to_float_or_none(obj.get("price_number"))
-            item["currency"] = _safe_str(obj.get("currency"))
+            item["price_number"] = _to_float_or_none(obj.get("price_number") or obj.get("price_raw"))
+            item["currency"] = _safe_str(obj.get("currency")) or "ريال"
             item["included_count"] = obj.get("included_count")
-            item["runtime_present"] = bool(obj.get("runtime_present"))
+            item["runtime_present"] = bool(obj.get("runtime_present", True))
             item["review_issues"] = _safe_str(obj.get("review_issues"))
             item["source_row"] = obj.get("source_row")
             item["is_active"] = bool(obj.get("is_active", True))
-            base_rows.append(item)
 
-    # Deduplicate exact repeated entries by normalized name + category + price + offering_type
-    deduped: list[dict[str, Any]] = []
-    seen_keys: set[tuple[str, str, str, str]] = set()
-    for item in base_rows:
-        key = (
-            _base_norm(item.get("package_name")),
-            _base_norm(item.get("main_category")),
-            _safe_str(item.get("offering_type")),
-            _safe_str(item.get("price_raw")) or str(item.get("price_number") or ""),
-        )
-        if key in seen_keys:
-            continue
-        seen_keys.add(key)
-        deduped.append(item)
-
-    df = _doc_frequency(deduped)
-
-    rows: list[dict[str, Any]] = []
-    for item in deduped:
-        text_blob = _record_text_blob(item)
-        package_name_norm = _base_norm(item.get("package_name"))
-        main_category_norm = _base_norm(item.get("main_category"))
-        package_name_tokens = _tokenize(item.get("package_name"))
-        category_tokens = _tokenize(item.get("main_category"))
-        desc_tokens = _tokenize(" ".join([
-            _safe_str(item.get("description_short")),
-            _safe_str(item.get("description_full"))[:1200],
-        ]))
-        blob_tokens = _tokenize(text_blob)
-
-        all_tokens = list(dict.fromkeys(package_name_tokens + category_tokens + desc_tokens + blob_tokens))
-        all_stems = {_light_stem(t) for t in all_tokens if _light_stem(t)}
-        bigrams = _extract_bigrams(package_name_tokens)
-        keyword_weights: dict[str, float] = {}
-        for token in all_tokens:
-            stem = _light_stem(token)
-            doc_count = max(1, df.get(token) or df.get(stem) or 1)
-            rarity_bonus = 1.0 / math.sqrt(doc_count)
-            base = 1.2 if token in package_name_tokens else 0.7
-            if token in _STRONG_KEYWORDS or stem in _STRONG_KEYWORDS:
-                base += 1.3
-            if token in _GENERIC_LOW_SIGNAL or stem in _GENERIC_LOW_SIGNAL:
-                base -= 0.5
-            keyword_weights[token] = round(max(0.15, base + rarity_bonus), 4)
-
-        row = dict(item)
-        row["package_name_norm"] = package_name_norm
-        row["main_category_norm"] = main_category_norm
-        row["text_blob_norm"] = _base_norm(text_blob)
-        row["package_name_tokens"] = package_name_tokens
-        row["category_tokens"] = category_tokens
-        row["desc_tokens"] = desc_tokens
-        row["all_tokens"] = all_tokens
-        row["all_stems"] = list(all_stems)
-        row["name_bigrams"] = list(bigrams)
-        row["keyword_weights"] = keyword_weights
-        rows.append(row)
-
+            combined_text = " ".join(
+                [
+                    package_name,
+                    main_category,
+                    item["description_short"],
+                    item["description_full"],
+                ]
+            )
+            item["package_name_norm"] = _norm(package_name)
+            item["main_category_norm"] = _norm(main_category)
+            item["combined_text"] = combined_text
+            item["combined_norm"] = _norm(combined_text)
+            item["combined_tokens"] = _tokenize(combined_text)
+            rows.append(item)
     return rows
 
 
@@ -442,7 +447,9 @@ def _is_detail_query(query_norm: str) -> bool:
 
 def _detect_category(query_norm: str, records: list[dict[str, Any]]) -> str:
     categories = {
-        _safe_str(r.get("main_category")): _safe_str(r.get("main_category_norm")) for r in records
+        _safe_str(r.get("main_category")): _safe_str(r.get("main_category_norm"))
+        for r in records
+        if _safe_str(r.get("main_category"))
     }
     for cat, cat_norm in categories.items():
         if cat_norm and cat_norm in query_norm:
@@ -457,76 +464,118 @@ def _detect_category(query_norm: str, records: list[dict[str, Any]]) -> str:
 def _is_category_like_query(query_norm: str, detected_category: str) -> bool:
     if not query_norm:
         return False
-    if detected_category and detected_category and _base_norm(detected_category) in query_norm:
+    if detected_category and _norm(detected_category) in query_norm:
         return True
-
     category_tokens = (
-        "Ø§Ù„ØªØ­Ø§Ù„ÙŠÙ„ Ø§Ù„Ø°Ø§ØªÙŠÙ‡",
-        "Ø§Ù„ØªØ­Ø§Ù„ÙŠÙ„ Ø§Ù„Ø°Ø§ØªÙŠØ©",
-        "Ø§Ù„ØªØ­Ø§Ù„ÙŠÙ„ Ø§Ù„Ø¬ÙŠÙ†ÙŠÙ‡",
-        "Ø§Ù„ØªØ­Ø§Ù„ÙŠÙ„ Ø§Ù„Ø¬ÙŠÙ†ÙŠØ©",
-        "Ø§Ù„Ø¨Ø§Ù‚Ø§Øª Ø§Ù„Ø¬ÙŠÙ†ÙŠÙ‡",
-        "Ø§Ù„Ø¨Ø§Ù‚Ø§Øª Ø§Ù„Ø¬ÙŠÙ†ÙŠØ©",
-        "ÙØ¦Ù‡",
-        "ÙØ¦Ø©",
-        "ØªØµÙ†ÙŠÙ",
-        "category",
+        "الفئة",
+        "فئة",
+        "تصنيف",
+        "نوع الباقات",
+        "باقات رمضان",
+        "باقات جينية",
+        "تحاليل جينية",
     )
     return any(_norm(t) in query_norm for t in category_tokens)
 
 
 def _score_package_match(query: str, record: dict[str, Any]) -> float:
     query_tokens = _tokenize(query)
-
-    combined_text = " ".join([
-        str(record.get("package_name", "") or ""),
-        str(record.get("description", "") or ""),
-        str(record.get("full_description", "") or ""),
-        str(record.get("category", "") or ""),
-    ])
-
-    record_tokens = _tokenize(combined_text)
-
-    if not record_tokens:
-        return 0
+    if not query_tokens:
+        return 0.0
 
     query_set = _expand_synonyms(query_tokens)
+    query_bigrams = _extract_bigrams(query_tokens)
+
+    name = _safe_str(record.get("package_name"))
+    name_norm = _safe_str(record.get("package_name_norm"))
+    category = _safe_str(record.get("main_category"))
+    short_desc = _safe_str(record.get("description_short"))
+    full_desc = _safe_str(record.get("description_full"))
+
+    combined_text = " ".join([name, category, short_desc, full_desc])
+    record_tokens = _tokenize(combined_text)
+    if not record_tokens:
+        return 0.0
+
     record_set = _expand_synonyms(record_tokens)
+    record_bigrams = _extract_bigrams(record_tokens)
 
-    score = 0
+    score = 0.0
 
-    # Exact matches
-    for t in query_set:
-        if t in record_set:
-            score += 4
+    # Strong exact full-name match.
+    query_norm = _norm(query)
+    if query_norm and query_norm == name_norm:
+        score += 20.0
+    elif query_norm and name_norm and (name_norm in query_norm or query_norm in name_norm):
+        score += 12.0
 
-    # Partial matches
+    # Direct token overlap.
+    exact_overlap = query_set.intersection(record_set)
+    score += 4.0 * len(exact_overlap)
+
+    # Strong keyword boost.
+    for key in _STRONG_KEYWORDS:
+        key_norm = _base_norm(key)
+        if key_norm and key_norm in query_set and key_norm in record_set:
+            score += 6.0
+
+    # Synonym-family boost.
+    for variants in _ALIAS_MAP.values():
+        if query_set.intersection(variants) and record_set.intersection(variants):
+            score += 3.0
+
+    # Bigram/phrase boost.
+    for phrase in query_bigrams:
+        if phrase in record_bigrams:
+            score += 6.0
+        elif phrase and phrase in _norm(combined_text):
+            score += 4.0
+
+    # Partial substring boost.
     for qt in query_set:
+        if not qt or qt in _GENERIC_LOW_SIGNAL:
+            continue
         for rt in record_set:
+            if not rt or rt in _GENERIC_LOW_SIGNAL:
+                continue
+            if qt == rt:
+                continue
             if qt in rt or rt in qt:
-                score += 2
+                score += 1.5
 
-    # Strong keyword boost
-    for key in _SYNONYMS:
-        if key in query_set and key in record_set:
-            score += 6
+    # Name-first weighting.
+    name_tokens = _expand_synonyms(_tokenize(name))
+    name_overlap = query_set.intersection(name_tokens)
+    score += 3.0 * len(name_overlap)
 
-    # Multi-token bonus
-    if len(query_set.intersection(record_set)) >= 2:
-        score += 3
+    # Multi-token bonus.
+    if len(exact_overlap) >= 2:
+        score += 5.0
+    elif len(exact_overlap) == 1:
+        score += 1.0
 
-    # Penalty
-    if score == 0:
-        score -= 2
+    # Prefer shorter / cleaner name hit when ties happen.
+    if name_tokens:
+        score += min(2.0, len(name_overlap) / max(1.0, len(name_tokens)))
+
+    # Light penalty when query only contains generic tokens.
+    meaningful_query_tokens = {t for t in query_set if t not in _GENERIC_LOW_SIGNAL}
+    if not meaningful_query_tokens:
+        score -= 2.0
+
+    if score <= 0:
+        score -= 2.0
 
     return score
-def _find_specific_package(query_text: str, records: list[dict[str, Any]]) -> dict[str, Any] | None:
+
+
+def _find_specific_package(query: str, records: list[dict[str, Any]]) -> dict[str, Any] | None:
     best: dict[str, Any] | None = None
     best_score = float("-inf")
     second_score = float("-inf")
 
     for record in records:
-        score = _score_package_match(query_text, record)
+        score = _score_package_match(query, record)
         if score > best_score:
             second_score = best_score
             best_score = score
@@ -537,128 +586,124 @@ def _find_specific_package(query_text: str, records: list[dict[str, Any]]) -> di
     if best is None:
         return None
 
-    # Conservative threshold + margin to reduce wrong selections.
-    if best_score < 8.0:
+    # Conservative threshold to avoid random wrong package selection.
+    if best_score < 3.0:
         return None
-    if second_score > float("-inf") and best_score - second_score < 1.5 and best_score < 18.0:
+
+    # If top two are too close and score itself is not very strong, prefer no match.
+    if second_score > float("-inf") and best_score < 8.0 and abs(best_score - second_score) < 1.5:
         return None
+
     return best
 
 
-def _format_general_overview(records: list[dict[str, Any]], conversation_id: UUID | None = None) -> str:
-    active_rows = [r for r in records if "package" in _safe_str(r.get("offering_type")).lower()]
-    rows = active_rows or records
-    rows = sorted(
-        rows,
-        key=lambda r: (
-            0 if isinstance(r.get("price_number"), (int, float)) else 1,
-            _safe_str(r.get("package_name")),
-        ),
+def _save_package_options(conversation_id: UUID | None, rows: list[dict[str, Any]], query_type: str) -> None:
+    if conversation_id is None or not rows:
+        return
+    save_selection_state(
+        conversation_id,
+        options=[
+            {
+                "id": _safe_str(row.get("id")) or f"package_option::{idx}",
+                "label": _safe_str(row.get("package_name")),
+                "selection_payload": {
+                    "package_name": _safe_str(row.get("package_name")),
+                },
+            }
+            for idx, row in enumerate(rows, start=1)
+        ],
+        selection_type="package",
+        query_type=query_type,
     )
-    top_rows = rows[:20]
 
-    if conversation_id is not None and top_rows:
-        save_selection_state(
-            conversation_id,
-            options=[
-                {
-                    "id": _safe_str(row.get("id")) or f"package_option::{idx}",
-                    "label": _safe_str(row.get("package_name")),
-                    "selection_payload": {"package_name": _safe_str(row.get("package_name"))},
-                }
-                for idx, row in enumerate(top_rows, start=1)
-            ],
-            selection_type="package",
-            query_type="package_general",
-        )
 
-    counts: dict[str, int] = {}
-    for r in rows:
-        cat = _safe_str(r.get("main_category"))
-        if cat:
-            counts[cat] = counts.get(cat, 0) + 1
+def _format_general_overview(
+    records: list[dict[str, Any]],
+    conversation_id: UUID | None = None,
+    limit: int = 20,
+) -> str:
+    active_rows = [r for r in records if bool(r.get("is_active", True))]
+    rows = active_rows or records
+    _save_package_options(conversation_id, rows[:limit], query_type="package_general")
 
-    lines = ["Ø§Ù„Ø¨Ø§Ù‚Ø§Øª Ø§Ù„Ù…ØªØ§Ø­Ø© Ø­Ø§Ù„ÙŠÙ‹Ø§:"]
-    for idx, row in enumerate(top_rows, start=1):
-        name = _safe_str(row.get("package_name"))
-        price = row.get("price_number")
+    lines = ["الباقات المتاحة حاليًا:"]
+    for idx, r in enumerate(rows[:limit], start=1):
+        name = _safe_str(r.get("package_name"))
+        price = r.get("price_number")
+        currency = _safe_str(r.get("currency") or "ريال")
         if isinstance(price, (int, float)):
-            lines.append(f"{idx}) {name} - {price:g} {_safe_str(row.get('currency') or 'Ø±ÙŠØ§Ù„')}")
+            lines.append(f"{idx}) {name} - {price:g} {currency}")
         else:
             lines.append(f"{idx}) {name}")
-    if len(rows) > len(top_rows):
-        lines.append(f"... ÙŠÙˆØ¬Ø¯ Ø£ÙŠØ¶Ù‹Ø§ {len(rows) - len(top_rows)} Ø¨Ø§Ù‚Ø§Øª Ø¥Ø¶Ø§ÙÙŠØ©.")
-    lines.append("Ø§ÙƒØªØ¨ Ø§Ø³Ù… Ø§Ù„Ø¨Ø§Ù‚Ø© Ù…Ø¨Ø§Ø´Ø±Ø© Ø£Ùˆ Ø±Ù‚Ù…Ù‡Ø§ Ø£Ùˆ Ø§Ù„ÙƒÙ„Ù…Ø§Øª Ø§Ù„Ø£Ù‚Ø±Ø¨ Ù„Ù‡Ø§ Ø¹Ø´Ø§Ù† Ø£Ø¹Ø±Ø¶ Ø§Ù„ØªÙØ§ØµÙŠÙ„.")
+
+    if len(rows) > limit:
+        lines.append(f"... يوجد أيضًا {len(rows) - limit} باقات إضافية.")
+    lines.append("اكتب اسم الباقة مباشرة أو رقمها أو الكلمات الأقرب لها عشان أعرض التفاصيل.")
     return "\n".join(lines)
 
 
-def _format_category_packages(category: str, records: list[dict[str, Any]], conversation_id: UUID | None = None) -> str:
+def _format_category_packages(
+    category: str,
+    records: list[dict[str, Any]],
+    conversation_id: UUID | None = None,
+    limit: int = 20,
+) -> str:
     rows = [r for r in records if _safe_str(r.get("main_category")) == category]
     if not rows:
-        return "Ù…Ø§ Ù„Ù‚ÙŠØª Ø¨Ø§Ù‚Ø§Øª ÙÙŠ Ù‡Ø°Ù‡ Ø§Ù„ÙØ¦Ø© Ø­Ø§Ù„ÙŠÙ‹Ø§."
+        return "ما لقيت باقات في هذه الفئة حاليًا."
 
-    if conversation_id is not None:
-        save_selection_state(
-            conversation_id,
-            options=[
-                {
-                    "id": _safe_str(row.get("id")) or f"package_option::{idx}",
-                    "label": _safe_str(row.get("package_name")),
-                    "selection_payload": {"package_name": _safe_str(row.get("package_name"))},
-                }
-                for idx, row in enumerate(rows[:20], start=1)
-            ],
-            selection_type="package",
-            query_type="package_category",
-        )
+    _save_package_options(conversation_id, rows[:limit], query_type="package_category")
 
-    lines = [f"Ø§Ù„Ø¨Ø§Ù‚Ø§Øª Ø§Ù„Ù…ØªØ§Ø­Ø© Ø¶Ù…Ù† ÙØ¦Ø© {category}:"]
-    for idx, r in enumerate(rows[:20], start=1):
+    lines = [f"الباقات المتاحة ضمن فئة {category}:"]
+    for idx, r in enumerate(rows[:limit], start=1):
         name = _safe_str(r.get("package_name"))
         price = r.get("price_number")
+        currency = _safe_str(r.get("currency") or "ريال")
         if isinstance(price, (int, float)):
-            lines.append(f"{idx}) {name} - {price:g} {_safe_str(r.get('currency') or 'Ø±ÙŠØ§Ù„')}")
+            lines.append(f"{idx}) {name} - {price:g} {currency}")
         else:
             lines.append(f"{idx}) {name}")
-    if len(rows) > 20:
-        lines.append(f"... ({len(rows) - 20} Ø¹Ù†Ø§ØµØ± Ø¥Ø¶Ø§ÙÙŠØ©)")
-    lines.append("Ø§ÙƒØªØ¨ Ø§Ø³Ù… Ø§Ù„Ø¹Ù†ØµØ± Ø£Ùˆ Ø±Ù‚Ù…Ù‡ Ø¹Ø´Ø§Ù† Ø£Ø¹Ø±Ø¶ ØªÙØ§ØµÙŠÙ„Ù‡.")
+
+    if len(rows) > limit:
+        lines.append(f"... يوجد أيضًا {len(rows) - limit} باقات إضافية.")
+    lines.append("اكتب اسم الباقة أو رقمها إذا تحب أعرض لك التفاصيل.")
     return "\n".join(lines)
 
 
 def _format_package_details(record: dict[str, Any]) -> str:
     name = _safe_str(record.get("package_name"))
     category = _safe_str(record.get("main_category"))
-    offering_type = _safe_str(record.get("offering_type"))
+    offering_type = _safe_str(record.get("offering_type") or "package")
     desc = _safe_str(record.get("description_short")) or _safe_str(record.get("description_full"))
-    currency = _safe_str(record.get("currency") or "Ø±ÙŠØ§Ù„")
+    currency = _safe_str(record.get("currency") or "ريال")
     price = record.get("price_number")
 
     lines = [
         f"{name}",
-        f"Ø§Ù„ÙØ¦Ø©: {category}",
-        f"Ø§Ù„Ù†ÙˆØ¹: {offering_type}",
+        f"الفئة: {category}" if category else "",
+        f"النوع: {offering_type}" if offering_type else "",
     ]
     if desc:
-        lines.append(f"Ø§Ù„ÙˆØµÙ: {desc}")
+        lines.append(f"الوصف: {desc}")
     if isinstance(price, (int, float)):
-        lines.append(f"Ø§Ù„Ø³Ø¹Ø±: {price:g} {currency}")
+        lines.append(f"السعر: {price:g} {currency}")
     else:
         lines.append(_PRICE_NOT_AVAILABLE)
-    return "\n".join(lines)
+
+    return "\n".join([line for line in lines if line])
 
 
 def _format_package_price(record: dict[str, Any]) -> str:
     name = _safe_str(record.get("package_name"))
-    currency = _safe_str(record.get("currency") or "Ø±ÙŠØ§Ù„")
+    currency = _safe_str(record.get("currency") or "ريال")
     price = record.get("price_number")
     if isinstance(price, (int, float)):
-        return f"Ø³Ø¹Ø± {name}: {price:g} {currency}."
+        return f"سعر {name}: {price:g} {currency}."
     return _PRICE_NOT_AVAILABLE
 
 
 def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) -> dict[str, Any]:
-    """Resolve package-like queries deterministically from packages_clean.jsonl."""
+    """Resolve package queries deterministically from packages_clean.jsonl."""
     query = _safe_str(user_text)
     query_norm = _norm(query)
     if not query_norm:
@@ -686,11 +731,21 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
     general_listing_like = _is_general_listing_query(query_norm)
     price_query = _is_price_query(query_norm)
     detail_query = _is_detail_query(query_norm)
-    specific_match = _find_specific_package(query, records)
 
-    # Category queries should win when they are clearly asking about a category list,
-    # unless we have a strong specific package match.
-    if category and category_like and not price_query and specific_match is None:
+    # General list of all packages must win before specific matching.
+    if general_listing_like and not price_query and not detail_query and not category:
+        return {
+            "matched": True,
+            "answer": _format_general_overview(records, conversation_id),
+            "route": "packages_general",
+            "meta": {
+                "query_type": "package_general",
+                "categories_count": len({_safe_str(r.get("main_category")) for r in records if _safe_str(r.get("main_category"))}),
+            },
+        }
+
+    # Explicit category listing.
+    if category and category_like and not price_query:
         return {
             "matched": True,
             "answer": _format_category_packages(category, records, conversation_id),
@@ -701,20 +756,9 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
             },
         }
 
-    # Explicit package-listing requests should return the general overview
-    # before specific package matching.
-    if general_listing_like and not price_query and not category:
-        return {
-            "matched": True,
-            "answer": _format_general_overview(records, conversation_id),
-            "route": "packages_general",
-            "meta": {
-                "query_type": "package_general",
-                "categories_count": len({_safe_str(r.get('main_category')) for r in records}),
-            },
-        }
+    specific_match = _find_specific_package(query, records)
 
-    if specific_match is not None and price_query:
+    if price_query and specific_match is not None:
         package_id = _safe_str(specific_match.get("id"))
         return {
             "matched": True,
@@ -731,11 +775,10 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
 
     if specific_match is not None:
         package_id = _safe_str(specific_match.get("id"))
-        route = "packages_specific_details" if detail_query else "packages_specific"
         return {
             "matched": True,
             "answer": _format_package_details(specific_match),
-            "route": route,
+            "route": "packages_specific",
             "meta": {
                 "query_type": "package_specific",
                 "matched_package_id": package_id,
@@ -744,6 +787,7 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
             },
         }
 
+    # If category detected but not phrased as explicit category request, still show that category.
     if category:
         return {
             "matched": True,
@@ -755,14 +799,14 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
             },
         }
 
-    if general_like or "Ø¨Ø§Ù‚Ù‡" in query_norm or "Ø¨Ø§Ù‚Ø§Øª" in query_norm or "package" in query_norm:
+    if general_like:
         return {
             "matched": True,
             "answer": _format_general_overview(records, conversation_id),
             "route": "packages_general",
             "meta": {
                 "query_type": "package_general",
-                "categories_count": len({_safe_str(r.get('main_category')) for r in records}),
+                "categories_count": len({_safe_str(r.get("main_category")) for r in records if _safe_str(r.get("main_category"))}),
             },
         }
 
@@ -787,21 +831,13 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
 
 
 if __name__ == "__main__":
-    try:
-        import sys
-
-        sys.stdout.reconfigure(encoding="utf-8")
-    except Exception:
-        pass
-
     samples = [
-        "ÙˆØ´ Ø¹Ù†Ø¯ÙƒÙ… Ø¨Ø§Ù‚Ø§Øª",
-        "Ø¨Ø§Ù‚Ø§Øª Ø±Ù…Ø¶Ø§Ù†",
-        "Ø¨Ø§Ù‚Ø© Ù†Ù‡Ø§Ø± Ø±Ù…Ø¶Ø§Ù† Ø§Ù„Ø´Ø§Ù…Ù„Ø©",
-        "ÙƒÙ… Ø³Ø¹Ø± Ø¨Ø§Ù‚Ø© Ù†Ù‡Ø§Ø± Ø±Ù…Ø¶Ø§Ù† Ø§Ù„Ø´Ø§Ù…Ù„Ø©",
-        "Ø¨ÙƒÙ… Ø¨Ø§Ù‚Ù‡ ØµØ­Ù‡ Ø§Ù„ØºØ¯Ù‡",
-        "thyroid package",
-        "Ø§Ø¨ÙŠ Ø´ÙŠØ¡ Ù„Ù„Ø´Ø¹Ø±",
+        "وش الباقات اللي عندكم",
+        "بكم باقة الغدة",
+        "وش تشمل باقة الغدة",
+        "تحليل الحساسية",
+        "صحة الاطفال",
+        "باقات رمضان",
     ]
     for text in samples:
         result = resolve_packages_query(text)
@@ -811,4 +847,3 @@ if __name__ == "__main__":
         print(f"META: {result.get('meta')}")
         print(f"ANSWER: {result.get('answer')}")
         print("-" * 72)
-
