@@ -1,12 +1,12 @@
-"""Deterministic bridge: parsed report text -> results_engine interpretations."""
+﻿"""Deterministic bridge: extracted report text -> results_engine interpretations."""
 
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 from typing import Any
 
-from app.services.report_parser_service import parse_lab_report_text
-from app.services.runtime.results_engine import interpret_result_query
+from app.services.runtime.results_engine import interpret_result_query, load_results_records
 from app.services.runtime.text_normalizer import normalize_arabic
 
 _MANUAL_FALLBACK = "أرسل صورة التحليل أو اكتب اسم التحليل مع النتيجة والمرجع الأدنى والأعلى."
@@ -20,21 +20,19 @@ _NARRATIVE_MARKERS = (
     "المختبر",
     "تاريخ التقرير",
 )
-_ROW_PREFIX_GARBAGE = "-•*:"
+_NOISE_HINTS = ("باقة", "package", "offer", "عرض")
 
 
 def _safe_str(value: Any) -> str:
     return str(value or "").strip()
 
 
-def _extract_simple_numeric(value_text: str) -> float | None:
-    text = _safe_str(value_text)
-    if not text:
-        return None
-    # Skip ratio-like strings (e.g. 1:80) in this first safe version.
-    if ":" in text:
-        return None
-    normalized = text.translate(
+def _compact_spaces(text: str) -> str:
+    return re.sub(r"\s+", " ", _safe_str(text)).strip()
+
+
+def _normalize_digits(text: str) -> str:
+    return _safe_str(text).translate(
         str.maketrans(
             {
                 "٠": "0",
@@ -52,24 +50,6 @@ def _extract_simple_numeric(value_text: str) -> float | None:
             }
         )
     )
-    compact = re.sub(r"\s+", "", normalized)
-    # Keep this strict to avoid guessing unclear values (ranges/operators/mixed tokens).
-    if not re.fullmatch(r"[-+]?\d+(?:\.\d+)?", compact):
-        return None
-    try:
-        return float(compact)
-    except ValueError:
-        return None
-
-
-def _is_clear_test_name(raw_name: str) -> bool:
-    name = _safe_str(raw_name)
-    if not name:
-        return False
-    name_norm = normalize_arabic(name)
-    if len(name_norm) < 2:
-        return False
-    return bool(re.search(r"[A-Za-z\u0621-\u063A\u0641-\u064A]", name))
 
 
 def _is_successful_interpretation(answer: str) -> bool:
@@ -79,80 +59,131 @@ def _is_successful_interpretation(answer: str) -> bool:
     return _MANUAL_FALLBACK not in text
 
 
-def _canonicalize_test_name_for_query(raw_name: str) -> str:
-    name = _compact_spaces(raw_name)
-    if not name:
-        return ""
-    # Keep deterministic, minimal cleanup: remove extra parenthetical details often present in Wareed headers.
-    name = re.sub(r"\([^)]*\)", " ", name)
-    name = name.replace(" -Total", " ")
-    name = _compact_spaces(name.strip(" -"))
-    return name
-
-
-def _compact_spaces(text: str) -> str:
-    return re.sub(r"\s+", " ", _safe_str(text)).strip()
-
-
 def _is_noise_line(line: str) -> bool:
     norm = normalize_arabic(line)
     if not norm:
         return True
     if any(marker in norm for marker in _NARRATIVE_MARKERS):
         return True
-    # Long prose-like lines are usually explanatory narrative in this report format.
-    if len(line) > 180 and (" " in line):
+    if len(line) > 180 and " " in line:
         return True
     return False
 
 
-def _clean_line(line: str) -> str:
-    cleaned = _safe_str(line).strip(_ROW_PREFIX_GARBAGE).strip()
-    return _compact_spaces(cleaned)
+def _canonicalize_test_name_for_query(name: str) -> str:
+    text = _compact_spaces(name)
+    if not text:
+        return ""
+    text = re.sub(r"\([^)]*\)", " ", text)
+    text = text.replace(" -Total", " ")
+    return _compact_spaces(text.strip(" -"))
 
 
-def _extract_row_from_line(line: str) -> dict[str, str] | None:
-    candidate = _clean_line(line)
-    if not candidate or _is_noise_line(candidate):
+@lru_cache(maxsize=1)
+def _build_test_term_index() -> list[tuple[str, str]]:
+    """Return normalized term -> canonical test name list sorted by term length desc."""
+    rows = load_results_records()
+    pairs: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+
+    for row in rows:
+        canonical = _safe_str(row.get("test_name"))
+        if not canonical:
+            continue
+
+        candidates: list[str] = [canonical]
+        for alias in row.get("aliases") or []:
+            alias_text = _safe_str(alias)
+            if not alias_text:
+                continue
+            alias_norm = normalize_arabic(alias_text)
+            if any(h in alias_norm for h in _NOISE_HINTS):
+                continue
+            if len(alias_text) > 90:
+                continue
+            candidates.append(alias_text)
+
+        for candidate in candidates:
+            candidate_norm = normalize_arabic(candidate)
+            if len(candidate_norm) < 2:
+                continue
+            key = (candidate_norm, canonical)
+            if key in seen:
+                continue
+            seen.add(key)
+            pairs.append(key)
+
+    pairs.sort(key=lambda x: len(x[0]), reverse=True)
+    return pairs
+
+
+def _find_closest_test_name(line: str) -> tuple[str, tuple[int, int]] | None:
+    line_norm = normalize_arabic(line)
+    if not line_norm:
         return None
 
-    # Pattern A: <unit> <value> <test_name> [range]
-    # Example: g/dL 10 Hemoglobin 11.5 - 15.2
-    p_a = re.match(
-        r"^(?P<unit>[%A-Za-zµμ/]+)\s+(?P<value>[-+]?\d+(?:\.\d+)?)\s+(?P<name>.+?)(?:\s+(?P<range>\d+(?:\.\d+)?\s*-\s*\d+(?:\.\d+)?))?$",
-        candidate,
-        flags=re.IGNORECASE,
-    )
-    if p_a:
-        return {
-            "test_name": _compact_spaces(p_a.group("name")),
-            "result_value": _safe_str(p_a.group("value")),
-            "unit": _safe_str(p_a.group("unit")),
-            "reference_range": _safe_str(p_a.group("range")),
-            "flags_if_present": "",
-        }
+    best_name = ""
+    best_span = (-1, -1)
+    best_len = -1
 
-    # Pattern B: <range> <unit> <value> <test_name>
-    # Example: 5.33 - 0.38 uIU/mL 4 Thyroid Stimulating Hormone (TSH)
-    p_b = re.match(
-        r"^(?P<range>\d+(?:\.\d+)?\s*-\s*\d+(?:\.\d+)?)\s+(?P<unit>[%A-Za-zµμ/]+)\s+(?P<value>[-+]?\d+(?:\.\d+)?)\s+(?P<name>.+)$",
-        candidate,
-        flags=re.IGNORECASE,
-    )
-    if p_b:
-        return {
-            "test_name": _compact_spaces(p_b.group("name")),
-            "result_value": _safe_str(p_b.group("value")),
-            "unit": _safe_str(p_b.group("unit")),
-            "reference_range": _safe_str(p_b.group("range")),
-            "flags_if_present": "",
-        }
+    for term_norm, canonical in _build_test_term_index():
+        idx = line_norm.find(term_norm)
+        if idx < 0:
+            continue
+        if len(term_norm) > best_len:
+            best_len = len(term_norm)
+            best_name = canonical
+            best_span = (idx, idx + len(term_norm))
 
-    return None
+    if not best_name:
+        return None
+    return best_name, best_span
 
 
-def _extract_wareed_rows(report_text: str) -> tuple[list[dict[str, str]], list[str], list[str]]:
-    selected_rows: list[dict[str, str]] = []
+def _extract_numeric_candidates(line: str) -> list[tuple[float, tuple[int, int]]]:
+    normalized = _normalize_digits(line)
+    if re.search(r"\b\d+\s*:\s*\d+\b", normalized):
+        return []
+
+    out: list[tuple[float, tuple[int, int]]] = []
+    for m in re.finditer(r"(?<![A-Za-z\u0621-\u063A\u0641-\u064A])[-+]?\d+(?:\.\d+)?(?![A-Za-z\u0621-\u063A\u0641-\u064A])", normalized):
+        raw = _safe_str(m.group(0))
+        if not raw:
+            continue
+        try:
+            out.append((float(raw), (m.start(), m.end())))
+        except ValueError:
+            continue
+    return out
+
+
+def _pick_closest_value(line: str, name_span: tuple[int, int]) -> float | None:
+    numbers = _extract_numeric_candidates(line)
+    if not numbers:
+        return None
+
+    best_value: float | None = None
+    best_score: float | None = None
+    left, right = name_span
+    norm_line = _normalize_digits(line)
+
+    for value, (n_start, n_end) in numbers:
+        distance = min(abs(n_end - left), abs(n_start - right))
+
+        # Penalize numbers that appear to be part of a reference range.
+        around = norm_line[max(0, n_start - 2) : min(len(norm_line), n_end + 2)]
+        penalty = 1000 if "-" in around else 0
+        score = float(distance + penalty)
+
+        if best_score is None or score < best_score:
+            best_score = score
+            best_value = value
+
+    return best_value
+
+
+def _extract_rows_line_by_line(report_text: str) -> tuple[list[dict[str, Any]], list[str], list[str]]:
+    rows: list[dict[str, Any]] = []
     selected_lines: list[str] = []
     ignored_lines: list[str] = []
 
@@ -160,57 +191,62 @@ def _extract_wareed_rows(report_text: str) -> tuple[list[dict[str, str]], list[s
         line = _compact_spaces(raw_line)
         if not line:
             continue
+
         if _is_noise_line(line):
             ignored_lines.append(line)
             continue
 
-        parsed = _extract_row_from_line(line)
-        if parsed:
-            selected_rows.append(parsed)
-            selected_lines.append(line)
-        else:
+        if not re.search(r"\d", _normalize_digits(line)):
             ignored_lines.append(line)
+            continue
 
-    return selected_rows, selected_lines, ignored_lines
+        name_hit = _find_closest_test_name(line)
+        if not name_hit:
+            ignored_lines.append(line)
+            continue
+
+        test_name, name_span = name_hit
+        value = _pick_closest_value(line, name_span)
+        if value is None:
+            ignored_lines.append(line)
+            continue
+
+        rows.append(
+            {
+                "line": line,
+                "test_name": test_name,
+                "result_value": value,
+            }
+        )
+        selected_lines.append(line)
+
+    return rows, selected_lines, ignored_lines
 
 
 def interpret_uploaded_lab_report_text(report_text: str) -> dict[str, Any]:
-    parsed_rows, selected_lines, ignored_lines = _extract_wareed_rows(report_text or "")
-    if not parsed_rows:
-        parsed_rows = parse_lab_report_text(report_text or "")
-        selected_lines = []
-        ignored_lines = []
+    parsed_rows, selected_lines, ignored_lines = _extract_rows_line_by_line(report_text or "")
+
     items: list[dict[str, Any]] = []
     seen_tests: set[str] = set()
     built_queries: list[str] = []
-    query_results: list[dict[str, Any]] = []
 
     for row in parsed_rows:
         raw_name = _safe_str(row.get("test_name"))
-        if not _is_clear_test_name(raw_name):
-            continue
         query_name = _canonicalize_test_name_for_query(raw_name)
         if not query_name:
             continue
 
-        value = _extract_simple_numeric(_safe_str(row.get("result_value")))
-        if value is None:
+        value = row.get("result_value")
+        if not isinstance(value, (float, int)):
             continue
 
         test_key = normalize_arabic(query_name)
         if test_key in seen_tests:
             continue
 
-        query = f"{query_name} {value}"
+        query = f"{query_name} {float(value)}"
         built_queries.append(query)
         interpretation = _safe_str(interpret_result_query(query))
-        query_results.append(
-            {
-                "query": query,
-                "matched": _is_successful_interpretation(interpretation),
-                "answer": interpretation,
-            }
-        )
         if not _is_successful_interpretation(interpretation):
             continue
 
@@ -218,7 +254,7 @@ def interpret_uploaded_lab_report_text(report_text: str) -> dict[str, Any]:
         items.append(
             {
                 "test_name": raw_name,
-                "value": value,
+                "value": float(value),
                 "query": query,
                 "interpretation": interpretation,
             }
@@ -230,10 +266,9 @@ def interpret_uploaded_lab_report_text(report_text: str) -> dict[str, Any]:
             "items": [],
             "answer": _MANUAL_FALLBACK,
             "debug": {
-                "selected_result_lines": selected_lines[:50],
-                "ignored_noise_lines": ignored_lines[:200],
-                "built_queries": built_queries[:50],
-                "query_results": query_results[:100],
+                "selected_result_lines": selected_lines[:80],
+                "ignored_noise_lines": ignored_lines[:300],
+                "built_queries": built_queries[:80],
             },
         }
 
@@ -241,14 +276,14 @@ def interpret_uploaded_lab_report_text(report_text: str) -> dict[str, Any]:
     for i, item in enumerate(items[:6], start=1):
         lines.append(f"{i}) {item['test_name']} = {item['value']}")
         lines.append(item["interpretation"])
+
     return {
         "matched": True,
         "items": items,
         "answer": "\n".join(lines),
         "debug": {
-            "selected_result_lines": selected_lines[:50],
-            "ignored_noise_lines": ignored_lines[:200],
-            "built_queries": built_queries[:50],
-            "query_results": query_results[:100],
+            "selected_result_lines": selected_lines[:80],
+            "ignored_noise_lines": ignored_lines[:300],
+            "built_queries": built_queries[:80],
         },
     }
