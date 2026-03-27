@@ -175,6 +175,7 @@ def run_message_runtime_orchestration(
 
         runtime_result = deps.route_runtime_message(
             question_for_ai,
+            conversation_id=conversation_id,
             system_rebuild_mode=system_rebuild_mode,
             faq_only_runtime_mode=faq_only_runtime_mode,
             recent_runtime_messages=recent_runtime_messages,

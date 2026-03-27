@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import re
 from typing import Any
+from uuid import UUID
 
 from app.services.runtime.branches_resolver import resolve_branches_query
 from app.services.runtime.branches_semantic_intent import (
@@ -29,6 +30,7 @@ from app.services.runtime.packages_resolver import resolve_packages_query
 from app.services.runtime.results_engine import interpret_result_query
 from app.services.runtime.results_query_detector import looks_like_result_query
 from app.services.runtime.response_formatter import format_runtime_answer
+from app.services.runtime.selection_state import load_selection_state
 from app.services.runtime.runtime_fallbacks import (
     get_faq_no_match_message,
     get_out_of_scope_message,
@@ -64,6 +66,18 @@ def _is_numeric_selection_query(text: str) -> bool:
         str.maketrans({"٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4", "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9"})
     )
     return bool(re.fullmatch(r"\d{1,2}", value))
+
+
+def _parse_numeric_selection(text: str) -> int | None:
+    value = _safe_str(text).translate(
+        str.maketrans({"٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4", "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9"})
+    )
+    if not re.fullmatch(r"\d{1,2}", value):
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
 
 def _looks_like_branch_query(text: str) -> bool:
     n = normalize_arabic(text)
@@ -220,9 +234,158 @@ def _build_tests_selection_query(query_type: str, selected_test: str) -> str:
         return f"نوع عينة {test_name}"
     return test_name
 
+
+def _resolve_numeric_selection_from_context(
+    text: str,
+    *,
+    conversation_id: UUID | None,
+) -> dict[str, Any] | None:
+    selection_number = _parse_numeric_selection(text)
+    if selection_number is None or selection_number < 1:
+        return None
+
+    state = load_selection_state(conversation_id)
+    options = list(state.get("last_options") or [])
+    selection_type = _safe_str(state.get("last_selection_type"))
+    query_type = _safe_str(state.get("query_type"))
+    if not options or not selection_type:
+        return None
+
+    if selection_number > len(options):
+        return {
+            "reply": format_runtime_answer(
+                f"الاختيار غير صحيح. اختر رقمًا من 1 إلى {len(options)}."
+            ),
+            "route": "selection_out_of_range",
+            "source": "selection_state",
+            "matched": True,
+            "meta": {
+                "query_type": "numeric_selection",
+                "selection_type": selection_type,
+                "options_count": len(options),
+                "selection_number": selection_number,
+                "reason": "out_of_range",
+            },
+        }
+
+    option = options[selection_number - 1] if isinstance(options[selection_number - 1], dict) else {}
+    payload = option.get("selection_payload") if isinstance(option, dict) else {}
+    label = _safe_str(option.get("label"))
+
+    if selection_type == "branch":
+        branches_result = resolve_branches_query(text, conversation_id=conversation_id)
+        if bool(branches_result.get("matched")):
+            return {
+                "reply": format_runtime_answer(_safe_str(branches_result.get("answer"))),
+                "route": _safe_str(branches_result.get("route")) or "branches",
+                "source": "branches",
+                "matched": True,
+                "meta": dict(branches_result.get("meta") or {}),
+            }
+        return {
+            "reply": format_runtime_answer("ما قدرت أحدد الفرع من الاختيار الحالي. حاول مرة ثانية."),
+            "route": "selection_branch_no_match",
+            "source": "selection_state",
+            "matched": True,
+            "meta": {
+                "query_type": "numeric_selection",
+                "selection_type": selection_type,
+                "selection_number": selection_number,
+                "reason": "branch_resolution_failed",
+            },
+        }
+
+    if selection_type == "test":
+        selected_test = _safe_str((payload or {}).get("selected_test")) or label
+        selected_query = _build_tests_selection_query(query_type, selected_test)
+        if selected_query:
+            tests_business_selected = resolve_tests_business_query(
+                selected_query,
+                conversation_id=conversation_id,
+            )
+            if _is_supported_tests_business_result(tests_business_selected):
+                return {
+                    "reply": format_runtime_answer(_safe_str(tests_business_selected.get("answer"))),
+                    "route": _safe_str(tests_business_selected.get("route")) or "tests_business",
+                    "source": "tests_business",
+                    "matched": True,
+                    "meta": _tests_business_meta(tests_business_selected.get("meta") or {}),
+                }
+            tests_selected = resolve_tests_query(
+                selected_query,
+                conversation_id=conversation_id,
+            )
+            if bool(tests_selected.get("matched")):
+                return {
+                    "reply": format_runtime_answer(_safe_str(tests_selected.get("answer"))),
+                    "route": _safe_str(tests_selected.get("route")) or "tests",
+                    "source": "tests",
+                    "matched": True,
+                    "meta": _tests_meta(tests_selected.get("meta") or {}),
+                }
+        return {
+            "reply": format_runtime_answer("ما قدرت أحدد التحليل من الاختيار الحالي. حاول مرة ثانية."),
+            "route": "selection_test_no_match",
+            "source": "selection_state",
+            "matched": True,
+            "meta": {
+                "query_type": "numeric_selection",
+                "selection_type": selection_type,
+                "selection_number": selection_number,
+                "reason": "test_resolution_failed",
+            },
+        }
+
+    if selection_type == "package":
+        package_name = _safe_str((payload or {}).get("package_name")) or label
+        package_query = f"باقة {package_name}" if package_name else label
+        packages_business_result = handle_packages_business_query(
+            package_query,
+            conversation_id=conversation_id,
+        )
+        if bool(packages_business_result.get("matched")):
+            return {
+                "reply": format_runtime_answer(_safe_str(packages_business_result.get("answer"))),
+                "route": "packages_business",
+                "source": "packages_business",
+                "matched": True,
+                "meta": {
+                    "query_type": _safe_str(packages_business_result.get("query_type")),
+                    "results_count": len(list(packages_business_result.get("results") or [])),
+                    "selection_number": selection_number,
+                },
+            }
+        packages_result = resolve_packages_query(
+            package_query,
+            conversation_id=conversation_id,
+        )
+        if bool(packages_result.get("matched")):
+            return {
+                "reply": format_runtime_answer(_safe_str(packages_result.get("answer"))),
+                "route": _safe_str(packages_result.get("route")) or "packages",
+                "source": "packages",
+                "matched": True,
+                "meta": dict(packages_result.get("meta") or {}),
+            }
+        return {
+            "reply": format_runtime_answer("ما قدرت أحدد الباقة من الاختيار الحالي. حاول مرة ثانية."),
+            "route": "selection_package_no_match",
+            "source": "selection_state",
+            "matched": True,
+            "meta": {
+                "query_type": "numeric_selection",
+                "selection_type": selection_type,
+                "selection_number": selection_number,
+                "reason": "package_resolution_failed",
+            },
+        }
+
+    return None
+
 def route_runtime_message(
     user_text: str,
     *,
+    conversation_id: UUID | None = None,
     system_rebuild_mode: bool = False,
     faq_only_runtime_mode: bool = False,
     last_user_text: str = "",
@@ -261,6 +424,14 @@ def route_runtime_message(
         is_tests_like = _looks_like_tests_query(text)
         is_symptoms_like = _looks_like_symptoms_query(text)
 
+        if is_numeric:
+            selection_result = _resolve_numeric_selection_from_context(
+                text,
+                conversation_id=conversation_id,
+            )
+            if selection_result is not None:
+                return selection_result
+
         if looks_like_result_query(text) and not is_branch_like and not is_package_like and not is_symptoms_like:
             result_answer = _safe_str(interpret_result_query(text))
             if result_answer:
@@ -276,7 +447,7 @@ def route_runtime_message(
 
         if is_numeric or is_branch_like or is_package_like or is_tests_like:
             if is_numeric or is_branch_like:
-                branches_result = resolve_branches_query(text)
+                branches_result = resolve_branches_query(text, conversation_id=conversation_id)
                 if bool(branches_result.get("matched")):
                     logger.debug(
                         "branches pre-faq guard matched | q=%s | numeric=%s | branch_like=%s | route=%s",
@@ -293,13 +464,16 @@ def route_runtime_message(
                         "meta": dict(branches_result.get("meta") or {}),
                     }
                 if is_numeric:
-                    selected = resolve_tests_disambiguation_selection(text)
+                    selected = resolve_tests_disambiguation_selection(text, conversation_id=conversation_id)
                     if selected:
                         selected_test = _safe_str(selected.get("selected_test"))
                         selected_query_type = _safe_str(selected.get("query_type"))
                         selected_query = _build_tests_selection_query(selected_query_type, selected_test)
                         if selected_query:
-                            tests_business_selected = resolve_tests_business_query(selected_query)
+                            tests_business_selected = resolve_tests_business_query(
+                                selected_query,
+                                conversation_id=conversation_id,
+                            )
                             if _is_supported_tests_business_result(tests_business_selected):
                                 return {
                                     "reply": format_runtime_answer(_safe_str(tests_business_selected.get("answer"))),
@@ -308,7 +482,10 @@ def route_runtime_message(
                                     "matched": True,
                                     "meta": _tests_business_meta(tests_business_selected.get("meta") or {}),
                                 }
-                            tests_selected = resolve_tests_query(selected_query)
+                            tests_selected = resolve_tests_query(
+                                selected_query,
+                                conversation_id=conversation_id,
+                            )
                             if bool(tests_selected.get("matched")):
                                 return {
                                     "reply": format_runtime_answer(_safe_str(tests_selected.get("answer"))),
@@ -319,7 +496,10 @@ def route_runtime_message(
                                 }
 
             if is_package_like and ENABLE_PACKAGES_RUNTIME_AFTER_BRANCHES:
-                packages_business_result = handle_packages_business_query(text)
+                packages_business_result = handle_packages_business_query(
+                    text,
+                    conversation_id=conversation_id,
+                )
                 if bool(packages_business_result.get("matched")):
                     return {
                         "reply": format_runtime_answer(_safe_str(packages_business_result.get("answer"))),
@@ -331,7 +511,7 @@ def route_runtime_message(
                             "results_count": len(list(packages_business_result.get("results") or [])),
                         },
                     }
-                packages_result = resolve_packages_query(text)
+                packages_result = resolve_packages_query(text, conversation_id=conversation_id)
                 if bool(packages_result.get("matched")):
                     logger.debug(
                         "packages pre-faq guard matched | q=%s | numeric=%s | branch_like=%s | package_like=%s | tests_like=%s | route=%s",
@@ -351,7 +531,10 @@ def route_runtime_message(
                     }
 
             if is_tests_like and ENABLE_TESTS_RUNTIME_AFTER_PACKAGES:
-                tests_business_result = resolve_tests_business_query(text)
+                tests_business_result = resolve_tests_business_query(
+                    text,
+                    conversation_id=conversation_id,
+                )
                 if _is_supported_tests_business_result(tests_business_result):
                     logger.debug(
                         "tests business pre-faq guard matched | q=%s | numeric=%s | branch_like=%s | package_like=%s | tests_like=%s | route=%s",
@@ -370,7 +553,7 @@ def route_runtime_message(
                         "meta": _tests_business_meta(tests_business_result.get("meta") or {}),
                     }
 
-                tests_result = resolve_tests_query(text)
+                tests_result = resolve_tests_query(text, conversation_id=conversation_id)
                 if bool(tests_result.get("matched")):
                     logger.debug(
                         "tests pre-faq guard matched | q=%s | numeric=%s | branch_like=%s | package_like=%s | tests_like=%s | route=%s",
@@ -471,7 +654,7 @@ def route_runtime_message(
             semantic_routing_used = is_confident_branch_intent(semantic_result)
             is_package_like = _looks_like_package_query(text)
 
-            branches_result = resolve_branches_query(text)
+            branches_result = resolve_branches_query(text, conversation_id=conversation_id)
             if bool(branches_result.get("matched")):
                 logger.debug(
                     "branches route matched after faq no match | q=%s | route=%s | semantic_intent=%s | semantic_score=%.4f | semantic_routing_used=%s",
@@ -494,7 +677,10 @@ def route_runtime_message(
                 }
 
             if is_package_like and ENABLE_PACKAGES_RUNTIME_AFTER_BRANCHES:
-                packages_business_result = handle_packages_business_query(text)
+                packages_business_result = handle_packages_business_query(
+                    text,
+                    conversation_id=conversation_id,
+                )
                 if bool(packages_business_result.get("matched")):
                     return {
                         "reply": format_runtime_answer(_safe_str(packages_business_result.get("answer"))),
@@ -506,7 +692,7 @@ def route_runtime_message(
                             "results_count": len(list(packages_business_result.get("results") or [])),
                         },
                     }
-                packages_result = resolve_packages_query(text)
+                packages_result = resolve_packages_query(text, conversation_id=conversation_id)
                 if bool(packages_result.get("matched")):
                     logger.debug(
                         "packages route matched after faq/branches no match | q=%s | route=%s",
@@ -521,7 +707,10 @@ def route_runtime_message(
                         "meta": dict(packages_result.get("meta") or {}),
                     }
             if ENABLE_TESTS_RUNTIME_AFTER_PACKAGES:
-                tests_business_result = resolve_tests_business_query(text)
+                tests_business_result = resolve_tests_business_query(
+                    text,
+                    conversation_id=conversation_id,
+                )
                 if _is_supported_tests_business_result(tests_business_result):
                     logger.debug(
                         "tests business route matched after faq/branches/packages no match | q=%s | route=%s",
@@ -536,7 +725,7 @@ def route_runtime_message(
                         "meta": _tests_business_meta(tests_business_result.get("meta") or {}),
                     }
 
-                tests_result = resolve_tests_query(text)
+                tests_result = resolve_tests_query(text, conversation_id=conversation_id)
                 if bool(tests_result.get("matched")):
                     logger.debug(
                         "tests route matched after faq/branches/packages no match | q=%s | route=%s",
@@ -577,6 +766,7 @@ def route_runtime_message(
 def route_runtime_reply(
     user_text: str,
     *,
+    conversation_id: UUID | None = None,
     system_rebuild_mode: bool = False,
     faq_only_runtime_mode: bool = False,
     last_user_text: str = "",
@@ -586,6 +776,7 @@ def route_runtime_reply(
     """Return only the final reply text for the current runtime stage."""
     result = route_runtime_message(
         user_text,
+        conversation_id=conversation_id,
         system_rebuild_mode=system_rebuild_mode,
         faq_only_runtime_mode=faq_only_runtime_mode,
         last_user_text=last_user_text,

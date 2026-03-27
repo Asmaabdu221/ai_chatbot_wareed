@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import json
 import re
-import time
 from difflib import SequenceMatcher
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
+from app.services.runtime.selection_state import load_selection_state, save_selection_state
 from app.services.runtime.text_normalizer import normalize_arabic
 
 _PRIMARY_BRANCHES_PATH = Path("app/data/runtime/rag/branches_with_coordinates.jsonl")
@@ -64,13 +65,6 @@ _CITY_ALIAS_NORMS = {
 } | {
     normalize_arabic(city) for city in _CITY_CANONICAL_ALIASES.values()
 }
-_CITY_SELECTION_TTL_SECONDS = 15 * 60
-_LAST_CITY_SELECTION: dict[str, Any] = {
-    "city": "",
-    "options": [],
-    "updated_at": 0.0,
-}
-
 _BRANCH_QUERY_TYPES = {
     "numeric_selection",
     "direct_branch",
@@ -475,30 +469,30 @@ def _format_district_options(matches: list[dict[str, Any]]) -> str:
     )
 
 
-def _set_last_city_options(city: str, options: list[dict[str, Any]]) -> None:
-    _LAST_CITY_SELECTION["city"] = _safe_str(city)
-    _LAST_CITY_SELECTION["options"] = list(options or [])
-    _LAST_CITY_SELECTION["updated_at"] = time.time()
-
-
-def _has_valid_city_selection_state() -> bool:
-    updated_at = float(_LAST_CITY_SELECTION.get("updated_at") or 0.0)
-    if not updated_at or (time.time() - updated_at) > _CITY_SELECTION_TTL_SECONDS:
+def _has_valid_city_selection_state(conversation_id: UUID | None) -> bool:
+    state = load_selection_state(conversation_id)
+    if _safe_str(state.get("last_selection_type")) != "branch":
         return False
-    return bool(list(_LAST_CITY_SELECTION.get("options") or []))
+    return bool(list(state.get("last_options") or []))
 
 
-def _get_last_city_option(selection_number: int) -> dict[str, Any] | None:
+def _get_last_city_option(selection_number: int, conversation_id: UUID | None) -> dict[str, Any] | None:
     if selection_number < 1:
         return None
-    updated_at = float(_LAST_CITY_SELECTION.get("updated_at") or 0.0)
-    if not updated_at or (time.time() - updated_at) > _CITY_SELECTION_TTL_SECONDS:
+    state = load_selection_state(conversation_id)
+    if _safe_str(state.get("last_selection_type")) != "branch":
         return None
-    options = list(_LAST_CITY_SELECTION.get("options") or [])
+    options = list(state.get("last_options") or [])
     index = selection_number - 1
     if index < 0 or index >= len(options):
         return None
-    return options[index]
+    selected = options[index]
+    if not isinstance(selected, dict):
+        return None
+    payload = selected.get("selection_payload")
+    if isinstance(payload, dict):
+        return payload
+    return selected
 
 
 def _parse_numeric_selection(text: str) -> int | None:
@@ -539,7 +533,7 @@ def _format_generic_branches_reply() -> str:
     )
 
 
-def _format_city_reply(city: str, city_records: list[dict[str, Any]]) -> str:
+def _format_city_reply(city: str, city_records: list[dict[str, Any]], conversation_id: UUID | None = None) -> str:
     names: list[str] = []
     city_options: list[dict[str, Any]] = []
     for record in city_records:
@@ -547,7 +541,21 @@ def _format_city_reply(city: str, city_records: list[dict[str, Any]]) -> str:
         if name and name not in names:
             names.append(name)
             city_options.append(record)
-    _set_last_city_options(city, city_options)
+    if conversation_id is not None and city_options:
+        options_payload = [
+            {
+                "id": _safe_str(record.get("id")) or f"branch::{idx}",
+                "label": _format_branch_name_for_reply(_safe_str(record.get("branch_name"))),
+                "selection_payload": dict(record),
+            }
+            for idx, record in enumerate(city_options, start=1)
+        ]
+        save_selection_state(
+            conversation_id,
+            options=options_payload,
+            selection_type="branch",
+            city=city,
+        )
 
     lines = [f"أكيد، هذه الفروع المتاحة في {city}:"]
     for idx, branch_name in enumerate(names, start=1):
@@ -689,7 +697,7 @@ def _match_specific_branch(query_norm: str, records: list[dict[str, Any]]) -> di
     return None
 
 
-def resolve_branches_query(user_text: str) -> dict[str, Any]:
+def resolve_branches_query(user_text: str, conversation_id: UUID | None = None) -> dict[str, Any]:
     """Resolve branches query from branches runtime dataset only."""
     query = _safe_str(user_text)
     query_norm = normalize_arabic(query)
@@ -718,8 +726,8 @@ def resolve_branches_query(user_text: str) -> dict[str, Any]:
 
     # Numeric selection should resolve before any generic fallback logic.
     numeric_selection = _parse_numeric_selection(query_norm)
-    has_state = _has_valid_city_selection_state()
-    selected = _get_last_city_option(numeric_selection) if numeric_selection is not None else None
+    has_state = _has_valid_city_selection_state(conversation_id)
+    selected = _get_last_city_option(numeric_selection, conversation_id) if numeric_selection is not None else None
     if numeric_selection is not None and selected is not None:
         selected_id = _safe_str(selected.get("id"))
         return {
@@ -923,7 +931,7 @@ def resolve_branches_query(user_text: str) -> dict[str, Any]:
         city = _safe_str(city_records[0].get("city"))
         return {
             "matched": True,
-            "answer": _format_city_reply(city, city_records),
+            "answer": _format_city_reply(city, city_records, conversation_id),
             "meta": _enrich_meta(
                 {"city": city, "count": len(city_records), "nearest_requested": nearest},
                 query_type=query_type,

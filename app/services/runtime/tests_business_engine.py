@@ -7,6 +7,7 @@ from difflib import SequenceMatcher
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 from app.services.runtime.tests_disambiguation import (
     find_disambiguation_candidates,
@@ -322,18 +323,26 @@ def _format_target_field(title: str, test_name: str, value: str) -> str:
     return f"{title} {test_name}:\n{value}"
 
 
-def _build_disambiguation_reply(query: str, query_type: str) -> str | None:
+def _build_disambiguation_reply(
+    query: str,
+    query_type: str,
+    conversation_id: UUID | None = None,
+) -> str | None:
     payload = find_disambiguation_candidates(query)
     if not payload:
         return None
     candidates = _as_str_list(payload.get("candidate_tests"))
     if not candidates:
         return None
-    set_tests_disambiguation_state(candidates, query_type=query_type)
+    set_tests_disambiguation_state(
+        candidates,
+        query_type=query_type,
+        conversation_id=conversation_id,
+    )
     return format_disambiguation_reply(payload)
 
 
-def resolve_tests_business_query(user_text: str) -> dict[str, Any]:
+def resolve_tests_business_query(user_text: str, conversation_id: UUID | None = None) -> dict[str, Any]:
     """Resolve business-support test queries deterministically."""
     query = _safe_str(user_text)
     query_norm = _norm(query)
@@ -394,7 +403,11 @@ def resolve_tests_business_query(user_text: str) -> dict[str, Any]:
 
     target, score = _find_target_test(query_norm, records)
     if target is None:
-        disambiguation_reply = _build_disambiguation_reply(query, query_type=query_type)
+        disambiguation_reply = _build_disambiguation_reply(
+            query,
+            query_type=query_type,
+            conversation_id=conversation_id,
+        )
         return {
             "matched": True,
             "answer": disambiguation_reply or _TEST_NOT_FOUND_MESSAGE,

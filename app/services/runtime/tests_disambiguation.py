@@ -4,20 +4,15 @@ from __future__ import annotations
 
 import json
 import re
-import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
+from app.services.runtime.selection_state import load_selection_state, save_selection_state
 from app.services.runtime.text_normalizer import normalize_arabic
 
 TESTS_DISAMBIGUATION_JSONL_PATH = Path("app/data/runtime/rag/tests_disambiguation.jsonl")
-_SELECTION_TTL_SECONDS = 15 * 60
-_LAST_TEST_DISAMBIGUATION: dict[str, Any] = {
-    "options": [],
-    "query_type": "",
-    "updated_at": 0.0,
-}
 
 
 def _safe_str(value: Any) -> str:
@@ -135,11 +130,28 @@ def format_disambiguation_reply(payload: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def set_tests_disambiguation_state(candidate_tests: list[str], query_type: str = "") -> None:
+def set_tests_disambiguation_state(
+    candidate_tests: list[str],
+    query_type: str = "",
+    conversation_id: UUID | None = None,
+) -> None:
     options = [c for c in _as_str_list(candidate_tests) if c][:5]
-    _LAST_TEST_DISAMBIGUATION["options"] = options
-    _LAST_TEST_DISAMBIGUATION["query_type"] = _safe_str(query_type)
-    _LAST_TEST_DISAMBIGUATION["updated_at"] = time.time()
+    payload = [
+        {
+            "id": f"test_option::{idx}",
+            "label": option,
+            "selection_payload": {
+                "selected_test": option,
+            },
+        }
+        for idx, option in enumerate(options, start=1)
+    ]
+    save_selection_state(
+        conversation_id,
+        options=payload,
+        selection_type="test",
+        query_type=_safe_str(query_type),
+    )
 
 
 def _parse_numeric_selection(text: str) -> int | None:
@@ -170,25 +182,30 @@ def _parse_numeric_selection(text: str) -> int | None:
         return None
 
 
-def resolve_tests_disambiguation_selection(user_text: str) -> dict[str, Any] | None:
+def resolve_tests_disambiguation_selection(
+    user_text: str,
+    conversation_id: UUID | None = None,
+) -> dict[str, Any] | None:
     selection_number = _parse_numeric_selection(user_text)
     if selection_number is None or selection_number < 1:
         return None
 
-    updated_at = float(_LAST_TEST_DISAMBIGUATION.get("updated_at") or 0.0)
-    if not updated_at or (time.time() - updated_at) > _SELECTION_TTL_SECONDS:
+    state = load_selection_state(conversation_id)
+    if _safe_str(state.get("last_selection_type")) != "test":
         return None
 
-    options = list(_LAST_TEST_DISAMBIGUATION.get("options") or [])
+    options = list(state.get("last_options") or [])
     idx = selection_number - 1
     if idx < 0 or idx >= len(options):
         return None
 
-    selected_test = _safe_str(options[idx])
+    option = options[idx] if isinstance(options[idx], dict) else {}
+    payload = option.get("selection_payload") if isinstance(option, dict) else {}
+    selected_test = _safe_str((payload or {}).get("selected_test")) or _safe_str(option.get("label"))
     if not selected_test:
         return None
     return {
         "selected_test": selected_test,
-        "query_type": _safe_str(_LAST_TEST_DISAMBIGUATION.get("query_type")),
+        "query_type": _safe_str(state.get("query_type")),
         "selection_number": selection_number,
     }

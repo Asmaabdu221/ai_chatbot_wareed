@@ -6,6 +6,7 @@ import json
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 from app.services.runtime.tests_disambiguation import (
     find_disambiguation_candidates,
@@ -289,18 +290,22 @@ def _format_preparation(record: dict[str, Any]) -> str:
     return f"تحضير {name}:\n{snippet}"
 
 
-def _build_disambiguation_reply(query: str) -> str | None:
+def _build_disambiguation_reply(query: str, conversation_id: UUID | None = None) -> str | None:
     payload = find_disambiguation_candidates(query)
     if not payload:
         return None
     candidates = _as_list_of_str(payload.get("candidate_tests"))
     if not candidates:
         return None
-    set_tests_disambiguation_state(candidates, query_type="test_preparation_query")
+    set_tests_disambiguation_state(
+        candidates,
+        query_type="test_preparation_query",
+        conversation_id=conversation_id,
+    )
     return format_disambiguation_reply(payload)
 
 
-def resolve_tests_query(user_text: str) -> dict[str, Any]:
+def resolve_tests_query(user_text: str, conversation_id: UUID | None = None) -> dict[str, Any]:
     """Resolve test queries deterministically from runtime tests dataset."""
     query = _safe_str(user_text)
     query_norm = _norm(query)
@@ -342,7 +347,7 @@ def resolve_tests_query(user_text: str) -> dict[str, Any]:
 
     if preparation_like:
         if specific_match is None:
-            disambiguation_reply = _build_disambiguation_reply(query)
+            disambiguation_reply = _build_disambiguation_reply(query, conversation_id)
             return {
                 "matched": True,
                 "answer": disambiguation_reply or _TEST_NOT_FOUND_REPLY,
@@ -396,7 +401,7 @@ def resolve_tests_query(user_text: str) -> dict[str, Any]:
         }
 
     if general_like or ("تحليل" in query_norm or "تحاليل" in query_norm):
-        disambiguation_reply = _build_disambiguation_reply(query)
+        disambiguation_reply = _build_disambiguation_reply(query, conversation_id)
         if disambiguation_reply:
             return {
                 "matched": True,

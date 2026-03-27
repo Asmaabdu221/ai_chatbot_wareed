@@ -8,7 +8,9 @@ from difflib import SequenceMatcher
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
+from app.services.runtime.selection_state import save_selection_state
 from app.services.runtime.text_normalizer import normalize_arabic
 
 PACKAGES_JSONL_PATH = Path("app/data/runtime/rag/packages_clean.jsonl")
@@ -230,7 +232,7 @@ def _format_package_price(record: dict[str, Any]) -> str:
     return _PRICE_NOT_AVAILABLE
 
 
-def resolve_packages_query(user_text: str) -> dict[str, Any]:
+def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) -> dict[str, Any]:
     """Resolve package queries deterministically from runtime package dataset."""
     query = _safe_str(user_text)
     query_norm = _norm(query)
@@ -262,6 +264,23 @@ def resolve_packages_query(user_text: str) -> dict[str, Any]:
     # Category queries should win over specific matching when the query is
     # clearly about a category label, not a package name.
     if category and category_like and not price_query and specific_match is None:
+        category_rows = [r for r in records if _safe_str(r.get("main_category")) == category]
+        if conversation_id is not None and category_rows:
+            save_selection_state(
+                conversation_id,
+                options=[
+                    {
+                        "id": _safe_str(row.get("id")) or f"package_option::{idx}",
+                        "label": _safe_str(row.get("package_name")),
+                        "selection_payload": {
+                            "package_name": _safe_str(row.get("package_name")),
+                        },
+                    }
+                    for idx, row in enumerate(category_rows[:15], start=1)
+                ],
+                selection_type="package",
+                query_type="package_category",
+            )
         return {
             "matched": True,
             "answer": _format_category_packages(category, records),

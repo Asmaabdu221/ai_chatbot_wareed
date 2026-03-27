@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_TTL_HOURS = 1.0
 DEFAULT_MAX_ENTRIES = 10_000
 STATE_TTL_MINUTES = 15
-STATE_KEY_PREFIXES = ("flow_state:", "branch_selection:", "package_selection:")
+STATE_KEY_PREFIXES = ("flow_state:", "branch_selection:", "package_selection:", "selection_state:")
 
 
 def _normalize_message(text: str) -> str:

@@ -6,7 +6,9 @@ import json
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
+from app.services.runtime.selection_state import save_selection_state
 from app.services.runtime.text_normalizer import normalize_arabic
 
 PACKAGES_BUSINESS_JSONL_PATH = Path("app/data/runtime/rag/packages_business_clean.jsonl")
@@ -378,7 +380,7 @@ def _package_guidance_text(package: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def handle_packages_business_query(query: str) -> dict[str, Any]:
+def handle_packages_business_query(query: str, conversation_id: UUID | None = None) -> dict[str, Any]:
     """Resolve enriched package queries with deterministic business logic."""
     query_text = _safe_str(query)
     query_type = detect_packages_query_type(query_text)
@@ -468,6 +470,22 @@ def handle_packages_business_query(query: str) -> dict[str, Any]:
                 lines.append(f"{idx}) {_safe_str(row.get('package_name'))} - {price_text}")
             else:
                 lines.append(f"{idx}) {_safe_str(row.get('package_name'))}")
+        if conversation_id is not None:
+            save_selection_state(
+                conversation_id,
+                options=[
+                    {
+                        "id": f"package_option::{idx}",
+                        "label": _safe_str(row.get("package_name")),
+                        "selection_payload": {
+                            "package_name": _safe_str(row.get("package_name")),
+                        },
+                    }
+                    for idx, row in enumerate(matches[:10], start=1)
+                ],
+                selection_type="package",
+                query_type=query_type,
+            )
         guidance = _package_guidance_text(matches[0])
         return {
             "matched": True,
@@ -504,6 +522,22 @@ def handle_packages_business_query(query: str) -> dict[str, Any]:
 
     # category_query fallback
     rows = matches if matches else records
+    if conversation_id is not None and rows:
+        save_selection_state(
+            conversation_id,
+            options=[
+                {
+                    "id": f"package_option::{idx}",
+                    "label": _safe_str(row.get("package_name")),
+                    "selection_payload": {
+                        "package_name": _safe_str(row.get("package_name")),
+                    },
+                }
+                for idx, row in enumerate(rows[:12], start=1)
+            ],
+            selection_type="package",
+            query_type=query_type,
+        )
     lines = ["الباقات المتاحة حالياً:"]
     for idx, row in enumerate(rows[:12], start=1):
         price_text = _safe_str(row.get("price_text"))
