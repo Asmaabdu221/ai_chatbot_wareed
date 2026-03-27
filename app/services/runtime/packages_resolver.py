@@ -756,6 +756,13 @@ def _find_package_by_label(label: str, records: list[dict[str, Any]]) -> dict[st
 def _format_best_for_selected_preview(record: dict[str, Any]) -> str:
     name = _safe_str(record.get("package_name"))
     short_desc = _safe_str(record.get("description_short"))
+    if not short_desc:
+        full_desc = _safe_str(record.get("description_full"))
+        if full_desc:
+            # Fallback: use first sentence from full description.
+            short_desc = re.split(r"[.!؟\n]+", full_desc, maxsplit=1)[0].strip()
+    if short_desc:
+        short_desc = re.sub(rf"^\s*{re.escape(name)}\s*[:\-–—]?\s*", "", short_desc, flags=re.IGNORECASE).strip()
     lines = [name]
     if short_desc:
         lines.extend(["", short_desc])
@@ -769,7 +776,7 @@ def _format_best_for_long_details(record: dict[str, Any]) -> str:
     body = full_desc if full_desc and _norm(full_desc) != _norm(short_desc) else short_desc
     if not body:
         body = "ما عندي تفاصيل إضافية واضحة في البيانات الحالية."
-    lines = [body, "", "إذا حاب بعده أعرفك على السعر أو أقارنها لك مع باقة ثانية، أقدر أوضح لك."]
+    lines = ["تمام ", "", body, "", "إذا حاب بعده أعرفك على السعر أو أقارنها لك مع باقة ثانية، أقدر أوضح لك."]
     return "\n".join(lines)
 
 
@@ -921,6 +928,14 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
     if best_for_context and remembered_package_label:
         remembered_record = _find_package_by_label(remembered_package_label, records)
         if remembered_record is not None:
+            strong_best_for_followup = {"نعم", "ايوا", "ايوه", "تمام", "اوكي", "ok"}
+            if query_norm in {_norm(v) for v in strong_best_for_followup}:
+                return {
+                    "matched": True,
+                    "answer": _format_best_for_long_details(remembered_record),
+                    "route": "packages_best_for_details",
+                    "meta": {"query_type": "package_best_for_query"},
+                }
             if _is_best_for_details_followup_query(query_norm):
                 return {
                     "matched": True,
