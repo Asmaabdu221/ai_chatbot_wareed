@@ -445,6 +445,15 @@ def _is_detail_query(query_norm: str) -> bool:
     return any(_norm(h) in query_norm for h in _DETAIL_HINTS)
 
 
+def _is_best_for_query(query_norm: str) -> bool:
+    keywords = [
+        "افضل", "أفضل", "أنسب", "انسب",
+        "وش تنصح", "تنصحني", "اقترح", "ترشح",
+        "best", "recommend", "recommended",
+    ]
+    return any(_norm(k) in query_norm for k in keywords)
+
+
 def _detect_category(query_norm: str, records: list[dict[str, Any]]) -> str:
     categories = {
         _safe_str(r.get("main_category")): _safe_str(r.get("main_category_norm"))
@@ -729,6 +738,7 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
     category_like = _is_category_like_query(query_norm, category)
     general_like = _is_general_query(query_norm)
     general_listing_like = _is_general_listing_query(query_norm)
+    best_for_query = _is_best_for_query(query_norm)
     price_query = _is_price_query(query_norm)
     detail_query = _is_detail_query(query_norm)
 
@@ -755,6 +765,37 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
                 "category": category,
             },
         }
+
+    if best_for_query:
+        scored = []
+        for r in records:
+            score = _score_package_match(query, r)
+            if score > 2:
+                scored.append((score, r))
+
+        if scored:
+            scored.sort(key=lambda x: x[0], reverse=True)
+            top = [r for _, r in scored[:2]]
+
+            lines = ["أنسب الباقات لك:"]
+            for idx, r in enumerate(top, start=1):
+                name = _safe_str(r.get("package_name"))
+                price = r.get("price_number")
+                currency = _safe_str(r.get("currency") or "ريال")
+
+                if isinstance(price, (int, float)):
+                    lines.append(f"{idx}) {name} - {price:g} {currency}")
+                else:
+                    lines.append(f"{idx}) {name}")
+
+            lines.append("اكتب اسم الباقة أو رقمها لعرض التفاصيل.")
+
+            return {
+                "matched": True,
+                "answer": "\n".join(lines),
+                "route": "packages_best_for",
+                "meta": {"query_type": "package_best_for_query"},
+            }
 
     specific_match = _find_specific_package(query, records)
 
