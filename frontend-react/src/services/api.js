@@ -26,7 +26,13 @@ api.interceptors.request.use((config) => {
   const url = config?.url || "";
   const token = getAccessToken();
   if (config.data instanceof FormData) {
+    config.headers = config.headers || {};
+    // Let the browser set multipart boundary automatically for FormData.
+    if (typeof config.headers.set === "function") {
+      config.headers.set("Content-Type", undefined);
+    }
     delete config.headers["Content-Type"];
+    delete config.headers["content-type"];
   }
   if (token && !config.headers?.Authorization) {
     config.headers = config.headers || {};
