@@ -450,25 +450,6 @@ def _resolve_numeric_selection_from_context(
     if selection_type == "package":
         package_name = _safe_str((payload or {}).get("package_name")) or label
         package_query = f"باقة {package_name}" if package_name else label
-        packages_business_result = handle_packages_business_query(
-            package_query,
-            conversation_id=conversation_id,
-        )
-        if bool(packages_business_result.get("matched")):
-            top_package = (list(packages_business_result.get("results") or []) or [{}])[0]
-            return {
-                "reply": format_runtime_answer(_safe_str(packages_business_result.get("answer"))),
-                "route": "packages_business",
-                "source": "packages_business",
-                "matched": True,
-                "meta": {
-                    "query_type": _safe_str(packages_business_result.get("query_type")),
-                    "results_count": len(list(packages_business_result.get("results") or [])),
-                    "selection_number": selection_number,
-                    "matched_package_id": _safe_str((top_package or {}).get("id")),
-                    "matched_package_name": _safe_str((top_package or {}).get("package_name")),
-                },
-            }
         packages_result = resolve_packages_query(
             package_query,
             conversation_id=conversation_id,
@@ -726,24 +707,6 @@ def route_runtime_message(
                                 }
 
             if is_package_like and ENABLE_PACKAGES_RUNTIME_AFTER_BRANCHES:
-                packages_business_result = handle_packages_business_query(
-                    text,
-                    conversation_id=conversation_id,
-                )
-                if bool(packages_business_result.get("matched")):
-                    top_package = (list(packages_business_result.get("results") or []) or [{}])[0]
-                    return {
-                        "reply": format_runtime_answer(_safe_str(packages_business_result.get("answer"))),
-                        "route": "packages_business",
-                        "source": "packages_business",
-                        "matched": True,
-                        "meta": {
-                            "query_type": _safe_str(packages_business_result.get("query_type")),
-                            "results_count": len(list(packages_business_result.get("results") or [])),
-                            "matched_package_id": _safe_str((top_package or {}).get("id")),
-                            "matched_package_name": _safe_str((top_package or {}).get("package_name")),
-                        },
-                    }
                 packages_result = resolve_packages_query(text, conversation_id=conversation_id)
                 if bool(packages_result.get("matched")):
                     logger.debug(
@@ -813,12 +776,13 @@ def route_runtime_message(
                 is_package_like,
                 is_tests_like,
             )
-            classifier_result = _try_ollama_classifier_fallback(
-                _safe_str(user_text),
-                conversation_id=conversation_id,
-            )
-            if classifier_result is not None:
-                return classifier_result
+            if False:
+                classifier_result = _try_ollama_classifier_fallback(
+                    _safe_str(user_text),
+                    conversation_id=conversation_id,
+                )
+                if classifier_result is not None:
+                    return classifier_result
             # Do not let FAQ hijack numeric/branch/location/package/tests queries.
             return {
                 "reply": format_runtime_answer(get_faq_no_match_message()),
@@ -916,24 +880,6 @@ def route_runtime_message(
                 }
 
             if is_package_like and ENABLE_PACKAGES_RUNTIME_AFTER_BRANCHES:
-                packages_business_result = handle_packages_business_query(
-                    text,
-                    conversation_id=conversation_id,
-                )
-                if bool(packages_business_result.get("matched")):
-                    top_package = (list(packages_business_result.get("results") or []) or [{}])[0]
-                    return {
-                        "reply": format_runtime_answer(_safe_str(packages_business_result.get("answer"))),
-                        "route": "packages_business",
-                        "source": "packages_business",
-                        "matched": True,
-                        "meta": {
-                            "query_type": _safe_str(packages_business_result.get("query_type")),
-                            "results_count": len(list(packages_business_result.get("results") or [])),
-                            "matched_package_id": _safe_str((top_package or {}).get("id")),
-                            "matched_package_name": _safe_str((top_package or {}).get("package_name")),
-                        },
-                    }
                 packages_result = resolve_packages_query(text, conversation_id=conversation_id)
                 if bool(packages_result.get("matched")):
                     logger.debug(
@@ -981,12 +927,13 @@ def route_runtime_message(
                         "matched": True,
                         "meta": _tests_meta(tests_result.get("meta") or {}),
                     }
-        classifier_result = _try_ollama_classifier_fallback(
-            _safe_str(user_text),
-            conversation_id=conversation_id,
-        )
-        if classifier_result is not None:
-            return classifier_result
+        if False:
+            classifier_result = _try_ollama_classifier_fallback(
+                _safe_str(user_text),
+                conversation_id=conversation_id,
+            )
+            if classifier_result is not None:
+                return classifier_result
         return {
             "reply": format_runtime_answer(get_faq_no_match_message()),
             "route": "faq_only_no_match",
