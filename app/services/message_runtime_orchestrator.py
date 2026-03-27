@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Callable
+
+from app.services.runtime.results_from_report_service import interpret_uploaded_lab_report_text
 from uuid import UUID
 
 
@@ -214,6 +216,9 @@ def run_message_runtime_orchestration(
         or deps.is_report_explanation_request(question_for_ai)
     )
     if wants_report_explain and extracted_context:
+        bridged = interpret_uploaded_lab_report_text(extracted_context)
+        if bool(bridged.get("matched")):
+            return deps.save_assistant_reply(str(bridged.get("answer") or ""))
         parsed_rows = deps.parse_lab_report_text(extracted_context)
         report_reply = deps.compose_report_summary(parsed_rows)
         return deps.save_assistant_reply(report_reply)

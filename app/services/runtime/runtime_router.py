@@ -26,6 +26,8 @@ from app.services.runtime.branches_semantic_intent import (
 from app.services.runtime.faq_resolver import resolve_faq
 from app.services.runtime.packages_business_engine import handle_packages_business_query
 from app.services.runtime.packages_resolver import resolve_packages_query
+from app.services.runtime.results_engine import interpret_result_query
+from app.services.runtime.results_query_detector import looks_like_result_query
 from app.services.runtime.response_formatter import format_runtime_answer
 from app.services.runtime.runtime_fallbacks import (
     get_faq_no_match_message,
@@ -257,6 +259,21 @@ def route_runtime_message(
         is_branch_like = _looks_like_branch_query(text)
         is_package_like = _looks_like_package_query(text)
         is_tests_like = _looks_like_tests_query(text)
+        is_symptoms_like = _looks_like_symptoms_query(text)
+
+        if looks_like_result_query(text) and not is_branch_like and not is_package_like and not is_symptoms_like:
+            result_answer = _safe_str(interpret_result_query(text))
+            if result_answer:
+                return {
+                    "reply": format_runtime_answer(result_answer),
+                    "route": "results_interpretation",
+                    "source": "results_engine",
+                    "matched": True,
+                    "meta": {
+                        "query_type": "result_interpretation",
+                    },
+                }
+
         if is_numeric or is_branch_like or is_package_like or is_tests_like:
             if is_numeric or is_branch_like:
                 branches_result = resolve_branches_query(text)
@@ -396,7 +413,7 @@ def route_runtime_message(
                 },
             }
 
-        if _looks_like_symptoms_query(text):
+        if is_symptoms_like:
             symptoms_result = handle_symptoms_query(text)
             if symptoms_result:
                 return {
