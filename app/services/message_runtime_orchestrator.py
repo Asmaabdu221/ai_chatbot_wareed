@@ -75,6 +75,12 @@ def run_message_runtime_orchestration(
     """Execute the existing runtime orchestration flow and return saved reply tuple."""
     runtime_mode_active = system_rebuild_mode or faq_only_runtime_mode
     if runtime_mode_active:
+        if attachment_content and extracted_context:
+            bridged = interpret_uploaded_lab_report_text(extracted_context)
+            if bool(bridged.get("matched")):
+                deps.logger.info("report interpretation bridge matched in runtime mode | source=results_from_report_service")
+                return deps.save_assistant_reply(str(bridged.get("answer") or "").strip())
+
         runtime_result = deps.route_runtime_message(
             question_for_ai,
             system_rebuild_mode=system_rebuild_mode,
