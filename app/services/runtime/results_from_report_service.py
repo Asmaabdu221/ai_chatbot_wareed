@@ -140,6 +140,40 @@ def _find_closest_test_name(line: str) -> tuple[str, tuple[int, int]] | None:
     return best_name, best_span
 
 
+def _find_test_hits(line: str) -> list[tuple[str, tuple[int, int]]]:
+    """Find multiple test-name hits in one line, preferring longer terms and non-overlap spans."""
+    line_norm = normalize_arabic(line)
+    if not line_norm:
+        return []
+
+    candidates: list[tuple[int, str, tuple[int, int]]] = []
+    for term_norm, canonical in _build_test_term_index():
+        start = line_norm.find(term_norm)
+        if start < 0:
+            continue
+        span = (start, start + len(term_norm))
+        candidates.append((len(term_norm), canonical, span))
+
+    candidates.sort(key=lambda x: x[0], reverse=True)
+
+    selected: list[tuple[str, tuple[int, int]]] = []
+    used_spans: list[tuple[int, int]] = []
+    seen_names: set[str] = set()
+    for _, canonical, span in candidates:
+        if canonical in seen_names:
+            continue
+        s1, e1 = span
+        overlaps = any(not (e1 <= s2 or e2 <= s1) for s2, e2 in used_spans)
+        if overlaps:
+            continue
+        used_spans.append(span)
+        seen_names.add(canonical)
+        selected.append((canonical, span))
+
+    selected.sort(key=lambda x: x[1][0])
+    return selected
+
+
 def _extract_numeric_candidates(line: str) -> list[tuple[float, tuple[int, int]]]:
     normalized = _normalize_digits(line)
     if re.search(r"\b\d+\s*:\s*\d+\b", normalized):
@@ -182,10 +216,11 @@ def _pick_closest_value(line: str, name_span: tuple[int, int]) -> float | None:
     return best_value
 
 
-def _extract_rows_line_by_line(report_text: str) -> tuple[list[dict[str, Any]], list[str], list[str]]:
+def _extract_rows_line_by_line(report_text: str) -> tuple[list[dict[str, Any]], list[str], list[str], list[dict[str, Any]]]:
     rows: list[dict[str, Any]] = []
     selected_lines: list[str] = []
     ignored_lines: list[str] = []
+    selection_trace: list[dict[str, Any]] = []
 
     for raw_line in (report_text or "").splitlines():
         line = _compact_spaces(raw_line)
@@ -200,35 +235,47 @@ def _extract_rows_line_by_line(report_text: str) -> tuple[list[dict[str, Any]], 
             ignored_lines.append(line)
             continue
 
-        name_hit = _find_closest_test_name(line)
-        if not name_hit:
+        hits = _find_test_hits(line)
+        if not hits:
             ignored_lines.append(line)
+            selection_trace.append({"line": line, "selected": False, "reason": "no_test_hit"})
             continue
 
-        test_name, name_span = name_hit
-        value = _pick_closest_value(line, name_span)
-        if value is None:
+        picked_any = False
+        for test_name, name_span in hits:
+            value = _pick_closest_value(line, name_span)
+            if value is None:
+                selection_trace.append(
+                    {"line": line, "selected": False, "reason": "no_numeric_near_test", "test_name": test_name}
+                )
+                continue
+            rows.append(
+                {
+                    "line": line,
+                    "test_name": test_name,
+                    "result_value": value,
+                }
+            )
+            selection_trace.append(
+                {"line": line, "selected": True, "reason": "ok", "test_name": test_name, "value": value}
+            )
+            picked_any = True
+
+        if picked_any:
+            selected_lines.append(line)
+        else:
             ignored_lines.append(line)
-            continue
 
-        rows.append(
-            {
-                "line": line,
-                "test_name": test_name,
-                "result_value": value,
-            }
-        )
-        selected_lines.append(line)
-
-    return rows, selected_lines, ignored_lines
+    return rows, selected_lines, ignored_lines, selection_trace
 
 
 def interpret_uploaded_lab_report_text(report_text: str) -> dict[str, Any]:
-    parsed_rows, selected_lines, ignored_lines = _extract_rows_line_by_line(report_text or "")
+    parsed_rows, selected_lines, ignored_lines, selection_trace = _extract_rows_line_by_line(report_text or "")
 
     items: list[dict[str, Any]] = []
     seen_tests: set[str] = set()
     built_queries: list[str] = []
+    query_trace: list[dict[str, Any]] = []
 
     for row in parsed_rows:
         raw_name = _safe_str(row.get("test_name"))
@@ -247,7 +294,16 @@ def interpret_uploaded_lab_report_text(report_text: str) -> dict[str, Any]:
         query = f"{query_name} {float(value)}"
         built_queries.append(query)
         interpretation = _safe_str(interpret_result_query(query))
-        if not _is_successful_interpretation(interpretation):
+        success = _is_successful_interpretation(interpretation)
+        query_trace.append(
+            {
+                "query": query,
+                "match": success,
+                "answer": interpretation,
+                "dropped_reason": "" if success else "results_engine_fallback",
+            }
+        )
+        if not success:
             continue
 
         seen_tests.add(test_key)
@@ -269,6 +325,8 @@ def interpret_uploaded_lab_report_text(report_text: str) -> dict[str, Any]:
                 "selected_result_lines": selected_lines[:80],
                 "ignored_noise_lines": ignored_lines[:300],
                 "built_queries": built_queries[:80],
+                "selection_trace": selection_trace[:200],
+                "query_trace": query_trace[:200],
             },
         }
 
@@ -285,5 +343,7 @@ def interpret_uploaded_lab_report_text(report_text: str) -> dict[str, Any]:
             "selected_result_lines": selected_lines[:80],
             "ignored_noise_lines": ignored_lines[:300],
             "built_queries": built_queries[:80],
+            "selection_trace": selection_trace[:200],
+            "query_trace": query_trace[:200],
         },
     }
