@@ -106,12 +106,34 @@ _DETAIL_HINTS = (
     "محتوى",
     "وش هي",
     "ايش هي",
+    "وش يعني",
+    "عرفني على",
     "what does it include",
     "what is included",
     "include",
     "includes",
     "details",
 )
+
+_INCLUSION_HINTS = (
+    "وش تشمل",
+    "ايش فيها",
+    "كم تحليل فيها",
+    "هل تحتوي على",
+)
+
+_ANALYTE_QUERY_HINTS = (
+    "فيها",
+    "تشمل",
+    "هل تحتوي",
+    "contains",
+    "include",
+    "includes",
+)
+
+_COMPARE_HINTS = ("الفرق بين", "قارن", "قارنة", "compare")
+_ALTERNATIVE_HINTS = ("مشابه", "باقة ثانية", "بديل", "غيرها", "alternative", "similar")
+_AMBIGUOUS_TERMS = ("الغدة", "الاطفال", "الأطفال", "الحساسية")
 
 _CATEGORY_HINTS: dict[str, tuple[str, ...]] = {
     "الباقات المتخصصة": (
@@ -159,6 +181,13 @@ _CATEGORY_HINTS: dict[str, tuple[str, ...]] = {
         "dna",
     ),
 }
+
+_SYMPTOM_GOAL_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("للشعر", ("للشعر", "الشعر", "تساقط", "hair", "alopecia")),
+    ("للغدة", ("للغده", "للغدة", "الغده", "الغدة", "thyroid", "tsh", "هرمونات")),
+    ("للسكر", ("للسكر", "السكر", "سكري", "diabetes", "glucose", "hba1c")),
+    ("للقولون", ("للقولون", "القولون", "قولون", "digestive", "gastro", "ibs")),
+)
 
 _PRICE_NOT_AVAILABLE = "سعر هذه الباقة غير متوفر حاليًا في البيانات الحالية."
 _PACKAGE_NOT_FOUND = "ما قدرت أحدد باقة محددة من سؤالك. اكتب اسم الباقة بشكل أوضح."
@@ -446,6 +475,10 @@ def _is_detail_query(query_norm: str) -> bool:
     return any(_norm(h) in query_norm for h in _DETAIL_HINTS)
 
 
+def _is_inclusion_query(query_norm: str) -> bool:
+    return any(_norm(h) in query_norm for h in _INCLUSION_HINTS)
+
+
 def _is_best_for_query(query_norm: str) -> bool:
     keywords = [
         "ايش افضل",
@@ -494,6 +527,67 @@ def _detect_category(query_norm: str, records: list[dict[str, Any]]) -> str:
         if any(_norm(h) in query_norm for h in hints):
             return category
     return ""
+
+
+def _detect_audience_terms(query_norm: str) -> tuple[str, tuple[str, ...]] | None:
+    audience_map: tuple[tuple[str, tuple[str, ...]], ...] = (
+        ("للنساء", ("للنساء", "نساء", "مراه", "مرأة", "امرأة", "women", "woman", "female")),
+        ("للرجال", ("للرجال", "رجال", "men", "male", "man")),
+        ("للأطفال", ("للاطفال", "للأطفال", "اطفال", "أطفال", "طفل", "children", "child", "kids", "pediatric")),
+    )
+    for label, terms in audience_map:
+        if any(_norm(t) in query_norm for t in terms):
+            return (label, terms)
+    return None
+
+
+def _detect_symptom_goal_query(query_norm: str) -> tuple[str, tuple[str, ...]] | None:
+    for label, terms in _SYMPTOM_GOAL_HINTS:
+        if any(_norm(t) in query_norm for t in terms):
+            return (label, terms)
+    return None
+
+
+def _extract_analyte_terms(query: str) -> list[str]:
+    query_norm = _norm(query)
+    if not query_norm:
+        return []
+    tokens = _tokenize(query_norm)
+    excluded = {"فيها", "تشمل", "يشمل", "تحتوي", "هل", "على", "package", "باقه", "باقة"}
+    terms: list[str] = []
+    for t in tokens:
+        if t in excluded:
+            continue
+        if len(t) < 2:
+            continue
+        terms.append(t)
+    # Keep stable order, unique.
+    out: list[str] = []
+    seen: set[str] = set()
+    for t in terms:
+        if t in seen:
+            continue
+        seen.add(t)
+        out.append(t)
+    return out
+
+
+def _is_analyte_query(query_norm: str, analyte_terms: list[str]) -> bool:
+    if not analyte_terms:
+        return False
+    return any(_norm(h) in query_norm for h in _ANALYTE_QUERY_HINTS)
+
+
+def _is_compare_query(query_norm: str) -> bool:
+    return any(_norm(h) in query_norm for h in _COMPARE_HINTS)
+
+
+def _is_alternatives_query(query_norm: str) -> bool:
+    return any(_norm(h) in query_norm for h in _ALTERNATIVE_HINTS)
+
+
+def _is_ambiguous_package_query(query_norm: str) -> bool:
+    return any(_norm(h) in query_norm for h in _AMBIGUOUS_TERMS)
 
 
 def _is_category_like_query(query_norm: str, detected_category: str) -> bool:
@@ -883,6 +977,93 @@ def _format_package_details(record: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _format_package_preview(record: dict[str, Any]) -> str:
+    name = _safe_str(record.get("package_name"))
+    short_desc = _safe_str(record.get("description_short"))
+    if not short_desc:
+        full_desc = _safe_str(record.get("description_full"))
+        if full_desc:
+            parts = re.split(r"[\.،\n]+", full_desc)
+            for part in parts:
+                candidate = _safe_str(part)
+                if candidate:
+                    short_desc = candidate
+                    break
+    lines = [name]
+    if short_desc:
+        lines.extend(["", short_desc])
+    return "\n".join(lines)
+
+
+def _format_package_full_details(record: dict[str, Any]) -> str:
+    full_desc = _safe_str(record.get("description_full"))
+    if full_desc:
+        return full_desc
+    short_desc = _safe_str(record.get("description_short"))
+    if short_desc:
+        return short_desc
+    return "تفاصيل هذه الباقة غير متوفرة حالياً."
+
+
+def _format_package_inclusions(record: dict[str, Any], *, query_norm: str = "") -> str:
+    name = _safe_str(record.get("package_name"))
+    full_desc = _safe_str(record.get("description_full"))
+    short_desc = _safe_str(record.get("description_short"))
+    included_count = record.get("included_count")
+
+    lines: list[str] = [name]
+
+    count_value: int | None = None
+    if isinstance(included_count, int):
+        count_value = included_count
+    elif isinstance(included_count, float):
+        count_value = int(included_count)
+    else:
+        txt = _safe_str(included_count)
+        if txt.isdigit():
+            count_value = int(txt)
+    if "كم تحليل" in query_norm and count_value is not None:
+        lines.extend(["", f"عدد التحاليل في الباقة: {count_value} تحليل."])
+
+    candidates: list[str] = []
+    for part in re.split(r"[\n\r]+", full_desc):
+        line = _safe_str(part)
+        if not line:
+            continue
+        if re.match(r"^\d+\s*[\.\)-]\s*", line):
+            candidates.append(line)
+            continue
+        if any(token in line for token in ("تشمل", "تحاليل", "تحليل", "contains", "include")):
+            candidates.append(line)
+
+    if not candidates and full_desc:
+        candidates = [s.strip() for s in re.split(r"[\.،\n]+", full_desc) if _safe_str(s)][:8]
+    if not candidates and short_desc:
+        candidates = [short_desc]
+
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for item in candidates:
+        key = _norm(item)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+
+    if deduped:
+        lines.append("")
+        lines.append("تشمل الباقة:")
+        for item in deduped[:10]:
+            if re.match(r"^\d+\s*[\.\)-]\s*", item):
+                lines.append(item)
+            else:
+                lines.append(f"- {item}")
+    elif len(lines) == 1:
+        lines.extend(["", "تفاصيل التحاليل المشمولة غير واضحة حالياً في البيانات."])
+
+    return "\n".join(lines)
+
+
 def _format_package_price(record: dict[str, Any]) -> str:
     name = _safe_str(record.get("package_name"))
     currency = _safe_str(record.get("currency") or "ريال")
@@ -890,6 +1071,164 @@ def _format_package_price(record: dict[str, Any]) -> str:
     if isinstance(price, (int, float)):
         return f"سعر {name}: {price:g} {currency}."
     return _PRICE_NOT_AVAILABLE
+
+
+def _format_audience_packages(
+    audience_label: str,
+    rows: list[dict[str, Any]],
+    *,
+    conversation_id: UUID | None = None,
+    limit: int = 20,
+) -> str:
+    if not rows:
+        return f"ما لقيت باقات {audience_label} حالياً."
+    _save_package_options(conversation_id, rows[:limit], query_type="package_audience")
+    lines = [f"الباقات المناسبة {audience_label}:"]
+    for idx, r in enumerate(rows[:limit], start=1):
+        lines.append(f"{idx}) {_safe_str(r.get('package_name'))}")
+    if len(rows) > limit:
+        lines.append(f"... يوجد أيضًا {len(rows) - limit} باقات إضافية.")
+    lines.append("اكتب اسم الباقة أو رقمها إذا تحب أعرض لك التفاصيل.")
+    return "\n".join(lines)
+
+
+def _format_goal_packages(
+    goal_label: str,
+    rows: list[dict[str, Any]],
+    *,
+    conversation_id: UUID | None = None,
+    limit: int = 20,
+) -> str:
+    if not rows:
+        return f"ما لقيت باقات {goal_label} حالياً."
+    _save_package_options(conversation_id, rows[:limit], query_type="package_goal")
+    lines = [f"الباقات المناسبة {goal_label}:"]
+    for idx, r in enumerate(rows[:limit], start=1):
+        lines.append(f"{idx}) {_safe_str(r.get('package_name'))}")
+    if len(rows) > limit:
+        lines.append(f"... يوجد أيضًا {len(rows) - limit} باقات إضافية.")
+    lines.append("اكتب اسم الباقة أو رقمها إذا تحب أعرض لك التفاصيل.")
+    return "\n".join(lines)
+
+
+def _find_packages_by_analyte(records: list[dict[str, Any]], analyte_terms: list[str]) -> list[dict[str, Any]]:
+    scored: list[tuple[int, dict[str, Any]]] = []
+    for row in records:
+        desc_blob = " ".join([
+            _safe_str(row.get("description_full")),
+            _safe_str(row.get("description_short")),
+        ])
+        desc_norm = _norm(desc_blob)
+        if not desc_norm:
+            continue
+        hit_count = 0
+        for term in analyte_terms:
+            t = _norm(term)
+            if t and t in desc_norm:
+                hit_count += 1
+        if hit_count > 0:
+            scored.append((hit_count, row))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [row for _, row in scored]
+
+
+def _format_packages_by_analyte(
+    analyte_terms: list[str],
+    rows: list[dict[str, Any]],
+    *,
+    conversation_id: UUID | None = None,
+    limit: int = 20,
+) -> str:
+    term_text = " / ".join(analyte_terms[:3])
+    if not rows:
+        return f"ما لقيت باقات تشمل {term_text} حالياً."
+    _save_package_options(conversation_id, rows[:limit], query_type="package_analyte")
+    lines = [f"الباقات التي تشمل {term_text}:"]
+    for idx, r in enumerate(rows[:limit], start=1):
+        lines.append(f"{idx}) {_safe_str(r.get('package_name'))}")
+    if len(rows) > limit:
+        lines.append(f"... يوجد أيضًا {len(rows) - limit} باقات إضافية.")
+    lines.append("اكتب اسم الباقة أو رقمها إذا تحب أعرض لك التفاصيل.")
+    return "\n".join(lines)
+
+
+def _extract_compare_targets(query: str) -> tuple[str, str] | None:
+    q = _norm(query)
+    if not q:
+        return None
+    if "الفرق بين" in q:
+        tail = q.split("الفرق بين", 1)[1].strip()
+        for sep in (" و ", " و", "و ", "/", "-", "vs"):
+            if sep in tail:
+                left, right = tail.split(sep, 1)
+                left = _safe_str(left)
+                right = _safe_str(right)
+                if left and right:
+                    return (left, right)
+    if "قارن" in q:
+        tail = q.split("قارن", 1)[1].strip()
+        for sep in (" و ", " و", "و ", "/", "-", "vs"):
+            if sep in tail:
+                left, right = tail.split(sep, 1)
+                left = _safe_str(left)
+                right = _safe_str(right)
+                if left and right:
+                    return (left, right)
+    return None
+
+
+def _find_top_scored_packages(query: str, records: list[dict[str, Any]], *, min_score: float = 3.0, limit: int = 5) -> list[dict[str, Any]]:
+    scored: list[tuple[float, dict[str, Any]]] = []
+    for row in records:
+        score = _score_package_match(query, row)
+        if score >= min_score:
+            scored.append((score, row))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for _, row in scored:
+        identity = _safe_str(row.get("id")) or _norm(_safe_str(row.get("package_name")))
+        if not identity or identity in seen:
+            continue
+        seen.add(identity)
+        out.append(row)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _format_package_comparison(left: dict[str, Any], right: dict[str, Any]) -> str:
+    def _price_text(row: dict[str, Any]) -> str:
+        price = row.get("price_number")
+        currency = _safe_str(row.get("currency") or "ريال")
+        if isinstance(price, (int, float)):
+            return f"{price:g} {currency}"
+        return "غير متوفر"
+
+    l_name = _safe_str(left.get("package_name"))
+    r_name = _safe_str(right.get("package_name"))
+    l_short = _safe_str(left.get("description_short")) or _safe_str(left.get("description_full"))
+    r_short = _safe_str(right.get("description_short")) or _safe_str(right.get("description_full"))
+    lines = [
+        f"مقارنة بين {l_name} و {r_name}:",
+        "",
+        f"1) {l_name}",
+        f"- السعر: {_price_text(left)}",
+        f"- الوصف المختصر: {l_short[:220] if l_short else 'غير متوفر'}",
+        "",
+        f"2) {r_name}",
+        f"- السعر: {_price_text(right)}",
+        f"- الوصف المختصر: {r_short[:220] if r_short else 'غير متوفر'}",
+    ]
+    return "\n".join(lines)
+
+
+def _format_alternative_packages(base_name: str, rows: list[dict[str, Any]], *, limit: int = 3) -> str:
+    lines = [f"باقات مشابهة لـ{base_name}:"]
+    for idx, row in enumerate(rows[:limit], start=1):
+        lines.append(f"{idx}) {_safe_str(row.get('package_name'))}")
+    lines.append("اكتب رقم الباقة أو اسمها إذا حاب تفاصيل أكثر.")
+    return "\n".join(lines)
 
 
 def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) -> dict[str, Any]:
@@ -917,15 +1256,18 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
 
     best_for_context = False
     remembered_package_label = ""
+    remembered_package_record: dict[str, Any] | None = None
     if conversation_id is not None:
         state = load_selection_state(conversation_id)
         best_for_context = _safe_str(state.get("query_type")) == "package_best_for"
         memory = load_entity_memory(conversation_id)
         if _safe_str(memory.get("last_intent")) == "package" and bool(memory.get("last_intent_has_entity")):
             remembered_package_label = _safe_str((memory.get("last_package") or {}).get("label"))
+            if remembered_package_label:
+                remembered_package_record = _find_package_by_label(remembered_package_label, records)
 
     if best_for_context and remembered_package_label:
-        remembered_record = _find_package_by_label(remembered_package_label, records)
+        remembered_record = remembered_package_record
         if remembered_record is not None:
             strong_best_for_followup = {"نعم", "ايوا", "ايوه", "تمام", "اوكي", "ok"}
             if query_norm in {_norm(v) for v in strong_best_for_followup}:
@@ -955,8 +1297,16 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
     general_like = _is_general_query(query_norm)
     general_listing_like = _is_general_listing_query(query_norm)
     best_for_query = _is_best_for_query(query_norm)
+    compare_query = _is_compare_query(query_norm)
+    alternatives_query = _is_alternatives_query(query_norm)
+    ambiguous_query = _is_ambiguous_package_query(query_norm)
     price_query = _is_price_query(query_norm)
+    inclusion_query = _is_inclusion_query(query_norm)
     detail_query = _is_detail_query(query_norm)
+    audience_terms = _detect_audience_terms(query_norm)
+    symptom_goal_terms = _detect_symptom_goal_query(query_norm)
+    analyte_terms = _extract_analyte_terms(query)
+    analyte_query = _is_analyte_query(query_norm, analyte_terms)
 
     # General list of all packages must win before specific matching.
     if general_listing_like and not price_query and not detail_query and not category:
@@ -982,6 +1332,54 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
             },
         }
 
+    if audience_terms and not price_query:
+        audience_label, terms = audience_terms
+        filtered_rows: list[dict[str, Any]] = []
+        for row in records:
+            blob = " ".join([
+                _safe_str(row.get("package_name")),
+                _safe_str(row.get("description_short")),
+                _safe_str(row.get("description_full")),
+            ])
+            blob_norm = _norm(blob)
+            if any(_norm(t) in blob_norm for t in terms):
+                filtered_rows.append(row)
+        if filtered_rows:
+            return {
+                "matched": True,
+                "answer": _format_audience_packages(audience_label, filtered_rows, conversation_id=conversation_id),
+                "route": "packages_audience",
+                "meta": {
+                    "query_type": "package_audience_query",
+                    "audience": audience_label,
+                    "results_count": len(filtered_rows),
+                },
+            }
+
+    if symptom_goal_terms and not price_query:
+        goal_label, terms = symptom_goal_terms
+        filtered_rows: list[dict[str, Any]] = []
+        for row in records:
+            blob = " ".join([
+                _safe_str(row.get("description_full")),
+                _safe_str(row.get("description_short")),
+                _safe_str(row.get("package_name")),
+            ])
+            blob_norm = _norm(blob)
+            if any(_norm(t) in blob_norm for t in terms):
+                filtered_rows.append(row)
+        if filtered_rows:
+            return {
+                "matched": True,
+                "answer": _format_goal_packages(goal_label, filtered_rows, conversation_id=conversation_id),
+                "route": "packages_goal",
+                "meta": {
+                    "query_type": "package_goal_query",
+                    "goal": goal_label,
+                    "results_count": len(filtered_rows),
+                },
+            }
+
     if best_for_query:
         scored = []
         for r in records:
@@ -1002,7 +1400,7 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
                     continue
                 seen.add(identity)
                 unique_top.append(row)
-                if len(unique_top) >= 2:
+                if len(unique_top) >= 3:
                     break
 
             _save_package_options(conversation_id, unique_top, query_type="package_best_for")
@@ -1014,8 +1412,82 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
                 "meta": {"query_type": "package_best_for_query"},
             }
 
+    if ambiguous_query and not price_query and not detail_query and not inclusion_query and not compare_query:
+        options = _find_top_scored_packages(query, records, min_score=3.0, limit=5)
+        if len(options) >= 2:
+            _save_package_options(conversation_id, options, query_type="package_ambiguity")
+            return {
+                "matched": True,
+                "answer": _format_ambiguous_package_options(options),
+                "route": "packages_ambiguous",
+                "meta": {
+                    "query_type": "package_ambiguity",
+                    "candidates_count": len(options),
+                },
+            }
+
+    if analyte_query:
+        analyte_rows = _find_packages_by_analyte(records, analyte_terms)
+        if analyte_rows:
+            return {
+                "matched": True,
+                "answer": _format_packages_by_analyte(analyte_terms, analyte_rows, conversation_id=conversation_id),
+                "route": "packages_by_analyte",
+                "meta": {
+                    "query_type": "package_analyte_query",
+                    "analyte_terms": analyte_terms[:5],
+                    "results_count": len(analyte_rows),
+                },
+            }
+
     specific_match = _find_specific_package(query, records)
     ambiguous_candidates = _find_ambiguous_package_candidates(query, records)
+
+    if compare_query:
+        compare_targets = _extract_compare_targets(query)
+        left_match: dict[str, Any] | None = None
+        right_match: dict[str, Any] | None = None
+        if compare_targets:
+            left_rows = _find_top_scored_packages(compare_targets[0], records, min_score=3.0, limit=1)
+            right_rows = _find_top_scored_packages(compare_targets[1], records, min_score=3.0, limit=1)
+            left_match = left_rows[0] if left_rows else None
+            right_match = right_rows[0] if right_rows else None
+        if left_match is None and specific_match is not None:
+            left_match = specific_match
+        if right_match is None and remembered_package_record is not None and (
+            left_match is None or _safe_str(remembered_package_record.get("id")) != _safe_str(left_match.get("id"))
+        ):
+            right_match = remembered_package_record
+        if left_match is not None and right_match is not None:
+            return {
+                "matched": True,
+                "answer": _format_package_comparison(left_match, right_match),
+                "route": "packages_compare",
+                "meta": {
+                    "query_type": "package_compare_query",
+                    "left_package": _safe_str(left_match.get("package_name")),
+                    "right_package": _safe_str(right_match.get("package_name")),
+                },
+            }
+
+    if alternatives_query:
+        base = specific_match or remembered_package_record
+        if base is not None:
+            base_name = _safe_str(base.get("package_name"))
+            candidates = _find_top_scored_packages(base_name, records, min_score=2.5, limit=6)
+            alternatives = [r for r in candidates if _safe_str(r.get("id")) != _safe_str(base.get("id"))]
+            if alternatives:
+                _save_package_options(conversation_id, alternatives[:5], query_type="package_alternatives")
+                return {
+                    "matched": True,
+                    "answer": _format_alternative_packages(base_name, alternatives, limit=5),
+                    "route": "packages_alternatives",
+                    "meta": {
+                        "query_type": "package_alternatives_query",
+                        "base_package": base_name,
+                        "results_count": len(alternatives[:5]),
+                    },
+                }
 
     if ambiguous_candidates:
         _save_package_options(conversation_id, ambiguous_candidates, query_type="package_ambiguity")
@@ -1055,6 +1527,49 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
             },
         }
 
+    if inclusion_query and specific_match is not None:
+        package_id = _safe_str(specific_match.get("id"))
+        return {
+            "matched": True,
+            "answer": _format_package_inclusions(specific_match, query_norm=query_norm),
+            "route": "packages_inclusions",
+            "meta": {
+                "query_type": "package_inclusion_query",
+                "matched_package_id": package_id,
+                "matched_package_name": _safe_str(specific_match.get("package_name")),
+                "category": _safe_str(specific_match.get("main_category")),
+            },
+        }
+
+    if price_query and remembered_package_record is not None:
+        remembered_id = _safe_str(remembered_package_record.get("id"))
+        return {
+            "matched": True,
+            "answer": _format_package_price(remembered_package_record),
+            "route": "packages_price",
+            "meta": {
+                "query_type": "package_price_query",
+                "matched_package_id": remembered_id,
+                "matched_package_name": _safe_str(remembered_package_record.get("package_name")),
+                "category": _safe_str(remembered_package_record.get("main_category")),
+                "price_available": isinstance(remembered_package_record.get("price_number"), (int, float)),
+            },
+        }
+
+    if inclusion_query and remembered_package_record is not None:
+        remembered_id = _safe_str(remembered_package_record.get("id"))
+        return {
+            "matched": True,
+            "answer": _format_package_inclusions(remembered_package_record, query_norm=query_norm),
+            "route": "packages_inclusions",
+            "meta": {
+                "query_type": "package_inclusion_query",
+                "matched_package_id": remembered_id,
+                "matched_package_name": _safe_str(remembered_package_record.get("package_name")),
+                "category": _safe_str(remembered_package_record.get("main_category")),
+            },
+        }
+
     if specific_match is not None:
         package_id = _safe_str(specific_match.get("id"))
         if best_for_context and not detail_query:
@@ -1081,15 +1596,41 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
                     "category": _safe_str(specific_match.get("main_category")),
                 },
             }
+        if detail_query:
+            return {
+                "matched": True,
+                "answer": _format_package_full_details(specific_match),
+                "route": "packages_specific_details",
+                "meta": {
+                    "query_type": "package_specific_details",
+                    "matched_package_id": package_id,
+                    "matched_package_name": _safe_str(specific_match.get("package_name")),
+                    "category": _safe_str(specific_match.get("main_category")),
+                },
+            }
         return {
             "matched": True,
-            "answer": _format_package_details(specific_match),
+            "answer": _format_package_preview(specific_match),
             "route": "packages_specific",
             "meta": {
                 "query_type": "package_specific",
                 "matched_package_id": package_id,
                 "matched_package_name": _safe_str(specific_match.get("package_name")),
                 "category": _safe_str(specific_match.get("main_category")),
+            },
+        }
+
+    if detail_query and remembered_package_record is not None:
+        remembered_id = _safe_str(remembered_package_record.get("id"))
+        return {
+            "matched": True,
+            "answer": _format_package_full_details(remembered_package_record),
+            "route": "packages_specific_details",
+            "meta": {
+                "query_type": "package_specific_details",
+                "matched_package_id": remembered_id,
+                "matched_package_name": _safe_str(remembered_package_record.get("package_name")),
+                "category": _safe_str(remembered_package_record.get("main_category")),
             },
         }
 
