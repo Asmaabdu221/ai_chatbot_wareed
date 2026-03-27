@@ -344,6 +344,7 @@ def _resolve_numeric_selection_from_context(
             conversation_id=conversation_id,
         )
         if bool(packages_business_result.get("matched")):
+            top_package = (list(packages_business_result.get("results") or []) or [{}])[0]
             return {
                 "reply": format_runtime_answer(_safe_str(packages_business_result.get("answer"))),
                 "route": "packages_business",
@@ -353,6 +354,8 @@ def _resolve_numeric_selection_from_context(
                     "query_type": _safe_str(packages_business_result.get("query_type")),
                     "results_count": len(list(packages_business_result.get("results") or [])),
                     "selection_number": selection_number,
+                    "matched_package_id": _safe_str((top_package or {}).get("id")),
+                    "matched_package_name": _safe_str((top_package or {}).get("package_name")),
                 },
             }
         packages_result = resolve_packages_query(
@@ -501,6 +504,7 @@ def route_runtime_message(
                     conversation_id=conversation_id,
                 )
                 if bool(packages_business_result.get("matched")):
+                    top_package = (list(packages_business_result.get("results") or []) or [{}])[0]
                     return {
                         "reply": format_runtime_answer(_safe_str(packages_business_result.get("answer"))),
                         "route": "packages_business",
@@ -509,6 +513,8 @@ def route_runtime_message(
                         "meta": {
                             "query_type": _safe_str(packages_business_result.get("query_type")),
                             "results_count": len(list(packages_business_result.get("results") or [])),
+                            "matched_package_id": _safe_str((top_package or {}).get("id")),
+                            "matched_package_name": _safe_str((top_package or {}).get("package_name")),
                         },
                     }
                 packages_result = resolve_packages_query(text, conversation_id=conversation_id)
@@ -682,6 +688,7 @@ def route_runtime_message(
                     conversation_id=conversation_id,
                 )
                 if bool(packages_business_result.get("matched")):
+                    top_package = (list(packages_business_result.get("results") or []) or [{}])[0]
                     return {
                         "reply": format_runtime_answer(_safe_str(packages_business_result.get("answer"))),
                         "route": "packages_business",
@@ -690,6 +697,8 @@ def route_runtime_message(
                         "meta": {
                             "query_type": _safe_str(packages_business_result.get("query_type")),
                             "results_count": len(list(packages_business_result.get("results") or [])),
+                            "matched_package_id": _safe_str((top_package or {}).get("id")),
+                            "matched_package_name": _safe_str((top_package or {}).get("package_name")),
                         },
                     }
                 packages_result = resolve_packages_query(text, conversation_id=conversation_id)

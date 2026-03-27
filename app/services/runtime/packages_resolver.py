@@ -300,6 +300,7 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
             "meta": {
                 "query_type": "package_price_query",
                 "matched_package_id": package_id,
+                "matched_package_name": _safe_str(specific_match.get("package_name")),
                 "category": _safe_str(specific_match.get("main_category")),
                 "price_available": isinstance(specific_match.get("price_number"), (int, float)),
             },
@@ -314,6 +315,7 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
             "meta": {
                 "query_type": "package_specific",
                 "matched_package_id": package_id,
+                "matched_package_name": _safe_str(specific_match.get("package_name")),
                 "category": _safe_str(specific_match.get("main_category")),
             },
         }

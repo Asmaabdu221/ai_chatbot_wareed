@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from app.services.runtime.entity_memory import update_entity_memory
 from app.services.runtime.results_from_report_service import interpret_uploaded_lab_report_text
 from uuid import UUID
 
@@ -188,6 +189,37 @@ def run_message_runtime_orchestration(
             runtime_result.get("matched"),
             runtime_result.get("meta"),
         )
+        if bool(runtime_result.get("matched")):
+            source = str(runtime_result.get("source") or "").strip()
+            meta = dict(runtime_result.get("meta") or {})
+            if source == "branches":
+                update_entity_memory(
+                    conversation_id,
+                    last_intent="branch",
+                    last_branch={
+                        "id": str(meta.get("matched_branch_id") or meta.get("id") or "").strip(),
+                        "label": str(meta.get("branch_name") or "").strip(),
+                        "city": str(meta.get("city") or "").strip(),
+                    },
+                )
+            elif source in {"tests", "tests_business"}:
+                update_entity_memory(
+                    conversation_id,
+                    last_intent="test",
+                    last_test={
+                        "id": str(meta.get("matched_test_id") or "").strip(),
+                        "label": str(meta.get("matched_test_name") or "").strip(),
+                    },
+                )
+            elif source in {"packages", "packages_business"}:
+                update_entity_memory(
+                    conversation_id,
+                    last_intent="package",
+                    last_package={
+                        "id": str(meta.get("matched_package_id") or "").strip(),
+                        "label": str(meta.get("matched_package_name") or "").strip(),
+                    },
+                )
         deps.logger.debug("runtime route path=%s", runtime_result.get("route"))
         return deps.save_assistant_reply(str(runtime_result.get("reply") or "").strip())
 
