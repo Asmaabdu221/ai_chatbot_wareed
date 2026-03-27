@@ -36,6 +36,18 @@ _GENERAL_HINTS = (
     "package list",
 )
 
+_GENERAL_LISTING_HINTS = (
+    "وش الباقات",
+    "ايش الباقات",
+    "ماهي الباقات",
+    "ما هي الباقات",
+    "انواع الباقات",
+    "الباقات المتوفرة",
+    "الباقات المتاحة",
+    "الباقات اللي عندكم",
+    "عندكم باقات",
+)
+
 _PRICE_HINTS = (
     "كم سعر",
     "كم اسعار",
@@ -416,6 +428,10 @@ def _is_general_query(query_norm: str) -> bool:
     return any(_norm(h) in query_norm for h in _GENERAL_HINTS)
 
 
+def _is_general_listing_query(query_norm: str) -> bool:
+    return any(_norm(h) in query_norm for h in _GENERAL_LISTING_HINTS)
+
+
 def _is_detail_query(query_norm: str) -> bool:
     return any(_norm(h) in query_norm for h in _DETAIL_HINTS)
 
@@ -749,6 +765,7 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
     category = _detect_category(query_norm, records)
     category_like = _is_category_like_query(query_norm, category)
     general_like = _is_general_query(query_norm)
+    general_listing_like = _is_general_listing_query(query_norm)
     price_query = _is_price_query(query_norm)
     detail_query = _is_detail_query(query_norm)
     specific_match = _find_specific_package(query, records)
@@ -763,6 +780,19 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
             "meta": {
                 "query_type": "package_category",
                 "category": category,
+            },
+        }
+
+    # Explicit package-listing requests should return the general overview
+    # before specific package matching.
+    if general_listing_like and not price_query and not category:
+        return {
+            "matched": True,
+            "answer": _format_general_overview(records, conversation_id),
+            "route": "packages_general",
+            "meta": {
+                "query_type": "package_general",
+                "categories_count": len({_safe_str(r.get('main_category')) for r in records}),
             },
         }
 
