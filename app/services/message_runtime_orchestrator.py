@@ -12,6 +12,8 @@ from typing import Any, Callable
 from app.services.runtime.results_from_report_service import interpret_uploaded_lab_report_text
 from uuid import UUID
 
+_REPORT_ATTACHMENT_FALLBACK = "لم أتمكن من قراءة القيم بشكل واضح من التقرير..."
+
 
 @dataclass(frozen=True)
 class RuntimeOrchestrationDeps:
@@ -73,6 +75,17 @@ def run_message_runtime_orchestration(
     deps: RuntimeOrchestrationDeps,
 ) -> Any:
     """Execute the existing runtime orchestration flow and return saved reply tuple."""
+    if attachment_content:
+        if (extracted_context or "").strip():
+            bridged = interpret_uploaded_lab_report_text(extracted_context)
+            if bool(bridged.get("matched")):
+                deps.logger.info("report interpretation bridge matched | source=results_from_report_service")
+                return deps.save_assistant_reply(str(bridged.get("answer") or "").strip())
+            deps.logger.info("report interpretation bridge did not match | source=results_from_report_service")
+            return deps.save_assistant_reply(_REPORT_ATTACHMENT_FALLBACK)
+        deps.logger.info("report interpretation skipped | reason=empty_extracted_context")
+        return deps.save_assistant_reply(_REPORT_ATTACHMENT_FALLBACK)
+
     deps.logger.info(
         "orchestration checkpoint | called=yes | runtime_mode_active=%s | has_attachment=%s | attachment_filename=%s | extracted_present=%s | extracted_len=%s",
         bool(system_rebuild_mode or faq_only_runtime_mode),
