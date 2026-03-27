@@ -26,6 +26,7 @@ from app.services.runtime.branches_semantic_intent import (
     is_confident_branch_intent,
 )
 from app.services.runtime.faq_resolver import resolve_faq
+from app.services.runtime.ollama_intent_classifier import classify_intent
 from app.services.runtime.packages_business_engine import handle_packages_business_query
 from app.services.runtime.packages_resolver import resolve_packages_query
 from app.services.runtime.results_engine import interpret_result_query
@@ -495,6 +496,119 @@ def _resolve_numeric_selection_from_context(
 
     return None
 
+
+def _has_strong_keyword_conflict(user_text: str, intent: str) -> bool:
+    text_norm = normalize_arabic(user_text)
+    if not text_norm:
+        return False
+    has_test_signal = any(token in text_norm for token in ("تحليل", "تحاليل", "فحص", "اختبار"))
+    has_package_signal = any(token in text_norm for token in ("باقه", "باقة", "باقات", "package"))
+    has_branch_signal = any(token in text_norm for token in ("فرع", "فروع", "موقع", "حي", "العنوان"))
+    if has_test_signal and intent != "test":
+        return True
+    if has_package_signal and intent != "package":
+        return True
+    if has_branch_signal and intent != "branch":
+        return True
+    return False
+
+
+def _try_ollama_classifier_fallback(
+    user_text: str,
+    *,
+    conversation_id: UUID | None,
+) -> dict[str, Any] | None:
+    raw_text = _safe_str(user_text)
+    if not raw_text:
+        return None
+
+    memory = load_entity_memory(conversation_id)
+    cls = classify_intent(raw_text, memory)
+    print("AI classifier:", cls)
+
+    intent = _safe_str((cls or {}).get("intent")).lower()
+    try:
+        confidence = float((cls or {}).get("confidence") or 0.0)
+    except (TypeError, ValueError):
+        confidence = 0.0
+
+    if confidence < 0.85:
+        return None
+    if intent not in {"test", "package", "branch", "faq", "symptoms", "results", "unknown"}:
+        return None
+    if _has_strong_keyword_conflict(raw_text, intent):
+        return None
+    if intent in {"faq", "symptoms", "results", "unknown"}:
+        return None
+
+    if intent == "test":
+        tests_business_result = resolve_tests_business_query(
+            raw_text,
+            conversation_id=conversation_id,
+        )
+        if bool(tests_business_result.get("matched")):
+            return {
+                "reply": format_runtime_answer(_safe_str(tests_business_result.get("answer"))),
+                "route": _safe_str(tests_business_result.get("route")) or "tests_business",
+                "source": "tests_business",
+                "matched": True,
+                "meta": _tests_business_meta(tests_business_result.get("meta") or {}),
+            }
+        tests_result = resolve_tests_query(raw_text, conversation_id=conversation_id)
+        if bool(tests_result.get("matched")):
+            return {
+                "reply": format_runtime_answer(_safe_str(tests_result.get("answer"))),
+                "route": _safe_str(tests_result.get("route")) or "tests",
+                "source": "tests",
+                "matched": True,
+                "meta": _tests_meta(tests_result.get("meta") or {}),
+            }
+        return None
+
+    if intent == "package":
+        packages_business_result = handle_packages_business_query(
+            raw_text,
+            conversation_id=conversation_id,
+        )
+        if bool(packages_business_result.get("matched")):
+            top_package = (list(packages_business_result.get("results") or []) or [{}])[0]
+            return {
+                "reply": format_runtime_answer(_safe_str(packages_business_result.get("answer"))),
+                "route": "packages_business",
+                "source": "packages_business",
+                "matched": True,
+                "meta": {
+                    "query_type": _safe_str(packages_business_result.get("query_type")),
+                    "results_count": len(list(packages_business_result.get("results") or [])),
+                    "matched_package_id": _safe_str((top_package or {}).get("id")),
+                    "matched_package_name": _safe_str((top_package or {}).get("package_name")),
+                },
+            }
+        packages_result = resolve_packages_query(raw_text, conversation_id=conversation_id)
+        if bool(packages_result.get("matched")):
+            return {
+                "reply": format_runtime_answer(_safe_str(packages_result.get("answer"))),
+                "route": _safe_str(packages_result.get("route")) or "packages",
+                "source": "packages",
+                "matched": True,
+                "meta": dict(packages_result.get("meta") or {}),
+            }
+        return None
+
+    if intent == "branch":
+        branches_result = resolve_branches_query(raw_text, conversation_id=conversation_id)
+        if bool(branches_result.get("matched")):
+            return {
+                "reply": format_runtime_answer(_safe_str(branches_result.get("answer"))),
+                "route": _safe_str(branches_result.get("route")) or "branches",
+                "source": "branches",
+                "matched": True,
+                "meta": dict(branches_result.get("meta") or {}),
+            }
+        return None
+
+    return None
+
 def route_runtime_message(
     user_text: str,
     *,
@@ -699,6 +813,12 @@ def route_runtime_message(
                 is_package_like,
                 is_tests_like,
             )
+            classifier_result = _try_ollama_classifier_fallback(
+                _safe_str(user_text),
+                conversation_id=conversation_id,
+            )
+            if classifier_result is not None:
+                return classifier_result
             # Do not let FAQ hijack numeric/branch/location/package/tests queries.
             return {
                 "reply": format_runtime_answer(get_faq_no_match_message()),
@@ -861,6 +981,12 @@ def route_runtime_message(
                         "matched": True,
                         "meta": _tests_meta(tests_result.get("meta") or {}),
                     }
+        classifier_result = _try_ollama_classifier_fallback(
+            _safe_str(user_text),
+            conversation_id=conversation_id,
+        )
+        if classifier_result is not None:
+            return classifier_result
         return {
             "reply": format_runtime_answer(get_faq_no_match_message()),
             "route": "faq_only_no_match",
