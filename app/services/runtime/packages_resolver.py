@@ -447,9 +447,34 @@ def _is_detail_query(query_norm: str) -> bool:
 
 def _is_best_for_query(query_norm: str) -> bool:
     keywords = [
-        "افضل", "أفضل", "أنسب", "انسب",
-        "وش تنصح", "تنصحني", "اقترح", "ترشح",
-        "best", "recommend", "recommended",
+        "ايش افضل",
+        "ايش أفضل",
+        "وش افضل",
+        "وش أفضل",
+        "ايش احسن",
+        "وش احسن",
+        "ايش أنسب",
+        "وش أنسب",
+        "وش تنصحني",
+        "ايش تنصحني",
+        "تنصحني",
+        "وش مناسب",
+        "ايش مناسب",
+        "يفيد",
+        "يفيدني",
+        "شيء لـ",
+        "شي لـ",
+        "ابي شيء لـ",
+        "ابغى شيء لـ",
+        "ابي باقة لـ",
+        "ابغى باقة لـ",
+        "وش الأفضل لـ",
+        "ايش الأفضل لـ",
+        "احسن باقة لـ",
+        "افضل باقة لـ",
+        "best package",
+        "recommend",
+        "recommended",
     ]
     return any(_norm(k) in query_norm for k in keywords)
 
@@ -485,6 +510,17 @@ def _is_category_like_query(query_norm: str, detected_category: str) -> bool:
         "تحاليل جينية",
     )
     return any(_norm(t) in query_norm for t in category_tokens)
+
+
+def _is_package_like_offering(record: dict[str, Any]) -> bool:
+    offering = _norm(record.get("offering_type"))
+    if not offering:
+        return False
+    excluded_tokens = ("single_test", "single", "individual", "test")
+    if any(token in offering for token in excluded_tokens):
+        return False
+    included_tokens = ("package", "genetic_package", "bundle", "باقه", "باقة", "باقات")
+    return any(token in offering for token in included_tokens)
 
 
 def _score_package_match(query: str, record: dict[str, Any]) -> float:
@@ -606,6 +642,70 @@ def _find_specific_package(query: str, records: list[dict[str, Any]]) -> dict[st
     return best
 
 
+def _find_ambiguous_package_candidates(query: str, records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    scored: list[tuple[float, dict[str, Any]]] = []
+    for record in records:
+        score = _score_package_match(query, record)
+        if score >= 8.0:
+            scored.append((score, record))
+    if len(scored) < 2:
+        return []
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    top_score = scored[0][0]
+    close_candidates = [row for score, row in scored if (top_score - score) <= 1.5]
+    if len(close_candidates) < 2:
+        return []
+    return close_candidates[:5]
+
+
+def _format_ambiguous_package_options(candidates: list[dict[str, Any]]) -> str:
+    lines = ["لقيت أكثر من باقة قريبة:"]
+    for idx, row in enumerate(candidates, start=1):
+        lines.append(f"{idx}) {_safe_str(row.get('package_name'))}")
+    lines.append("اكتب الرقم أو اسم الباقة التي تقصدها.")
+    return "\n".join(lines)
+
+
+def _extract_best_for_topic(query: str) -> str:
+    text = _norm(query)
+    if not text:
+        return ""
+    lead_phrases = (
+        "ايش افضل", "ايش أفضل", "وش افضل", "وش أفضل",
+        "ايش احسن", "وش احسن", "ايش أنسب", "وش أنسب",
+        "وش تنصحني", "ايش تنصحني", "تنصحني",
+        "وش مناسب", "ايش مناسب",
+        "وش الأفضل ل", "ايش الأفضل ل",
+        "احسن باقة ل", "افضل باقة ل",
+        "ابي شيء ل", "ابغى شيء ل", "ابي باقة ل", "ابغى باقة ل",
+    )
+    for phrase in lead_phrases:
+        p = _norm(phrase)
+        if p and p in text:
+            tail = text.split(p, 1)[1].strip()
+            if tail:
+                return tail
+    if " ل" in text:
+        tail = text.split(" ل", 1)[1].strip()
+        if tail:
+            return tail
+    return ""
+
+
+def _format_best_for_options(query: str, rows: list[dict[str, Any]]) -> str:
+    topic = _extract_best_for_topic(query)
+    if topic:
+        lines = [f"أفضل الباقات لـ{topic}:"]
+    else:
+        lines = ["هذي أفضل الباقات المناسبة:"]
+    for idx, row in enumerate(rows, start=1):
+        lines.append(f"{idx}) {_safe_str(row.get('package_name'))}")
+    lines.append("")
+    lines.append("اختر رقم الباقة اللي حاب تعرف عنها أكثر.")
+    return "\n".join(lines)
+
+
 def _save_package_options(conversation_id: UUID | None, rows: list[dict[str, Any]], query_type: str) -> None:
     if conversation_id is None or not rows:
         return
@@ -681,25 +781,21 @@ def _format_category_packages(
 
 def _format_package_details(record: dict[str, Any]) -> str:
     name = _safe_str(record.get("package_name"))
-    category = _safe_str(record.get("main_category"))
-    offering_type = _safe_str(record.get("offering_type") or "package")
-    desc = _safe_str(record.get("description_short")) or _safe_str(record.get("description_full"))
-    currency = _safe_str(record.get("currency") or "ريال")
-    price = record.get("price_number")
+    short_desc = _safe_str(record.get("description_short"))
+    full_desc = _safe_str(record.get("description_full"))
 
-    lines = [
-        f"{name}",
-        f"الفئة: {category}" if category else "",
-        f"النوع: {offering_type}" if offering_type else "",
-    ]
-    if desc:
-        lines.append(f"الوصف: {desc}")
-    if isinstance(price, (int, float)):
-        lines.append(f"السعر: {price:g} {currency}")
-    else:
-        lines.append(_PRICE_NOT_AVAILABLE)
-
-    return "\n".join([line for line in lines if line])
+    lines = [name]
+    if short_desc:
+        lines.append("")
+        lines.append(short_desc)
+    if full_desc and full_desc != short_desc:
+        lines.append("")
+        lines.append(full_desc)
+    lines.append("")
+    lines.append("إذا حاب تعرف السعر أو تفاصيل أكثر، اكتب:")
+    lines.append("- السعر")
+    lines.append("- التفاصيل")
+    return "\n".join(lines)
 
 
 def _format_package_price(record: dict[str, Any]) -> str:
@@ -769,35 +865,49 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
     if best_for_query:
         scored = []
         for r in records:
+            if not _is_package_like_offering(r):
+                continue
             score = _score_package_match(query, r)
             if score > 2:
                 scored.append((score, r))
 
         if scored:
             scored.sort(key=lambda x: x[0], reverse=True)
-            top = [r for _, r in scored[:2]]
+            unique_top: list[dict[str, Any]] = []
+            seen: set[str] = set()
+            for _, row in scored:
+                row_id = _safe_str(row.get("matched_package_id")) or _safe_str(row.get("id"))
+                identity = row_id or _norm(_safe_str(row.get("package_name")))
+                if not identity or identity in seen:
+                    continue
+                seen.add(identity)
+                unique_top.append(row)
+                if len(unique_top) >= 2:
+                    break
 
-            lines = ["أنسب الباقات لك:"]
-            for idx, r in enumerate(top, start=1):
-                name = _safe_str(r.get("package_name"))
-                price = r.get("price_number")
-                currency = _safe_str(r.get("currency") or "ريال")
-
-                if isinstance(price, (int, float)):
-                    lines.append(f"{idx}) {name} - {price:g} {currency}")
-                else:
-                    lines.append(f"{idx}) {name}")
-
-            lines.append("اكتب اسم الباقة أو رقمها لعرض التفاصيل.")
+            _save_package_options(conversation_id, unique_top, query_type="package_best_for")
 
             return {
                 "matched": True,
-                "answer": "\n".join(lines),
+                "answer": _format_best_for_options(query, unique_top),
                 "route": "packages_best_for",
                 "meta": {"query_type": "package_best_for_query"},
             }
 
     specific_match = _find_specific_package(query, records)
+    ambiguous_candidates = _find_ambiguous_package_candidates(query, records)
+
+    if ambiguous_candidates:
+        _save_package_options(conversation_id, ambiguous_candidates, query_type="package_ambiguity")
+        return {
+            "matched": True,
+            "answer": _format_ambiguous_package_options(ambiguous_candidates),
+            "route": "packages_ambiguous",
+            "meta": {
+                "query_type": "package_ambiguity",
+                "candidates_count": len(ambiguous_candidates),
+            },
+        }
 
     if price_query and specific_match is not None:
         package_id = _safe_str(specific_match.get("id"))
