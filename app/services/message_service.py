@@ -3710,6 +3710,7 @@ def send_message_with_attachment(
         ai_prompt=ai_prompt,
         attachment_content=attachment_content,
         attachment_filename=attachment_filename,
+        attachment_content_type=attachment_type,
         extracted_context=extracted_context,
         conversation_id=conversation_id,
         recent_runtime_messages=recent_runtime_messages,

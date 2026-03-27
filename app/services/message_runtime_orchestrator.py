@@ -6,13 +6,46 @@ message_service while preserving behavior.
 
 from __future__ import annotations
 
+import json
+from datetime import datetime, timezone
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable
 
 from app.services.runtime.results_from_report_service import interpret_uploaded_lab_report_text
 from uuid import UUID
 
 _REPORT_ATTACHMENT_FALLBACK = "لم أتمكن من قراءة القيم بشكل واضح من التقرير..."
+_REPORT_DEBUG_DIR = Path("app/data/runtime/debug/report_interpretation")
+
+
+def _persist_report_debug_snapshot(
+    *,
+    attachment_filename: str | None,
+    attachment_content_type: str | None,
+    extracted_context: str,
+    bridged_result: dict[str, Any] | None,
+    matched: bool,
+    final_answer: str,
+) -> None:
+    """Persist a temporary debug snapshot for attachment-based report interpretation."""
+    try:
+        _REPORT_DEBUG_DIR.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        snapshot_path = _REPORT_DEBUG_DIR / f"report_debug_{ts}.json"
+        payload = {
+            "timestamp_utc": ts,
+            "attachment_filename": attachment_filename or "",
+            "attachment_content_type": attachment_content_type or "",
+            "extracted_context_preview": (extracted_context or "")[:4000],
+            "matched": bool(matched),
+            "final_answer": final_answer or "",
+            "results_debug": dict((bridged_result or {}).get("debug") or {}),
+        }
+        snapshot_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        # Debug instrumentation must never affect runtime behavior.
+        return
 
 
 @dataclass(frozen=True)
@@ -66,6 +99,7 @@ def run_message_runtime_orchestration(
     ai_prompt: str,
     attachment_content: bytes | None,
     attachment_filename: str | None,
+    attachment_content_type: str | None,
     extracted_context: str,
     conversation_id: UUID,
     recent_runtime_messages: list[dict[str, str]],
@@ -80,10 +114,35 @@ def run_message_runtime_orchestration(
             bridged = interpret_uploaded_lab_report_text(extracted_context)
             if bool(bridged.get("matched")):
                 deps.logger.info("report interpretation bridge matched | source=results_from_report_service")
-                return deps.save_assistant_reply(str(bridged.get("answer") or "").strip())
+                final_answer = str(bridged.get("answer") or "").strip()
+                _persist_report_debug_snapshot(
+                    attachment_filename=attachment_filename,
+                    attachment_content_type=attachment_content_type,
+                    extracted_context=extracted_context,
+                    bridged_result=bridged,
+                    matched=True,
+                    final_answer=final_answer,
+                )
+                return deps.save_assistant_reply(final_answer)
             deps.logger.info("report interpretation bridge did not match | source=results_from_report_service")
+            _persist_report_debug_snapshot(
+                attachment_filename=attachment_filename,
+                attachment_content_type=attachment_content_type,
+                extracted_context=extracted_context,
+                bridged_result=bridged,
+                matched=False,
+                final_answer=_REPORT_ATTACHMENT_FALLBACK,
+            )
             return deps.save_assistant_reply(_REPORT_ATTACHMENT_FALLBACK)
         deps.logger.info("report interpretation skipped | reason=empty_extracted_context")
+        _persist_report_debug_snapshot(
+            attachment_filename=attachment_filename,
+            attachment_content_type=attachment_content_type,
+            extracted_context=extracted_context,
+            bridged_result=None,
+            matched=False,
+            final_answer=_REPORT_ATTACHMENT_FALLBACK,
+        )
         return deps.save_assistant_reply(_REPORT_ATTACHMENT_FALLBACK)
 
     deps.logger.info(
