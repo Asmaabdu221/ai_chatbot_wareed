@@ -161,7 +161,7 @@ const MessageList = ({
       {/* Ramadan Watermark */}
       <div
         className="ramadan-watermark"
-        style={{ backgroundImage: "url('/images/ramadan.png')" }}
+        style={{ backgroundColor: '#f8fafc' }}
         aria-hidden="true"
       />
       {messages.length === 0 && !isSending && !isFetching && (
