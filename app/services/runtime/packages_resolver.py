@@ -917,16 +917,11 @@ def _format_general_overview(
     lines = ["الباقات المتاحة حاليًا:"]
     for idx, r in enumerate(rows[:limit], start=1):
         name = _safe_str(r.get("package_name"))
-        price = r.get("price_number")
-        currency = _safe_str(r.get("currency") or "ريال")
-        if isinstance(price, (int, float)):
-            lines.append(f"{idx}) {name} - {price:g} {currency}")
-        else:
-            lines.append(f"{idx}) {name}")
+        lines.append(f"{idx}) {name}")
 
     if len(rows) > limit:
         lines.append(f"... يوجد أيضًا {len(rows) - limit} باقات إضافية.")
-    lines.append("اكتب اسم الباقة مباشرة أو رقمها أو الكلمات الأقرب لها عشان أعرض التفاصيل.")
+    lines.append("اكتب اسم الباقة أو رقمها إذا حاب أعرض لك التفاصيل.")
     return "\n".join(lines)
 
 
