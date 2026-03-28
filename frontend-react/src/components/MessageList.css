@@ -11,18 +11,16 @@
 /* Seasonal Theme: Ramadan Watermark */
 .ramadan-watermark {
   position: fixed;
-  top: 55%;
-  left: 20px;
-  /* Aligned to the left */
-  transform: translateY(-50%);
-  width: min(500px, 90vw);
-  /* Enlarged slightly */
-  height: min(500px, 90vh);
-  background-size: contain;
+  top: 0;
+  left: 0;
+  transform: none;
+  width: 100%;
+  min-height: 100vh;
+  height: 100vh;
+  background-size: 100% 100%;
   background-repeat: no-repeat;
-  background-position: left center;
+  background-position: center center;
   opacity: 0.20;
-  /* More visible (less transparent) */
   pointer-events: none;
   z-index: 0;
 }
