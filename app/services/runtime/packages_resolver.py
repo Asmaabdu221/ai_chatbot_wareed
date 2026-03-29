@@ -737,6 +737,73 @@ def _find_specific_package(query: str, records: list[dict[str, Any]]) -> dict[st
     return best
 
 
+def _extract_specific_package_candidate(query: str) -> str:
+    """Strip lead-in wording and keep likely package-name phrase only."""
+    q = _norm(query)
+    if not q:
+        return ""
+    cleanup_prefixes = (
+        "ايش هي",
+        "وش هي",
+        "عرفني على",
+        "ممكن",
+        "ابغى",
+        "ابي",
+        "عن",
+        "باقة",
+        "باقه",
+        "package",
+    )
+    candidate = q
+    changed = True
+    while changed and candidate:
+        changed = False
+        for prefix in cleanup_prefixes:
+            p = _norm(prefix)
+            if p and candidate.startswith(p):
+                candidate = candidate[len(p):].strip()
+                changed = True
+    return re.sub(r"\s+", " ", candidate).strip()
+
+
+def _find_specific_package_by_name_pass(query: str, records: list[dict[str, Any]]) -> dict[str, Any] | None:
+    candidate = _extract_specific_package_candidate(query)
+    if not candidate:
+        return None
+
+    best: dict[str, Any] | None = None
+    best_score = -1.0
+    cand_tokens = set(_tokenize(candidate))
+    if not cand_tokens:
+        return None
+
+    for row in records:
+        name = _safe_str(row.get("package_name"))
+        name_norm = _safe_str(row.get("package_name_norm")) or _norm(name)
+        if not name_norm:
+            continue
+        if candidate == name_norm:
+            return row
+        if candidate in name_norm or name_norm in candidate:
+            return row
+
+        name_tokens = set(_tokenize(name_norm))
+        overlap = cand_tokens.intersection(name_tokens)
+        score = float(len(overlap))
+        if cand_tokens and overlap:
+            score += len(overlap) / max(1.0, float(len(cand_tokens)))
+        if score > best_score:
+            best_score = score
+            best = row
+
+    if best is None:
+        return None
+    # Require near-exact lexical overlap for this direct-name pass.
+    if best_score < 2.0:
+        return None
+    return best
+
+
 def _find_ambiguous_package_candidates(query: str, records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     scored: list[tuple[float, dict[str, Any]]] = []
     for record in records:
@@ -877,18 +944,36 @@ def _find_package_by_label(label: str, records: list[dict[str, Any]]) -> dict[st
 def _format_best_for_selected_preview(record: dict[str, Any]) -> str:
     name = _safe_str(record.get("package_name"))
     short_desc = _safe_str(record.get("description_short"))
+    name_norm = _norm(name)
+    def _is_meaningful_description(text: str) -> bool:
+        t = _safe_str(text)
+        if not t:
+            return False
+        t_norm = _norm(t)
+        if not t_norm:
+            return False
+        if t_norm == name_norm:
+            return False
+        if t_norm in {f"{name_norm}:", f"{name_norm} -", f"{name_norm} –", f"{name_norm} —"}:
+            return False
+        return True
+
+    if not _is_meaningful_description(short_desc):
+        short_desc = ""
     if not short_desc:
         full_desc = _safe_str(record.get("description_full"))
         if full_desc:
-            first_sentence = ""
             for part in re.split(r"[\.،\n]+", full_desc):
                 candidate = _safe_str(part)
-                if candidate:
-                    first_sentence = candidate
+                if _is_meaningful_description(candidate):
+                    short_desc = candidate
                     break
-            short_desc = first_sentence or full_desc[:150].strip()
+            if not short_desc:
+                clipped = _safe_str(full_desc[:150])
+                if _is_meaningful_description(clipped):
+                    short_desc = clipped
     if not short_desc:
-        short_desc = "هذه الباقة تساعدك في تقييم حالتك بشكل شامل."
+        short_desc = "هذه الباقة تساعد في تقييم الحالة بشكل شامل."
     if short_desc:
         short_desc = re.sub(rf"^\s*{re.escape(name)}\s*[:\-–—]?\s*", "", short_desc, flags=re.IGNORECASE).strip()
     lines = [name]
@@ -1384,6 +1469,9 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
     analyte_terms = _extract_analyte_terms(query)
     analyte_query = _is_analyte_query(query_norm, analyte_terms)
     specific_match = _find_specific_package(query, records)
+    direct_name_match = _find_specific_package_by_name_pass(query, records)
+    if direct_name_match is not None:
+        specific_match = direct_name_match
     ambiguous_candidates = _find_ambiguous_package_candidates(query, records)
     has_package_keyword = any(k in query_norm for k in ("باقة", "باقه", "package"))
     strong_specific_like = specific_match is not None and (has_package_keyword or detail_query or price_query)
@@ -1459,6 +1547,81 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
                     "results_count": len(filtered_rows),
                 },
             }
+
+    # Strong specific package pass should win before best-for/ambiguity flows.
+    if strong_specific_like and specific_match is not None and not compare_query and not alternatives_query:
+        package_id = _safe_str(specific_match.get("id"))
+        if price_query:
+            if best_for_context:
+                return {
+                    "matched": True,
+                    "answer": _format_best_for_price(specific_match),
+                    "route": "packages_best_for_price",
+                    "meta": {
+                        "query_type": "package_best_for_query",
+                        "matched_package_id": package_id,
+                        "matched_package_name": _safe_str(specific_match.get("package_name")),
+                    },
+                }
+            return {
+                "matched": True,
+                "answer": _format_package_price(specific_match),
+                "route": "packages_price",
+                "meta": {
+                    "query_type": "package_price_query",
+                    "matched_package_id": package_id,
+                    "matched_package_name": _safe_str(specific_match.get("package_name")),
+                    "category": _safe_str(specific_match.get("main_category")),
+                    "price_available": isinstance(specific_match.get("price_number"), (int, float)),
+                },
+            }
+        if inclusion_query:
+            return {
+                "matched": True,
+                "answer": _format_package_inclusions(specific_match, query_norm=query_norm),
+                "route": "packages_inclusions",
+                "meta": {
+                    "query_type": "package_inclusion_query",
+                    "matched_package_id": package_id,
+                    "matched_package_name": _safe_str(specific_match.get("package_name")),
+                    "category": _safe_str(specific_match.get("main_category")),
+                },
+            }
+        if detail_query:
+            return {
+                "matched": True,
+                "answer": _format_package_full_details(specific_match),
+                "route": "packages_specific_details",
+                "meta": {
+                    "query_type": "package_specific_details",
+                    "matched_package_id": package_id,
+                    "matched_package_name": _safe_str(specific_match.get("package_name")),
+                    "category": _safe_str(specific_match.get("main_category")),
+                },
+            }
+        if best_for_context:
+            return {
+                "matched": True,
+                "answer": _format_best_for_selected_preview(specific_match),
+                "route": "packages_best_for_selected",
+                "meta": {
+                    "query_type": "package_best_for_query",
+                    "matched_package_id": package_id,
+                    "matched_package_name": _safe_str(specific_match.get("package_name")),
+                    "category": _safe_str(specific_match.get("main_category")),
+                },
+            }
+        return {
+            "matched": True,
+            "answer": _format_package_preview(specific_match),
+            "route": "packages_specific",
+            "meta": {
+                "query_type": "package_specific",
+                "matched_package_id": package_id,
+                "matched_package_name": _safe_str(specific_match.get("package_name")),
+                "category": _safe_str(specific_match.get("main_category")),
+            },
+        }
 
     if best_for_query and not strong_specific_like:
         scored = []
