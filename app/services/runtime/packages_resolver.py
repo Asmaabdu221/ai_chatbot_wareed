@@ -280,6 +280,18 @@ def _safe_str(value: Any) -> str:
     return str(value or "").strip()
 
 
+def _parse_numeric_selection_value(text: str) -> int | None:
+    value = _safe_str(text).translate(
+        str.maketrans({"٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4", "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9"})
+    )
+    if not re.fullmatch(r"\d{1,2}", value):
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
 def _base_norm(value: Any) -> str:
     text = normalize_arabic(_safe_str(value))
     if not text:
@@ -947,6 +959,47 @@ def _find_package_by_label(label: str, records: list[dict[str, Any]]) -> dict[st
     return None
 
 
+def _resolve_package_numeric_selection(
+    text: str,
+    *,
+    records: list[dict[str, Any]],
+    conversation_id: UUID | None,
+) -> dict[str, Any] | None:
+    if conversation_id is None:
+        return None
+    number = _parse_numeric_selection_value(text)
+    if number is None:
+        return None
+    state = load_selection_state(conversation_id)
+    if _safe_str(state.get("last_selection_type")) != "package":
+        return None
+    options = list(state.get("last_options") or [])
+    index = number - 1
+    if index < 0 or index >= len(options):
+        return None
+    selected = options[index] if isinstance(options[index], dict) else {}
+    payload = selected.get("selection_payload") or {}
+    package_name = _safe_str(payload.get("package_name")) or _safe_str(selected.get("label"))
+    if not package_name:
+        return None
+    matched = _find_package_by_label(package_name, records)
+    if matched is None:
+        matched = _find_specific_package(f"باقة {package_name}", records)
+    if matched is None:
+        return None
+    return {
+        "matched": True,
+        "answer": _format_best_for_selected_preview(matched),
+        "route": "packages_selected",
+        "meta": {
+            "query_type": "package_selection_query",
+            "matched_package_id": _safe_str(matched.get("id")),
+            "matched_package_name": _safe_str(matched.get("package_name")),
+            "selection_number": number,
+        },
+    }
+
+
 def _format_best_for_selected_preview(record: dict[str, Any]) -> str:
     name = _safe_str(record.get("package_name"))
     short_desc = _safe_str(record.get("description_short"))
@@ -1374,6 +1427,15 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
             "route": "packages_no_match",
             "meta": {"query_type": "no_match", "reason": "packages_data_unavailable"},
         }
+
+    # Highest priority: numbered package selection from conversation state.
+    numeric_selection_result = _resolve_package_numeric_selection(
+        query,
+        records=records,
+        conversation_id=conversation_id,
+    )
+    if numeric_selection_result is not None:
+        return numeric_selection_result
 
     best_for_context = False
     remembered_package_label = ""
