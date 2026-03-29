@@ -836,6 +836,33 @@ def _is_best_for_price_followup_query(query_norm: str) -> bool:
     return any(_norm(h) == query_norm or _norm(h) in query_norm for h in hints)
 
 
+def _is_package_details_followup_query(query_norm: str) -> bool:
+    hints = (
+        "نعم",
+        "ايوا",
+        "ايوه",
+        "طيب",
+        "تمام",
+        "اوكي",
+        "ok",
+        "كمل",
+        "شرح",
+        "اشرح",
+        "التفاصيل",
+        "تفاصيل",
+        "وش فيها",
+        "ايش فيها",
+        "وش تشمل",
+        "ايش تشمل",
+    )
+    return any(_norm(h) == query_norm or _norm(h) in query_norm for h in hints)
+
+
+def _is_package_price_followup_query(query_norm: str) -> bool:
+    hints = ("السعر", "سعر", "سعرها", "بكم", "كم سعرها", "كم سعره")
+    return any(_norm(h) == query_norm or _norm(h) in query_norm for h in hints)
+
+
 def _find_package_by_label(label: str, records: list[dict[str, Any]]) -> dict[str, Any] | None:
     target = _norm(label)
     if not target:
@@ -853,7 +880,15 @@ def _format_best_for_selected_preview(record: dict[str, Any]) -> str:
     if not short_desc:
         full_desc = _safe_str(record.get("description_full"))
         if full_desc:
-            short_desc = full_desc
+            first_sentence = ""
+            for part in re.split(r"[\.،\n]+", full_desc):
+                candidate = _safe_str(part)
+                if candidate:
+                    first_sentence = candidate
+                    break
+            short_desc = first_sentence or full_desc[:150].strip()
+    if not short_desc:
+        short_desc = "هذه الباقة تساعدك في تقييم حالتك بشكل شامل."
     if short_desc:
         short_desc = re.sub(rf"^\s*{re.escape(name)}\s*[:\-–—]?\s*", "", short_desc, flags=re.IGNORECASE).strip()
     lines = [name]
@@ -1261,6 +1296,52 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
             if remembered_package_label:
                 remembered_package_record = _find_package_by_label(remembered_package_label, records)
 
+    if remembered_package_record is not None:
+        remembered_id = _safe_str(remembered_package_record.get("id"))
+        if _is_package_price_followup_query(query_norm):
+            if best_for_context:
+                return {
+                    "matched": True,
+                    "answer": _format_best_for_price(remembered_package_record),
+                    "route": "packages_best_for_price",
+                    "meta": {
+                        "query_type": "package_best_for_query",
+                        "matched_package_id": remembered_id,
+                        "matched_package_name": _safe_str(remembered_package_record.get("package_name")),
+                    },
+                }
+            return {
+                "matched": True,
+                "answer": _format_package_price(remembered_package_record),
+                "route": "packages_price",
+                "meta": {
+                    "query_type": "package_price_query",
+                    "matched_package_id": remembered_id,
+                    "matched_package_name": _safe_str(remembered_package_record.get("package_name")),
+                    "category": _safe_str(remembered_package_record.get("main_category")),
+                    "price_available": isinstance(remembered_package_record.get("price_number"), (int, float)),
+                },
+            }
+        if _is_package_details_followup_query(query_norm):
+            if best_for_context:
+                return {
+                    "matched": True,
+                    "answer": _format_best_for_long_details(remembered_package_record),
+                    "route": "packages_best_for_details",
+                    "meta": {"query_type": "package_best_for_query"},
+                }
+            return {
+                "matched": True,
+                "answer": _format_package_full_details(remembered_package_record),
+                "route": "packages_specific_details",
+                "meta": {
+                    "query_type": "package_specific_details",
+                    "matched_package_id": remembered_id,
+                    "matched_package_name": _safe_str(remembered_package_record.get("package_name")),
+                    "category": _safe_str(remembered_package_record.get("main_category")),
+                },
+            }
+
     if best_for_context and remembered_package_label:
         remembered_record = remembered_package_record
         if remembered_record is not None:
@@ -1302,6 +1383,10 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
     symptom_goal_terms = _detect_symptom_goal_query(query_norm)
     analyte_terms = _extract_analyte_terms(query)
     analyte_query = _is_analyte_query(query_norm, analyte_terms)
+    specific_match = _find_specific_package(query, records)
+    ambiguous_candidates = _find_ambiguous_package_candidates(query, records)
+    has_package_keyword = any(k in query_norm for k in ("باقة", "باقه", "package"))
+    strong_specific_like = specific_match is not None and (has_package_keyword or detail_query or price_query)
 
     # General list of all packages must win before specific matching.
     if general_listing_like and not price_query and not detail_query and not category:
@@ -1375,7 +1460,7 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
                 },
             }
 
-    if best_for_query:
+    if best_for_query and not strong_specific_like:
         scored = []
         for r in records:
             if not _is_package_like_offering(r):
@@ -1434,9 +1519,6 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
                     "results_count": len(analyte_rows),
                 },
             }
-
-    specific_match = _find_specific_package(query, records)
-    ambiguous_candidates = _find_ambiguous_package_candidates(query, records)
 
     if compare_query:
         compare_targets = _extract_compare_targets(query)
