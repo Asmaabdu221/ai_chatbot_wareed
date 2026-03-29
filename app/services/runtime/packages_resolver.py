@@ -737,11 +737,16 @@ def _find_specific_package(query: str, records: list[dict[str, Any]]) -> dict[st
     return best
 
 
-def _extract_specific_package_candidate(query: str) -> str:
+def _extract_specific_package_candidate(query: str) -> str | None:
     """Strip lead-in wording and keep likely package-name phrase only."""
     q = _norm(query)
     if not q:
-        return ""
+        return None
+    if _is_general_listing_query(q) or _is_general_query(q):
+        return None
+    has_package_like_token = any(token in q for token in ("باقة", "باقه", "باقات", "package", "packages"))
+    if not has_package_like_token:
+        return None
     cleanup_prefixes = (
         "ايش هي",
         "وش هي",
@@ -763,7 +768,8 @@ def _extract_specific_package_candidate(query: str) -> str:
             if p and candidate.startswith(p):
                 candidate = candidate[len(p):].strip()
                 changed = True
-    return re.sub(r"\s+", " ", candidate).strip()
+    cleaned = re.sub(r"\s+", " ", candidate).strip()
+    return cleaned or None
 
 
 def _find_specific_package_by_name_pass(query: str, records: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -1468,16 +1474,9 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
     symptom_goal_terms = _detect_symptom_goal_query(query_norm)
     analyte_terms = _extract_analyte_terms(query)
     analyte_query = _is_analyte_query(query_norm, analyte_terms)
-    specific_match = _find_specific_package(query, records)
-    direct_name_match = _find_specific_package_by_name_pass(query, records)
-    if direct_name_match is not None:
-        specific_match = direct_name_match
-    ambiguous_candidates = _find_ambiguous_package_candidates(query, records)
-    has_package_keyword = any(k in query_norm for k in ("باقة", "باقه", "package"))
-    strong_specific_like = specific_match is not None and (has_package_keyword or detail_query or price_query)
 
-    # General list of all packages must win before specific matching.
-    if general_listing_like and not price_query and not detail_query and not category:
+    # General list must win before specific/best-for/ambiguity.
+    if general_listing_like:
         return {
             "matched": True,
             "answer": _format_general_overview(records, conversation_id),
@@ -1487,18 +1486,13 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
                 "categories_count": len({_safe_str(r.get("main_category")) for r in records if _safe_str(r.get("main_category"))}),
             },
         }
-
-    # Explicit category listing.
-    if category and category_like and not price_query:
-        return {
-            "matched": True,
-            "answer": _format_category_packages(category, records, conversation_id),
-            "route": "packages_category",
-            "meta": {
-                "query_type": "package_category",
-                "category": category,
-            },
-        }
+    specific_match = _find_specific_package(query, records)
+    direct_name_match = _find_specific_package_by_name_pass(query, records)
+    if direct_name_match is not None:
+        specific_match = direct_name_match
+    ambiguous_candidates = _find_ambiguous_package_candidates(query, records)
+    has_package_keyword = any(k in query_norm for k in ("باقة", "باقه", "package"))
+    strong_specific_like = specific_match is not None and (has_package_keyword or detail_query or price_query)
 
     if audience_terms and not price_query:
         audience_label, terms = audience_terms
