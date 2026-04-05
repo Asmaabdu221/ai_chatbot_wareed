@@ -77,6 +77,15 @@ _PREPARATION_TEXT_HINTS = (
     "ينصح",
     "الاستعداد",
 )
+_SAMPLE_TYPE_HINTS = (
+    "نوع عينة",
+    "نوع العينة",
+    "العينة",
+    "العينه",
+    "من اي عينة",
+    "من أي عينة",
+    "sample type",
+)
 _GENERAL_REPLY = (
     "أقدر أساعدك بمعلومات التحاليل المتاحة. "
     "اكتب اسم التحليل بشكل مباشر (مثال: تحليل ANA) "
@@ -329,6 +338,24 @@ def _is_preparation_query(query_norm: str) -> bool:
     return decision
 
 
+def _is_sample_type_query(query_norm: str) -> bool:
+    score = _detector_score(
+        query_norm,
+        _SAMPLE_TYPE_HINTS,
+        strong_keywords=("عينة", "العينة", "sample", "type"),
+    )
+    decision = score >= 0.95
+    if not decision:
+        decision = any(_norm(h) in query_norm for h in _SAMPLE_TYPE_HINTS)
+    logger.debug(
+        "tests_resolver sample_type_detector | query=%s | score=%.3f | decision=%s",
+        query_norm,
+        score,
+        decision,
+    )
+    return decision
+
+
 def _vitamin_key(text_norm: str) -> str:
     """Extract deterministic vitamin designator key to avoid cross-vitamin drift."""
     if not text_norm:
@@ -496,6 +523,7 @@ def resolve_tests_query(user_text: str, conversation_id: UUID | None = None) -> 
     general_like = _is_general_query(query_norm)
     explanation_like = _is_explanation_query(query_norm)
     preparation_like = _is_preparation_query(query_norm)
+    sample_type_like = _is_sample_type_query(query_norm)
     specific_match, specific_score = _find_specific_test(query_norm, records)
     general_only = _is_general_only_query(query_norm)
 
@@ -538,6 +566,19 @@ def resolve_tests_query(user_text: str, conversation_id: UUID | None = None) -> 
                 "preparation_available": answer != _PREPARATION_NOT_AVAILABLE_REPLY,
             },
         }
+
+    if sample_type_like and specific_match is None:
+        disambiguation_reply = _build_disambiguation_reply(query, conversation_id)
+        if disambiguation_reply:
+            return {
+                "matched": True,
+                "answer": disambiguation_reply,
+                "route": "tests_disambiguation",
+                "meta": {
+                    "query_type": "test_sample_type_query",
+                    "disambiguation_used": True,
+                },
+            }
 
     if explanation_like and specific_match is not None:
         return {

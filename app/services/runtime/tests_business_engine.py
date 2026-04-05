@@ -20,7 +20,15 @@ from app.services.runtime.text_normalizer import normalize_arabic
 TESTS_BUSINESS_JSONL_PATH = Path("app/data/runtime/rag/tests_business_clean.jsonl")
 logger = logging.getLogger(__name__)
 
-_FASTING_HINTS = ("صيام", "صايم", "كم ساعه الصيام", "كم ساعة الصيام", "fasting")
+_FASTING_HINTS = (
+    "صيام",
+    "صايم",
+    "كم ساعه الصيام",
+    "كم ساعة الصيام",
+    "يحتاج صيام",
+    "هل يحتاج صيام",
+    "fasting",
+)
 _PREPARATION_HINTS = (
     "تحضير",
     "التحضير",
@@ -48,7 +56,16 @@ _PREPARATION_HINTS = (
 _SYMPTOMS_HINTS = ("اعراض", "أعراض", "مناسب", "المناسب", "لتساقط", "لأعراض", "للاعراض")
 _COMPLEMENTARY_HINTS = ("مكمله", "مكمله", "مكملة", "مكمل", "complementary")
 _ALTERNATIVE_HINTS = ("بديل", "بديله", "بديلة", "alternative", "قريب من", "مشابه")
-_SAMPLE_TYPE_HINTS = ("نوع عينه", "نوع العينه", "العينه", "العينة", "sample type")
+_SAMPLE_TYPE_HINTS = (
+    "نوع عينه",
+    "نوع العينه",
+    "نوع العينة",
+    "العينه",
+    "العينة",
+    "من اي عينة",
+    "من أي عينة",
+    "sample type",
+)
 
 _NOT_CLEAR_MESSAGE = "المعلومة غير واضحة بشكل كافٍ في البيانات الحالية."
 _TEST_NOT_FOUND_MESSAGE = "ما قدرت أحدد التحليل المقصود بدقة. اكتب اسم التحليل بشكل أوضح."
@@ -95,6 +112,32 @@ def _tokenize(text: str) -> list[str]:
     if not n:
         return []
     return [t for t in n.split() if t]
+
+
+def _normalize_business_query_aliases(query_norm: str) -> str:
+    """Inject stable aliases to improve business-intent target matching."""
+    q = _safe_str(query_norm)
+    if not q:
+        return ""
+    expanded = q
+
+    # HbA1c canonicalization.
+    if any(token in expanded for token in ("hba1c", "hb a1c", "a1c", "سكر تراكمي", "السكر التراكمي")):
+        if "hba1c" not in expanded:
+            expanded = f"{expanded} hba1c"
+        if "السكر التراكمي" not in expanded:
+            expanded = f"{expanded} السكر التراكمي"
+        if "الهيموغلوبين السكري" not in expanded:
+            expanded = f"{expanded} الهيموغلوبين السكري"
+
+    # Vitamin D canonicalization.
+    if any(token in expanded for token in ("vit d", "vitamin d", "vit d3", "فيتامين د", "فيتامين دال", "دال")):
+        if "فيتامين د" not in expanded:
+            expanded = f"{expanded} فيتامين د"
+        if "vitamin d" not in expanded:
+            expanded = f"{expanded} vitamin d"
+
+    return _norm(expanded)
 
 
 @lru_cache(maxsize=1)
@@ -335,23 +378,30 @@ def _score_record_match(query_norm: str, record: dict[str, Any]) -> float:
     return best
 
 
-def _find_target_test(query_norm: str, records: list[dict[str, Any]]) -> tuple[dict[str, Any] | None, float]:
+def _rank_target_candidates(query_norm: str, records: list[dict[str, Any]]) -> list[tuple[float, dict[str, Any]]]:
     candidate = _extract_test_candidate(query_norm)
-    primary = candidate or query_norm
+    primary = _normalize_business_query_aliases(candidate or query_norm)
+    query_enriched = _normalize_business_query_aliases(query_norm)
 
-    best: dict[str, Any] | None = None
-    best_score = 0.0
-    second_best_score = 0.0
+    scored: list[tuple[float, dict[str, Any]]] = []
     for r in records:
-        score = _score_record_match(primary, r)
-        # Secondary weak signal from full query.
-        score = max(score, _score_record_match(query_norm, r) * 0.7)
-        if score > best_score:
-            second_best_score = best_score
-            best = r
-            best_score = score
-        elif score > second_best_score:
-            second_best_score = score
+        score_primary = _score_record_match(primary, r)
+        score_full = _score_record_match(query_enriched, r) * 0.7
+        score = max(score_primary, score_full)
+        if score <= 0.0:
+            continue
+        scored.append((score, r))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return scored
+
+
+def _find_target_test(query_norm: str, records: list[dict[str, Any]]) -> tuple[dict[str, Any] | None, float]:
+    ranked = _rank_target_candidates(query_norm, records)
+    if not ranked:
+        return None, 0.0
+
+    best_score, best = ranked[0]
+    second_best_score = ranked[1][0] if len(ranked) > 1 else 0.0
     if best is None or best_score < 0.62:
         return None, 0.0
     # Safety: if more than one candidate is very close, force clarification path.
@@ -389,7 +439,22 @@ def _extract_test_candidate(query_norm: str) -> str:
     """Extract likely target test phrase from the user query."""
     if not query_norm:
         return ""
-    text = query_norm
+    text = _normalize_business_query_aliases(query_norm)
+    marker_patterns = (
+        "تحليل",
+        "فحص",
+        "اختبار",
+        "قبل تحليل",
+        "قبل الفحص",
+        "نوع عينة",
+        "نوع العينة",
+    )
+    for marker in marker_patterns:
+        m = _norm(marker)
+        if m and m in text:
+            tail = text.split(m, 1)[1].strip()
+            if tail:
+                return _clean_candidate_phrase(tail)
     for marker in ("تحليل", "فحص", "اختبار"):
         if marker in text:
             tail = text.split(marker, 1)[1].strip()
@@ -399,7 +464,8 @@ def _extract_test_candidate(query_norm: str) -> str:
 
 
 def _clean_candidate_phrase(text: str) -> str:
-    tokens = _tokenize(text)
+    text_norm = _normalize_business_query_aliases(text)
+    tokens = _tokenize(text_norm)
     if not tokens:
         return ""
     drop = {
@@ -436,6 +502,20 @@ def _clean_candidate_phrase(text: str) -> str:
         "كيف",
         "استعد",
         "لا",
+        "يحتاج",
+        "الصيام",
+        "احتياج",
+        "محتاج",
+        "عينة",
+        "عينه",
+        "اي",
+        "أي",
+        "قبل",
+        "بعد",
+        "التحضير",
+        "تحضير",
+        "يلزم",
+        "مطلوب",
     }
     out: list[str] = []
     for token in tokens:
@@ -447,9 +527,17 @@ def _clean_candidate_phrase(text: str) -> str:
         out.append(t)
 
     code_like = [t for t in out if any(ch.isascii() for ch in t)]
-    if code_like:
-        return " ".join(code_like[:3]).strip()
-    return " ".join(out[:5]).strip()
+    base = " ".join(code_like[:3]).strip() if code_like else " ".join(out[:5]).strip()
+    if not base:
+        return ""
+
+    # Keep deterministic alias augmentation for common user forms.
+    if any(t in base for t in ("hba1c", "a1c", "hb a1c")):
+        base = f"{base} السكر التراكمي الهيموغلوبين السكري"
+    if "فيتامين" in base and ("د" in base or "vitamin d" in base or "vit d" in base):
+        if "فيتامين د" not in base:
+            base = f"{base} فيتامين د"
+    return _norm(base)
 
 
 def _format_target_field(title: str, test_name: str, value: str) -> str:
@@ -473,6 +561,45 @@ def _build_disambiguation_reply(
         conversation_id=conversation_id,
     )
     return format_disambiguation_reply(payload)
+
+
+def _build_ranked_disambiguation_reply(
+    query_norm: str,
+    *,
+    query_type: str,
+    records: list[dict[str, Any]],
+    conversation_id: UUID | None = None,
+) -> str | None:
+    ranked = _rank_target_candidates(query_norm, records)
+    if not ranked:
+        return None
+
+    candidates: list[str] = []
+    seen: set[str] = set()
+    for score, record in ranked:
+        if score < 0.50:
+            continue
+        name = _safe_str(record.get("test_name_ar"))
+        name_norm = _norm(name)
+        if not name or name_norm in seen:
+            continue
+        seen.add(name_norm)
+        candidates.append(name)
+        if len(candidates) >= 4:
+            break
+
+    if len(candidates) < 2:
+        return None
+
+    set_tests_disambiguation_state(
+        candidates,
+        query_type=query_type,
+        conversation_id=conversation_id,
+    )
+    lines = ["ما قدرت أحدد التحليل المقصود بدقة. هل تقصد:"]
+    for idx, name in enumerate(candidates, start=1):
+        lines.append(f"{idx}) {name}")
+    return "\n".join(lines)
 
 
 def resolve_tests_business_query(user_text: str, conversation_id: UUID | None = None) -> dict[str, Any]:
@@ -534,13 +661,21 @@ def resolve_tests_business_query(user_text: str, conversation_id: UUID | None = 
             },
         }
 
+    query_norm = _normalize_business_query_aliases(query_norm)
     target, score = _find_target_test(query_norm, records)
     if target is None:
-        disambiguation_reply = _build_disambiguation_reply(
-            query,
+        ranked_disambiguation_reply = _build_ranked_disambiguation_reply(
+            query_norm,
+            query_type=query_type,
+            records=records,
+            conversation_id=conversation_id,
+        )
+        fallback_disambiguation_reply = _build_disambiguation_reply(
+            query_norm or query,
             query_type=query_type,
             conversation_id=conversation_id,
         )
+        disambiguation_reply = ranked_disambiguation_reply or fallback_disambiguation_reply
         return {
             "matched": True,
             "answer": disambiguation_reply or _TEST_NOT_FOUND_MESSAGE,
@@ -551,6 +686,11 @@ def resolve_tests_business_query(user_text: str, conversation_id: UUID | None = 
                 "matched_test_name": "",
                 "score": 0.0,
                 "disambiguation_used": bool(disambiguation_reply),
+                "disambiguation_source": (
+                    "ranked_candidates"
+                    if bool(ranked_disambiguation_reply)
+                    else ("rule_based" if bool(fallback_disambiguation_reply) else "")
+                ),
             },
         }
 
