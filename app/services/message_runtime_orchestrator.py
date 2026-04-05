@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from app.services.runtime.entity_memory import update_entity_memory
+from app.services.runtime.entity_memory import load_entity_memory, save_entity_memory, update_entity_memory
 from app.services.runtime.results_from_report_service import interpret_uploaded_lab_report_text
 from uuid import UUID
 
@@ -193,15 +193,31 @@ def run_message_runtime_orchestration(
             source = str(runtime_result.get("source") or "").strip()
             meta = dict(runtime_result.get("meta") or {})
             if source == "branches":
+                branch_id = str(meta.get("matched_branch_id") or meta.get("id") or "").strip()
+                branch_label = str(meta.get("branch_name") or "").strip()
+                branch_city = str(meta.get("city") or "").strip()
                 update_entity_memory(
                     conversation_id,
                     last_intent="branch",
                     last_branch={
-                        "id": str(meta.get("matched_branch_id") or meta.get("id") or "").strip(),
-                        "label": str(meta.get("branch_name") or "").strip(),
-                        "city": str(meta.get("city") or "").strip(),
+                        "id": branch_id,
+                        "label": branch_label,
+                        "city": branch_city,
                     },
                 )
+                # Preserve city-only branch context (e.g. city-list responses) for follow-up refinement.
+                if branch_city and not branch_id and not branch_label:
+                    current_memory = load_entity_memory(conversation_id)
+                    current_memory["last_intent"] = "branch"
+                    current_branch = dict(current_memory.get("last_branch") or {})
+                    current_branch["city"] = branch_city
+                    current_memory["last_branch"] = current_branch
+                    save_entity_memory(conversation_id, current_memory)
+                    deps.logger.debug(
+                        "branch city-only context persisted | conversation_id=%s | city=%s",
+                        conversation_id,
+                        branch_city,
+                    )
             elif source in {"tests", "tests_business"}:
                 update_entity_memory(
                     conversation_id,

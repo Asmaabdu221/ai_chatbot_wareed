@@ -621,7 +621,8 @@ def _get_recent_branch_city_context(conversation_id: UUID | None) -> str:
         return ""
     state = load_selection_state(conversation_id)
     if _safe_str(state.get("last_selection_type")) == "branch":
-        city_from_state = _safe_str(state.get("city"))
+        # Selection state persists city under "last_city"; keep "city" as a legacy fallback.
+        city_from_state = _safe_str(state.get("last_city")) or _safe_str(state.get("city"))
         if city_from_state:
             return normalize_arabic(city_from_state)
     memory = load_entity_memory(conversation_id)
