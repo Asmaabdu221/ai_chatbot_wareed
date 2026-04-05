@@ -1731,7 +1731,7 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
                 },
             }
 
-    if best_for_context and remembered_package_label:
+    if best_for_context and remembered_package_label and not has_explicit_package_in_query:
         remembered_record = remembered_package_record
         if remembered_record is not None:
             strong_best_for_followup = {"نعم", "ايوا", "ايوه", "تمام", "اوكي", "ok"}
@@ -1790,9 +1790,73 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
         specific_match = direct_name_match
     ambiguous_candidates = _find_ambiguous_package_candidates(query, records)
     has_package_keyword = any(k in query_norm for k in ("باقة", "باقه", "package"))
-    strong_specific_like = specific_match is not None and (has_package_keyword or detail_query or price_query)
+    strong_specific_like = specific_match is not None and (
+        has_package_keyword
+        or detail_query
+        or inclusion_query
+        or price_query
+        or direct_name_match is not None
+    )
 
-    if audience_terms and not price_query:
+    # Compare intent has highest priority in package resolver.
+    if compare_query:
+        compare_targets = _extract_compare_targets(query)
+        left_match: dict[str, Any] | None = None
+        right_match: dict[str, Any] | None = None
+
+        if compare_targets:
+            left_rows = _find_top_scored_packages(compare_targets[0], records, min_score=3.0, limit=1)
+            right_rows = _find_top_scored_packages(compare_targets[1], records, min_score=3.0, limit=1)
+            left_match = left_rows[0] if left_rows else None
+            right_match = right_rows[0] if right_rows else None
+        elif strong_specific_like and specific_match is not None:
+            left_match = specific_match
+
+        if (
+            left_match is not None
+            and right_match is not None
+            and _safe_str(left_match.get("id")) != _safe_str(right_match.get("id"))
+        ):
+            return {
+                "matched": True,
+                "answer": _format_package_comparison(left_match, right_match),
+                "route": "packages_compare",
+                "meta": {
+                    "query_type": "package_compare_query",
+                    "left_package": _safe_str(left_match.get("package_name")),
+                    "right_package": _safe_str(right_match.get("package_name")),
+                },
+            }
+
+        if left_match is not None and right_match is None:
+            return {
+                "matched": True,
+                "answer": (
+                    f"حددت الباقة الأولى: {_safe_str(left_match.get('package_name'))}.\n"
+                    "اكتب اسم الباقة الثانية عشان أقارن بينهم."
+                ),
+                "route": "packages_compare",
+                "meta": {
+                    "query_type": "package_compare_query",
+                    "left_package": _safe_str(left_match.get("package_name")),
+                    "right_package": "",
+                    "reason": "second_package_missing",
+                },
+            }
+
+        return {
+            "matched": True,
+            "answer": "للمقارنة اكتب اسم باقتين بوضوح، مثال: قارن باقة الغدة وباقة السكر.",
+            "route": "packages_compare",
+            "meta": {
+                "query_type": "package_compare_query",
+                "left_package": "",
+                "right_package": "",
+                "reason": "insufficient_compare_targets",
+            },
+        }
+
+    if audience_terms and not price_query and not strong_specific_like and not compare_query:
         audience_label, terms = audience_terms
         filtered_rows: list[dict[str, Any]] = []
         for row in records:
@@ -1816,7 +1880,7 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
                 },
             }
 
-    if symptom_goal_terms and not price_query:
+    if symptom_goal_terms and not price_query and not strong_specific_like and not compare_query:
         goal_label, terms = symptom_goal_terms
         filtered_rows: list[dict[str, Any]] = []
         for row in records:
@@ -1972,33 +2036,6 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
                     "query_type": "package_analyte_query",
                     "analyte_terms": analyte_terms[:5],
                     "results_count": len(analyte_rows),
-                },
-            }
-
-    if compare_query:
-        compare_targets = _extract_compare_targets(query)
-        left_match: dict[str, Any] | None = None
-        right_match: dict[str, Any] | None = None
-        if compare_targets:
-            left_rows = _find_top_scored_packages(compare_targets[0], records, min_score=3.0, limit=1)
-            right_rows = _find_top_scored_packages(compare_targets[1], records, min_score=3.0, limit=1)
-            left_match = left_rows[0] if left_rows else None
-            right_match = right_rows[0] if right_rows else None
-        if left_match is None and specific_match is not None:
-            left_match = specific_match
-        if right_match is None and remembered_package_record is not None and (
-            left_match is None or _safe_str(remembered_package_record.get("id")) != _safe_str(left_match.get("id"))
-        ):
-            right_match = remembered_package_record
-        if left_match is not None and right_match is not None:
-            return {
-                "matched": True,
-                "answer": _format_package_comparison(left_match, right_match),
-                "route": "packages_compare",
-                "meta": {
-                    "query_type": "package_compare_query",
-                    "left_package": _safe_str(left_match.get("package_name")),
-                    "right_package": _safe_str(right_match.get("package_name")),
                 },
             }
 
