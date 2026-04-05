@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import logging
 from functools import lru_cache
 from typing import Any
 
@@ -21,6 +22,7 @@ _NARRATIVE_MARKERS = (
     "تاريخ التقرير",
 )
 _NOISE_HINTS = ("باقة", "package", "offer", "عرض")
+logger = logging.getLogger(__name__)
 
 
 def _safe_str(value: Any) -> str:
@@ -270,7 +272,19 @@ def _extract_rows_line_by_line(report_text: str) -> tuple[list[dict[str, Any]], 
 
 
 def interpret_uploaded_lab_report_text(report_text: str) -> dict[str, Any]:
+    text = report_text or ""
+    logger.debug(
+        "report_interpretation start | non_empty=%s | text_len=%s",
+        bool(_safe_str(text)),
+        len(text),
+    )
     parsed_rows, selected_lines, ignored_lines, selection_trace = _extract_rows_line_by_line(report_text or "")
+    logger.debug(
+        "report_interpretation parsed | parsed_rows=%s | selected_lines=%s | ignored_lines=%s",
+        len(parsed_rows),
+        len(selected_lines),
+        len(ignored_lines),
+    )
 
     items: list[dict[str, Any]] = []
     seen_tests: set[str] = set()
@@ -316,7 +330,18 @@ def interpret_uploaded_lab_report_text(report_text: str) -> dict[str, Any]:
             }
         )
 
+    logger.debug(
+        "report_interpretation selection | built_queries=%s | interpreted_items=%s",
+        len(built_queries),
+        len(items),
+    )
+
     if not items:
+        logger.debug(
+            "report_interpretation final | matched=%s | items_count=%s",
+            False,
+            0,
+        )
         return {
             "matched": False,
             "items": [],
@@ -335,6 +360,11 @@ def interpret_uploaded_lab_report_text(report_text: str) -> dict[str, Any]:
         lines.append(f"{i}) {item['test_name']} = {item['value']}")
         lines.append(item["interpretation"])
 
+    logger.debug(
+        "report_interpretation final | matched=%s | items_count=%s",
+        True,
+        len(items),
+    )
     return {
         "matched": True,
         "items": items,

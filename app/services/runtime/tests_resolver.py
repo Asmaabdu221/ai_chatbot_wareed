@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,7 @@ from app.services.runtime.tests_disambiguation import (
 from app.services.runtime.text_normalizer import normalize_arabic
 
 TESTS_JSONL_PATH = Path("app/data/runtime/rag/tests_clean.jsonl")
+logger = logging.getLogger(__name__)
 
 _GENERAL_HINTS = (
     "تحاليل",
@@ -106,6 +108,53 @@ def _as_list_of_str(value: Any) -> list[str]:
     return [part.strip() for part in text.split(",") if part.strip()]
 
 
+def _token_overlap_score(query_norm: str, hint_norm: str) -> float:
+    q_tokens = {t for t in query_norm.split() if t}
+    h_tokens = {t for t in hint_norm.split() if t}
+    if not q_tokens or not h_tokens:
+        return 0.0
+    overlap = q_tokens.intersection(h_tokens)
+    if not overlap:
+        return 0.0
+    return min(0.6, 0.25 * len(overlap))
+
+
+def _detector_score(query_norm: str, hints: tuple[str, ...], strong_keywords: tuple[str, ...] = ()) -> float:
+    if not query_norm:
+        return 0.0
+
+    padded = f" {query_norm} "
+    score = 0.0
+    for hint in hints:
+        h = _norm(hint)
+        if not h:
+            continue
+        if query_norm == h:
+            score += 1.6
+            continue
+        if f" {h} " in padded:
+            score += 1.2
+        elif h in query_norm:
+            score += 0.8
+        score += _token_overlap_score(query_norm, h)
+
+    strong_hits = 0
+    for kw in strong_keywords:
+        k = _norm(kw)
+        if not k:
+            continue
+        if f" {k} " in padded or k in query_norm:
+            score += 0.45
+            strong_hits += 1
+
+    # Ambiguity penalty for very short generic queries.
+    q_tokens = [t for t in query_norm.split() if t]
+    if len(q_tokens) <= 2 and strong_hits == 0:
+        score -= 0.25
+
+    return score
+
+
 @lru_cache(maxsize=1)
 def load_tests_records() -> list[dict[str, Any]]:
     """Load runtime test records from JSONL with normalized helper fields."""
@@ -159,7 +208,22 @@ def load_tests_records() -> list[dict[str, Any]]:
 
 
 def _is_general_query(query_norm: str) -> bool:
-    return any(_norm(h) in query_norm for h in _GENERAL_HINTS)
+    score = _detector_score(
+        query_norm,
+        _GENERAL_HINTS,
+        strong_keywords=("تحليل", "تحاليل", "فحص", "فحوصات", "اختبار", "اختبارات"),
+    )
+    decision = score >= 1.05
+    if not decision:
+        # Backward-compatible conservative fallback.
+        decision = any(_norm(h) in query_norm for h in _GENERAL_HINTS)
+    logger.debug(
+        "tests_resolver general_detector | query=%s | score=%.3f | decision=%s",
+        query_norm,
+        score,
+        decision,
+    )
+    return decision
 
 
 def _is_general_only_query(query_norm: str) -> bool:
@@ -167,27 +231,102 @@ def _is_general_only_query(query_norm: str) -> bool:
     if not _is_general_query(query_norm):
         return False
     overview_tokens = ("الموجود", "المتوفر", "عندكم", "وش", "ايش", "عطني", "اعرض")
-    return any(token in query_norm for token in overview_tokens)
+    overview_score = _detector_score(
+        query_norm,
+        overview_tokens,
+        strong_keywords=("الموجود", "المتوفر", "عندكم", "اعرض", "عطني"),
+    )
+    decision = overview_score >= 0.60
+    if not decision:
+        decision = any(_norm(token) in query_norm for token in overview_tokens)
+    logger.debug(
+        "tests_resolver general_only_detector | query=%s | score=%.3f | decision=%s",
+        query_norm,
+        overview_score,
+        decision,
+    )
+    return decision
 
 
 def _is_explanation_query(query_norm: str) -> bool:
-    if any(_norm(h) in query_norm for h in _EXPLANATION_HINTS):
+    primary_score = _detector_score(
+        query_norm,
+        _EXPLANATION_HINTS,
+        strong_keywords=("اشرح", "تعريف", "يعني", "ماهو", "ايش هو", "وش هو"),
+    )
+    if primary_score >= 1.0:
+        logger.debug(
+            "tests_resolver explanation_detector | query=%s | primary_score=%.3f | context_score=0.000 | decision=true | reason=primary",
+            query_norm,
+            primary_score,
+        )
         return True
     has_test_context = any(token in query_norm for token in ("تحليل", "تحاليل", "فحص", "اختبار"))
     if not has_test_context:
+        logger.debug(
+            "tests_resolver explanation_detector | query=%s | primary_score=%.3f | context_score=0.000 | decision=false | reason=no_test_context",
+            query_norm,
+            primary_score,
+        )
         return False
-    return any(_norm(h) in query_norm for h in _EXPLANATION_CONTEXT_HINTS)
+    context_score = _detector_score(
+        query_norm,
+        _EXPLANATION_CONTEXT_HINTS,
+        strong_keywords=("يفحص", "يفيد"),
+    )
+    decision = context_score >= 0.75
+    if not decision:
+        decision = any(_norm(h) in query_norm for h in _EXPLANATION_CONTEXT_HINTS)
+    logger.debug(
+        "tests_resolver explanation_detector | query=%s | primary_score=%.3f | context_score=%.3f | decision=%s",
+        query_norm,
+        primary_score,
+        context_score,
+        decision,
+    )
+    return decision
 
 
 def _is_preparation_query(query_norm: str) -> bool:
-    if any(_norm(h) in query_norm for h in _PREPARATION_HINTS[:-4]):
+    primary_score = _detector_score(
+        query_norm,
+        _PREPARATION_HINTS[:-4],
+        strong_keywords=("صيام", "تحضير", "preparation", "fasting", "قبل التحليل"),
+    )
+    if primary_score >= 1.0:
+        logger.debug(
+            "tests_resolver preparation_detector | query=%s | primary_score=%.3f | natural_score=0.000 | decision=true | reason=primary",
+            query_norm,
+            primary_score,
+        )
         return True
 
     # Natural preparation wording should require test context to avoid over-triggering.
     has_test_context = any(token in query_norm for token in ("تحليل", "تحاليل", "فحص", "اختبار"))
     if not has_test_context:
+        logger.debug(
+            "tests_resolver preparation_detector | query=%s | primary_score=%.3f | natural_score=0.000 | decision=false | reason=no_test_context",
+            query_norm,
+            primary_score,
+        )
         return False
-    return any(_norm(h) in query_norm for h in ("استعد", "الاستعداد", "المطلوب", "قبل"))
+    natural_hints = ("استعد", "الاستعداد", "المطلوب", "قبل")
+    natural_score = _detector_score(
+        query_norm,
+        natural_hints,
+        strong_keywords=("استعد", "الاستعداد", "المطلوب", "قبل"),
+    )
+    decision = natural_score >= 0.85
+    if not decision:
+        decision = any(_norm(h) in query_norm for h in natural_hints)
+    logger.debug(
+        "tests_resolver preparation_detector | query=%s | primary_score=%.3f | natural_score=%.3f | decision=%s",
+        query_norm,
+        primary_score,
+        natural_score,
+        decision,
+    )
+    return decision
 
 
 def _vitamin_key(text_norm: str) -> str:

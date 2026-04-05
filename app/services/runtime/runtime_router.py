@@ -223,8 +223,21 @@ def _is_context_followup_query(text: str, triggers: tuple[str, ...]) -> bool:
     words = [w for w in q.split() if w]
     if not (1 <= len(words) <= 4):
         return False
-    normalized_triggers = [normalize_arabic(v) for v in triggers]
-    return any(q == t or t in q for t in normalized_triggers if t)
+    normalized_triggers = [normalize_arabic(v) for v in triggers if normalize_arabic(v)]
+    legacy = any(q == t or t in q for t in normalized_triggers if t)
+    scores = _detector_score(
+        q,
+        hints=tuple(normalized_triggers),
+        strong_keywords=tuple(normalized_triggers),
+        ambiguity_terms=("ايش", "وش", "نعم", "ok"),
+    )
+    return _detector_pick(
+        "context_followup",
+        q,
+        scores,
+        min_score=1.75,
+        legacy_match=legacy,
+    )
 
 
 def _parse_numeric_selection(text: str) -> int | None:
@@ -237,6 +250,122 @@ def _parse_numeric_selection(text: str) -> int | None:
         return int(value)
     except ValueError:
         return None
+
+
+def _detector_tokens(text: str) -> list[str]:
+    n = normalize_arabic(_safe_str(text))
+    if not n:
+        return []
+    return [t for t in re.split(r"\s+", n) if t]
+
+
+def _contains_boundary_phrase(text_norm: str, phrase_norm: str) -> bool:
+    if not text_norm or not phrase_norm:
+        return False
+    if text_norm == phrase_norm:
+        return True
+    return f" {phrase_norm} " in f" {text_norm} "
+
+
+def _detector_score(
+    text_norm: str,
+    *,
+    hints: tuple[str, ...],
+    strong_keywords: tuple[str, ...] = (),
+    blockers: tuple[str, ...] = (),
+    ambiguity_terms: tuple[str, ...] = (),
+) -> dict[str, float]:
+    tokens = _detector_tokens(text_norm)
+    token_set = set(tokens)
+    score = 0.0
+    exact_hits = 0.0
+    boundary_hits = 0.0
+    overlap_hits = 0.0
+    strong_hits = 0.0
+    blocker_hits = 0.0
+    ambiguity_hits = 0.0
+
+    for hint in hints:
+        h = normalize_arabic(_safe_str(hint))
+        if not h:
+            continue
+        if text_norm == h:
+            score += 3.0
+            exact_hits += 1.0
+        elif _contains_boundary_phrase(text_norm, h):
+            score += 2.0
+            boundary_hits += 1.0
+        elif h in text_norm:
+            score += 1.0
+
+        hint_tokens = [t for t in re.split(r"\s+", h) if t]
+        if hint_tokens:
+            overlap = len(token_set & set(hint_tokens))
+            if overlap == len(hint_tokens):
+                score += 1.0
+                overlap_hits += 1.0
+            elif overlap > 0 and len(hint_tokens) > 1:
+                score += 0.5
+                overlap_hits += 0.5
+
+    for keyword in strong_keywords:
+        k = normalize_arabic(_safe_str(keyword))
+        if not k:
+            continue
+        if _contains_boundary_phrase(text_norm, k) or k in token_set:
+            score += 1.25
+            strong_hits += 1.0
+
+    for blocker in blockers:
+        b = normalize_arabic(_safe_str(blocker))
+        if not b:
+            continue
+        if _contains_boundary_phrase(text_norm, b) or b in text_norm:
+            score -= 1.75
+            blocker_hits += 1.0
+
+    if len(tokens) <= 2 and ambiguity_terms:
+        if all(t in ambiguity_terms for t in tokens):
+            score -= 1.25
+            ambiguity_hits += 1.0
+
+    return {
+        "score": score,
+        "exact": exact_hits,
+        "boundary": boundary_hits,
+        "overlap": overlap_hits,
+        "strong": strong_hits,
+        "blockers": blocker_hits,
+        "ambiguity_penalty": ambiguity_hits,
+    }
+
+
+def _detector_pick(
+    detector_name: str,
+    query_norm: str,
+    scores: dict[str, float],
+    *,
+    min_score: float,
+    legacy_match: bool,
+) -> bool:
+    score = float(scores.get("score", 0.0))
+    fallback_reason = ""
+    if score >= min_score:
+        result = True
+    else:
+        result = legacy_match
+        fallback_reason = "weak_or_ambiguous_score_legacy_substring"
+    logger.debug(
+        "runtime_router.detector name=%s query=%r score=%.3f scores=%s result=%s fallback_reason=%s",
+        detector_name,
+        query_norm,
+        score,
+        scores,
+        result,
+        fallback_reason,
+    )
+    return result
+
 
 def _looks_like_branch_query(text: str) -> bool:
     n = normalize_arabic(text)
@@ -258,7 +387,70 @@ def _looks_like_branch_query(text: str) -> bool:
         "في مكه",
         "بمكه",
     )
-    return any(h in n for h in hints)
+    legacy = any(h in n for h in hints)
+    blockers = (
+        "باقه",
+        "باقات",
+        "package",
+        "well dna",
+        "nifty",
+        "genetic package",
+        "genetic_test",
+        "تحليل",
+        "تحاليل",
+        "فحص",
+        "اختبار",
+        "hba1c",
+        "tsh",
+        "nipt",
+    )
+    scores = _detector_score(
+        n,
+        hints=hints,
+        strong_keywords=("فرع", "فروع", "موقع", "العنوان", "location"),
+        blockers=blockers,
+        ambiguity_terms=("فرع", "موقع", "حي"),
+    )
+    score = float(scores.get("score", 0.0))
+    if score >= 2.25:
+        logger.debug(
+            "runtime_router.detector name=%s query=%r score=%.3f scores=%s result=%s fallback_reason=%s",
+            "branch_like",
+            n,
+            score,
+            scores,
+            True,
+            "",
+        )
+        return True
+
+    blockers_seen = [b for b in blockers if b and (_contains_boundary_phrase(n, b) or b in n)]
+    has_strong_anchor = bool(
+        float(scores.get("strong", 0.0)) > 0.0
+        or float(scores.get("boundary", 0.0)) > 0.0
+        or float(scores.get("exact", 0.0)) > 0.0
+    )
+    allow_legacy_fallback = bool(legacy and has_strong_anchor and not blockers_seen)
+
+    logger.debug(
+        "runtime_router.branch_detector weak-score fallback | query=%r | score=%.3f | legacy=%s | anchor_hit=%s | blockers_seen=%s | fallback_allowed=%s",
+        n,
+        score,
+        legacy,
+        has_strong_anchor,
+        blockers_seen,
+        allow_legacy_fallback,
+    )
+    logger.debug(
+        "runtime_router.detector name=%s query=%r score=%.3f scores=%s result=%s fallback_reason=%s",
+        "branch_like",
+        n,
+        score,
+        scores,
+        allow_legacy_fallback,
+        "weak_score_legacy_allowed" if allow_legacy_fallback else "weak_score_legacy_blocked",
+    )
+    return allow_legacy_fallback
 
 
 def _looks_like_package_query(text: str) -> bool:
@@ -268,21 +460,47 @@ def _looks_like_package_query(text: str) -> bool:
     if _looks_like_branch_query(n):
         return False
 
-    # Strong package signals first.
-    if any(token in n for token in ("باقه", "باقات", "package")):
-        return True
-    if any(token in n for token in ("well dna", "nifty", "genetic package", "genetic_test")):
-        return True
+    strong_tokens = ("باقه", "باقات", "package")
+    genetic_tokens = ("well dna", "nifty", "genetic package", "genetic_test")
+    package_category_tokens = ("جيني", "جينية", "رمضان", "ذاتية", "self collection")
+    test_tokens = ("تحليل", "تحاليل")
+    price_tokens = ("كم سعر", "بكم", "سعر")
 
-    # Category/product phrasing (deterministic, conservative).
-    has_test_word = any(token in n for token in ("تحليل", "تحاليل"))
-    has_package_category = any(token in n for token in ("جيني", "جينية", "رمضان", "ذاتية", "self collection"))
-    has_price_word = any(token in n for token in ("كم سعر", "بكم", "سعر"))
+    has_test_word = any(token in n for token in test_tokens)
+    has_package_category = any(token in n for token in package_category_tokens)
+    has_price_word = any(token in n for token in price_tokens)
+
+    legacy = False
+    if any(token in n for token in strong_tokens):
+        legacy = True
+    if any(token in n for token in genetic_tokens):
+        legacy = True
     if has_test_word and has_package_category:
-        return True
+        legacy = True
     if has_price_word and ("باقه" in n or "package" in n):
-        return True
-    return False
+        legacy = True
+
+    blockers = (
+        "فرع",
+        "فروع",
+        "موقع",
+        "العنوان",
+        "وينه",
+        "وين",
+    )
+    scores = _detector_score(
+        n,
+        hints=strong_tokens + genetic_tokens + package_category_tokens,
+        strong_keywords=strong_tokens + genetic_tokens + ("جيني", "رمضان"),
+        blockers=blockers,
+        ambiguity_terms=("باقه", "package", "تحاليل"),
+    )
+    if has_test_word and has_package_category:
+        scores["score"] = float(scores.get("score", 0.0)) + 1.0
+    if has_price_word and ("باقه" in n or "package" in n):
+        scores["score"] = float(scores.get("score", 0.0)) + 0.75
+
+    return _detector_pick("package_like", n, scores, min_score=2.0, legacy_match=legacy)
 
 
 def _looks_like_tests_query(text: str) -> bool:
@@ -303,7 +521,27 @@ def _looks_like_tests_query(text: str) -> bool:
         "فيتامين",
         "حديد",
     )
-    return any(token in n for token in hints)
+    legacy = any(token in n for token in hints)
+    blockers = (
+        "فرع",
+        "موقع",
+        "العنوان",
+        "باقه",
+        "باقات",
+        "package",
+        "well dna",
+        "nifty",
+        "genetic package",
+        "genetic_test",
+    )
+    scores = _detector_score(
+        n,
+        hints=hints,
+        strong_keywords=("تحليل", "تحاليل", "فحص", "اختبار", "hba1c", "tsh", "nipt"),
+        blockers=blockers,
+        ambiguity_terms=("تحليل", "فحص", "اختبار"),
+    )
+    return _detector_pick("tests_like", n, scores, min_score=1.75, legacy_match=legacy)
 
 
 def _looks_like_symptoms_query(text: str) -> bool:
@@ -327,7 +565,23 @@ def _looks_like_symptoms_query(text: str) -> bool:
         "فقر دم",
         "نقص فيتامين",
     )
-    return any(normalize_arabic(token) in n for token in hints)
+    norm_hints = tuple(normalize_arabic(token) for token in hints if normalize_arabic(token))
+    legacy = any(token in n for token in norm_hints)
+    blockers = (
+        "فرع",
+        "موقع",
+        "باقه",
+        "باقات",
+        "package",
+    )
+    scores = _detector_score(
+        n,
+        hints=norm_hints,
+        strong_keywords=("اعراض", "أعراض", "اعاني", "أعاني", "تعب", "ارهاق"),
+        blockers=blockers,
+        ambiguity_terms=("عندي", "احس", "أحس"),
+    )
+    return _detector_pick("symptoms_like", n, scores, min_score=2.0, legacy_match=legacy)
 
 
 def _format_symptoms_suggestions_reply(payload: dict[str, Any]) -> str:
@@ -638,6 +892,27 @@ def _try_ollama_classifier_fallback(
 
     return None
 
+
+def _log_final_route_decision(
+    result: dict[str, Any] | None,
+    *,
+    conversation_id: UUID | None,
+    path_stage: str,
+) -> dict[str, Any]:
+    payload = dict(result or {})
+    meta = payload.get("meta")
+    meta_dict = meta if isinstance(meta, dict) else {}
+    logger.debug(
+        "runtime_router.final_decision | route=%s | source=%s | matched=%s | conversation_id=%s | path_stage=%s | query_type=%s",
+        _safe_str(payload.get("route")),
+        _safe_str(payload.get("source")),
+        bool(payload.get("matched")),
+        _safe_str(conversation_id),
+        _safe_str(path_stage),
+        _safe_str(meta_dict.get("query_type")),
+    )
+    return payload
+
 def route_runtime_message(
     user_text: str,
     *,
@@ -661,9 +936,15 @@ def route_runtime_message(
     rewritten = _resolve_reference_rewrite(text, conversation_id=conversation_id)
     if rewritten:
         text = rewritten
+    def _final(result: dict[str, Any], path_stage: str) -> dict[str, Any]:
+        return _log_final_route_decision(
+            result,
+            conversation_id=conversation_id,
+            path_stage=path_stage,
+        )
 
     if system_rebuild_mode:
-        return {
+        return _final({
             "reply": format_runtime_answer(get_rebuild_mode_message()),
             "route": "rebuild_mode",
             "source": "runtime_fallback",
@@ -671,7 +952,7 @@ def route_runtime_message(
             "meta": {
                 "mode": "system_rebuild",
             },
-        }
+        }, "system_rebuild_mode")
 
     if faq_only_runtime_mode:
         # Strong branch guard before FAQ:
@@ -689,7 +970,7 @@ def route_runtime_message(
                 conversation_id=conversation_id,
             )
             if selection_result is not None:
-                return selection_result
+                return _final(selection_result, "numeric_selection_context")
 
         if conversation_id is not None:
             memory = load_entity_memory(conversation_id)
@@ -711,13 +992,13 @@ def route_runtime_message(
             ):
                 packages_result = resolve_packages_query(text, conversation_id=conversation_id)
                 if bool(packages_result.get("matched")):
-                    return {
+                    return _final({
                         "reply": format_runtime_answer(_safe_str(packages_result.get("answer"))),
                         "route": _safe_str(packages_result.get("route")) or "packages",
                         "source": "packages",
                         "matched": True,
                         "meta": dict(packages_result.get("meta") or {}),
-                    }
+                    }, "context_followup_package")
             if (
                 last_intent == "test"
                 and last_test
@@ -730,22 +1011,22 @@ def route_runtime_message(
                     conversation_id=conversation_id,
                 )
                 if _is_supported_tests_business_result(tests_business_result):
-                    return {
+                    return _final({
                         "reply": format_runtime_answer(_safe_str(tests_business_result.get("answer"))),
                         "route": _safe_str(tests_business_result.get("route")) or "tests_business",
                         "source": "tests_business",
                         "matched": True,
                         "meta": _tests_business_meta(tests_business_result.get("meta") or {}),
-                    }
+                    }, "context_followup_tests_business")
                 tests_result = resolve_tests_query(text, conversation_id=conversation_id)
                 if bool(tests_result.get("matched")):
-                    return {
+                    return _final({
                         "reply": format_runtime_answer(_safe_str(tests_result.get("answer"))),
                         "route": _safe_str(tests_result.get("route")) or "tests",
                         "source": "tests",
                         "matched": True,
                         "meta": _tests_meta(tests_result.get("meta") or {}),
-                    }
+                    }, "context_followup_tests")
             if (
                 last_intent == "branch"
                 and last_branch
@@ -755,26 +1036,32 @@ def route_runtime_message(
             ):
                 branches_result = resolve_branches_query(text, conversation_id=conversation_id)
                 if bool(branches_result.get("matched")):
-                    return {
+                    return _final({
                         "reply": format_runtime_answer(_safe_str(branches_result.get("answer"))),
                         "route": _safe_str(branches_result.get("route")) or "branches",
                         "source": "branches",
                         "matched": True,
                         "meta": dict(branches_result.get("meta") or {}),
-                    }
+                    }, "context_followup_branch")
 
-        if looks_like_result_query(text) and not is_branch_like and not is_package_like and not is_symptoms_like:
-            result_answer = _safe_str(interpret_result_query(text))
-            if result_answer:
-                return {
-                    "reply": format_runtime_answer(result_answer),
-                    "route": "results_interpretation",
-                    "source": "results_engine",
-                    "matched": True,
-                    "meta": {
-                        "query_type": "result_interpretation",
-                    },
-                }
+        if looks_like_result_query(text):
+            if is_tests_like:
+                logger.debug(
+                    "results routing blocked by tests-like query | q=%s | result_detected=true | tests_like=true",
+                    text,
+                )
+            elif not is_branch_like and not is_package_like and not is_symptoms_like:
+                result_answer = _safe_str(interpret_result_query(text))
+                if result_answer:
+                    return _final({
+                        "reply": format_runtime_answer(result_answer),
+                        "route": "results_interpretation",
+                        "source": "results_engine",
+                        "matched": True,
+                        "meta": {
+                            "query_type": "result_interpretation",
+                        },
+                    }, "results_interpretation")
 
         if is_numeric or is_branch_like or is_package_like or is_tests_like:
             if is_numeric or is_branch_like:
@@ -787,13 +1074,13 @@ def route_runtime_message(
                         is_branch_like,
                         _safe_str(branches_result.get("route")),
                     )
-                    return {
+                    return _final({
                         "reply": format_runtime_answer(_safe_str(branches_result.get("answer"))),
                         "route": _safe_str(branches_result.get("route")) or "branches",
                         "source": "branches",
                         "matched": True,
                         "meta": dict(branches_result.get("meta") or {}),
-                    }
+                    }, "domains_prefilter_branches")
                 if is_numeric:
                     selected = resolve_tests_disambiguation_selection(text, conversation_id=conversation_id)
                     if selected:
@@ -806,25 +1093,25 @@ def route_runtime_message(
                                 conversation_id=conversation_id,
                             )
                             if _is_supported_tests_business_result(tests_business_selected):
-                                return {
+                                return _final({
                                     "reply": format_runtime_answer(_safe_str(tests_business_selected.get("answer"))),
                                     "route": _safe_str(tests_business_selected.get("route")) or "tests_business",
                                     "source": "tests_business",
                                     "matched": True,
                                     "meta": _tests_business_meta(tests_business_selected.get("meta") or {}),
-                                }
+                                }, "numeric_selection_tests_business")
                             tests_selected = resolve_tests_query(
                                 selected_query,
                                 conversation_id=conversation_id,
                             )
                             if bool(tests_selected.get("matched")):
-                                return {
+                                return _final({
                                     "reply": format_runtime_answer(_safe_str(tests_selected.get("answer"))),
                                     "route": _safe_str(tests_selected.get("route")) or "tests",
                                     "source": "tests",
                                     "matched": True,
                                     "meta": _tests_meta(tests_selected.get("meta") or {}),
-                                }
+                                }, "numeric_selection_tests")
 
             if is_package_like and ENABLE_PACKAGES_RUNTIME_AFTER_BRANCHES:
                 packages_result = resolve_packages_query(text, conversation_id=conversation_id)
@@ -838,13 +1125,13 @@ def route_runtime_message(
                         is_tests_like,
                         _safe_str(packages_result.get("route")),
                     )
-                    return {
+                    return _final({
                         "reply": format_runtime_answer(_safe_str(packages_result.get("answer"))),
                         "route": _safe_str(packages_result.get("route")) or "packages",
                         "source": "packages",
                         "matched": True,
                         "meta": dict(packages_result.get("meta") or {}),
-                    }
+                    }, "domains_prefilter_packages")
 
             if is_tests_like and ENABLE_TESTS_RUNTIME_AFTER_PACKAGES:
                 tests_business_result = resolve_tests_business_query(
@@ -861,13 +1148,13 @@ def route_runtime_message(
                         is_tests_like,
                         _safe_str(tests_business_result.get("route")),
                     )
-                    return {
+                    return _final({
                         "reply": format_runtime_answer(_safe_str(tests_business_result.get("answer"))),
                         "route": _safe_str(tests_business_result.get("route")) or "tests_business",
                         "source": "tests_business",
                         "matched": True,
                         "meta": _tests_business_meta(tests_business_result.get("meta") or {}),
-                    }
+                    }, "domains_prefilter_tests_business")
 
                 tests_result = resolve_tests_query(text, conversation_id=conversation_id)
                 if bool(tests_result.get("matched")):
@@ -880,13 +1167,13 @@ def route_runtime_message(
                         is_tests_like,
                         _safe_str(tests_result.get("route")),
                     )
-                    return {
+                    return _final({
                         "reply": format_runtime_answer(_safe_str(tests_result.get("answer"))),
                         "route": _safe_str(tests_result.get("route")) or "tests",
                         "source": "tests",
                         "matched": True,
                         "meta": _tests_meta(tests_result.get("meta") or {}),
-                    }
+                    }, "domains_prefilter_tests")
 
             logger.debug(
                 "domains pre-faq guard no match | q=%s | numeric=%s | branch_like=%s | package_like=%s | tests_like=%s | route=domains_pre_faq_no_match",
@@ -903,8 +1190,46 @@ def route_runtime_message(
                 )
                 if classifier_result is not None:
                     return classifier_result
-            # Do not let FAQ hijack numeric/branch/location/package/tests queries.
-            return {
+            logger.debug(
+                "domains pre-faq guard fallback faq attempt | q=%s | numeric=%s | branch_like=%s | package_like=%s | tests_like=%s",
+                text,
+                is_numeric,
+                is_branch_like,
+                is_package_like,
+                is_tests_like,
+            )
+            faq_fallback_result = resolve_faq(
+                text,
+                last_user_text=last_user_text,
+                last_assistant_text=last_assistant_text,
+                recent_runtime_messages=recent_runtime_messages,
+            )
+            if faq_fallback_result:
+                logger.debug(
+                    "domains pre-faq guard fallback faq matched | q=%s | selected_faq_id=%s | matched_text=%s | route=faq_only",
+                    text,
+                    _safe_str(faq_fallback_result.get("faq_id")),
+                    _safe_str(faq_fallback_result.get("matched_text")),
+                )
+                return _final({
+                    "reply": format_runtime_answer(_safe_str(faq_fallback_result.get("answer"))),
+                    "route": "faq_only",
+                    "source": "faq",
+                    "matched": True,
+                    "meta": {
+                        "faq_id": _safe_str(faq_fallback_result.get("faq_id")),
+                        "question": _safe_str(faq_fallback_result.get("question")),
+                        "score": float(faq_fallback_result.get("score") or 0.0),
+                        "margin": float(faq_fallback_result.get("margin") or 0.0),
+                        "matched_text": _safe_str(faq_fallback_result.get("matched_text")),
+                        "concepts": list(faq_fallback_result.get("concepts") or []),
+                    },
+                }, "domains_prefilter_faq_fallback_match")
+            logger.debug(
+                "domains pre-faq guard fallback faq not matched | q=%s | route=faq_only_no_match_domains_prefilter",
+                text,
+            )
+            return _final({
                 "reply": format_runtime_answer(get_faq_no_match_message()),
                 "route": "faq_only_no_match_domains_prefilter",
                 "source": "runtime_fallback",
@@ -917,12 +1242,12 @@ def route_runtime_message(
                     "package_like_query": is_package_like,
                     "tests_like_query": is_tests_like,
                 },
-            }
+            }, "domains_prefilter_no_match")
 
         if is_symptoms_like:
             symptoms_result = handle_symptoms_query(text)
             if symptoms_result:
-                return {
+                return _final({
                     "reply": format_runtime_answer(_format_symptoms_suggestions_reply(symptoms_result)),
                     "route": "symptoms_suggestions",
                     "source": "symptoms_engine",
@@ -933,7 +1258,7 @@ def route_runtime_message(
                         "tests_count": len(list(symptoms_result.get("tests") or [])),
                         "packages_count": len(list(symptoms_result.get("packages") or [])),
                     },
-                }
+                }, "symptoms_route")
 
         faq_result = resolve_faq(
             text,
@@ -948,7 +1273,7 @@ def route_runtime_message(
                 _safe_str(faq_result.get("faq_id")),
                 _safe_str(faq_result.get("matched_text")),
             )
-            return {
+            return _final({
                 "reply": format_runtime_answer(_safe_str(faq_result.get("answer"))),
                 "route": "faq_only",
                 "source": "faq",
@@ -961,7 +1286,7 @@ def route_runtime_message(
                     "matched_text": _safe_str(faq_result.get("matched_text")),
                     "concepts": list(faq_result.get("concepts") or []),
                 },
-            }
+            }, "faq_direct_match")
 
         logger.debug(
             "faq_only no match | q=%s | route=faq_only_no_match",
@@ -991,13 +1316,13 @@ def route_runtime_message(
                 meta["semantic_intent"] = semantic_intent
                 meta["semantic_score"] = semantic_score
                 meta["semantic_routing_used"] = semantic_routing_used
-                return {
+                return _final({
                     "reply": format_runtime_answer(_safe_str(branches_result.get("answer"))),
                     "route": _safe_str(branches_result.get("route")) or "branches",
                     "source": "branches",
                     "matched": True,
                     "meta": meta,
-                }
+                }, "after_faq_no_match_branches")
 
             if is_package_like and ENABLE_PACKAGES_RUNTIME_AFTER_BRANCHES:
                 packages_result = resolve_packages_query(text, conversation_id=conversation_id)
@@ -1007,13 +1332,13 @@ def route_runtime_message(
                         text,
                         _safe_str(packages_result.get("route")),
                     )
-                    return {
+                    return _final({
                         "reply": format_runtime_answer(_safe_str(packages_result.get("answer"))),
                         "route": _safe_str(packages_result.get("route")) or "packages",
                         "source": "packages",
                         "matched": True,
                         "meta": dict(packages_result.get("meta") or {}),
-                    }
+                    }, "after_faq_no_match_packages")
             if ENABLE_TESTS_RUNTIME_AFTER_PACKAGES:
                 tests_business_result = resolve_tests_business_query(
                     text,
@@ -1025,13 +1350,13 @@ def route_runtime_message(
                         text,
                         _safe_str(tests_business_result.get("route")),
                     )
-                    return {
+                    return _final({
                         "reply": format_runtime_answer(_safe_str(tests_business_result.get("answer"))),
                         "route": _safe_str(tests_business_result.get("route")) or "tests_business",
                         "source": "tests_business",
                         "matched": True,
                         "meta": _tests_business_meta(tests_business_result.get("meta") or {}),
-                    }
+                    }, "after_faq_no_match_tests_business")
 
                 tests_result = resolve_tests_query(text, conversation_id=conversation_id)
                 if bool(tests_result.get("matched")):
@@ -1040,13 +1365,13 @@ def route_runtime_message(
                         text,
                         _safe_str(tests_result.get("route")),
                     )
-                    return {
+                    return _final({
                         "reply": format_runtime_answer(_safe_str(tests_result.get("answer"))),
                         "route": _safe_str(tests_result.get("route")) or "tests",
                         "source": "tests",
                         "matched": True,
                         "meta": _tests_meta(tests_result.get("meta") or {}),
-                    }
+                    }, "after_faq_no_match_tests")
         if False:
             classifier_result = _try_ollama_classifier_fallback(
                 _safe_str(user_text),
@@ -1054,7 +1379,7 @@ def route_runtime_message(
             )
             if classifier_result is not None:
                 return classifier_result
-        return {
+        return _final({
             "reply": format_runtime_answer(get_faq_no_match_message()),
             "route": "faq_only_no_match",
             "source": "runtime_fallback",
@@ -1065,9 +1390,9 @@ def route_runtime_message(
                 "semantic_score": semantic_score,
                 "semantic_routing_used": semantic_routing_used,
             },
-        }
+        }, "faq_only_final_no_match")
 
-    return {
+    return _final({
         "reply": format_runtime_answer(get_out_of_scope_message()),
         "route": "no_runtime_mode",
         "source": "runtime_fallback",
@@ -1075,7 +1400,7 @@ def route_runtime_message(
         "meta": {
             "mode": "no_runtime_mode",
         },
-    }
+    }, "no_runtime_mode")
 
 
 def route_runtime_reply(

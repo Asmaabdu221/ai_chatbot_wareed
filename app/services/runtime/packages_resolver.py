@@ -1,4 +1,4 @@
-﻿"""Deterministic runtime resolver for package queries.
+"""Deterministic runtime resolver for package queries.
 
 Active runtime source of truth:
 - app/data/runtime/rag/packages_clean.jsonl
@@ -17,6 +17,7 @@ It supports:
 from __future__ import annotations
 
 import json
+import logging
 import re
 from functools import lru_cache
 from pathlib import Path
@@ -28,6 +29,7 @@ from app.services.runtime.selection_state import load_selection_state, save_sele
 from app.services.runtime.text_normalizer import normalize_arabic
 
 PACKAGES_JSONL_PATH = Path("app/data/runtime/rag/packages_clean.jsonl")
+logger = logging.getLogger(__name__)
 
 _GENERAL_HINTS = (
     "باقات",
@@ -412,6 +414,132 @@ def _to_float_or_none(value: Any) -> float | None:
         return None
 
 
+def _contains_boundary_phrase(query_norm: str, phrase: str) -> bool:
+    phrase_norm = _norm(phrase)
+    if not query_norm or not phrase_norm:
+        return False
+    if query_norm == phrase_norm:
+        return True
+    return f" {phrase_norm} " in f" {query_norm} "
+
+
+def _detector_score(
+    query_norm: str,
+    *,
+    hints: tuple[str, ...] | list[str],
+    strong_keywords: tuple[str, ...] | list[str] = (),
+    domain_phrases: tuple[str, ...] | list[str] = (),
+    blockers: tuple[str, ...] | list[str] = (),
+    ambiguity_penalty: bool = False,
+) -> dict[str, float]:
+    q_tokens = _tokenize(query_norm)
+    q_set = _expand_synonyms(q_tokens)
+    q_bigrams = _extract_bigrams(q_tokens)
+
+    score = 0.0
+    exact_hits = 0.0
+    boundary_hits = 0.0
+    overlap_hits = 0.0
+    strong_hits = 0.0
+    domain_hits = 0.0
+    blocker_hits = 0.0
+    ambiguity_hits = 0.0
+
+    for hint in hints:
+        hint_norm = _norm(hint)
+        if not hint_norm:
+            continue
+        if query_norm == hint_norm:
+            score += 3.0
+            exact_hits += 1.0
+        elif _contains_boundary_phrase(query_norm, hint_norm):
+            score += 2.0
+            boundary_hits += 1.0
+        elif hint_norm in query_norm:
+            score += 1.0
+
+        hint_tokens = _tokenize(hint_norm)
+        if hint_tokens:
+            hint_set = _expand_synonyms(hint_tokens)
+            overlap = len(q_set & hint_set)
+            if overlap and overlap == len(hint_tokens):
+                score += 1.25
+                overlap_hits += 1.0
+            elif overlap and len(hint_tokens) > 1:
+                score += 0.5
+                overlap_hits += 0.5
+
+    for keyword in strong_keywords:
+        keyword_norm = _norm(keyword)
+        if not keyword_norm:
+            continue
+        if _contains_boundary_phrase(query_norm, keyword_norm) or keyword_norm in q_set:
+            score += 1.5
+            strong_hits += 1.0
+
+    for phrase in domain_phrases:
+        phrase_norm = _norm(phrase)
+        if not phrase_norm:
+            continue
+        if _contains_boundary_phrase(query_norm, phrase_norm):
+            score += 1.0
+            domain_hits += 1.0
+            continue
+        phrase_tokens = _tokenize(phrase_norm)
+        if len(phrase_tokens) == 2 and f"{phrase_tokens[0]} {phrase_tokens[1]}" in q_bigrams:
+            score += 0.75
+            domain_hits += 0.75
+
+    for blocker in blockers:
+        blocker_norm = _norm(blocker)
+        if not blocker_norm:
+            continue
+        if _contains_boundary_phrase(query_norm, blocker_norm):
+            score -= 2.0
+            blocker_hits += 1.0
+
+    if ambiguity_penalty and len(q_tokens) <= 2 and all(t in _GENERIC_LOW_SIGNAL for t in q_tokens):
+        score -= 1.5
+        ambiguity_hits += 1.0
+
+    return {
+        "score": score,
+        "exact": exact_hits,
+        "boundary": boundary_hits,
+        "overlap": overlap_hits,
+        "strong": strong_hits,
+        "domain": domain_hits,
+        "blockers": blocker_hits,
+        "ambiguity_penalty": ambiguity_hits,
+    }
+
+
+def _detector_pick(
+    detector_name: str,
+    query_norm: str,
+    scores: dict[str, float],
+    *,
+    min_score: float,
+    legacy_match: bool,
+) -> bool:
+    score = float(scores.get("score", 0.0))
+    fallback_reason = ""
+    if score >= min_score:
+        result = True
+    else:
+        result = legacy_match
+        fallback_reason = "weak_or_ambiguous_score_legacy_substring"
+    logger.debug(
+        "packages_resolver.detector name=%s query=%r scores=%s result=%s fallback_reason=%s",
+        detector_name,
+        query_norm,
+        scores,
+        result,
+        fallback_reason,
+    )
+    return result
+
+
 @lru_cache(maxsize=1)
 def load_packages_records() -> list[dict[str, Any]]:
     """Load package records from packages_clean.jsonl only."""
@@ -472,23 +600,65 @@ def load_packages_records() -> list[dict[str, Any]]:
 
 
 def _is_price_query(query_norm: str) -> bool:
-    return any(_norm(h) in query_norm for h in _PRICE_HINTS)
+    legacy = any(_norm(h) in query_norm for h in _PRICE_HINTS)
+    scores = _detector_score(
+        query_norm,
+        hints=_PRICE_HINTS,
+        strong_keywords=("سعر", "بكم", "price", "cost", "how much"),
+        domain_phrases=("كم سعر", "how much"),
+        blockers=("الفرق بين", "قارن"),
+    )
+    return _detector_pick("price", query_norm, scores, min_score=2.0, legacy_match=legacy)
 
 
 def _is_general_query(query_norm: str) -> bool:
-    return any(_norm(h) in query_norm for h in _GENERAL_HINTS)
+    legacy = any(_norm(h) in query_norm for h in _GENERAL_HINTS)
+    scores = _detector_score(
+        query_norm,
+        hints=_GENERAL_HINTS,
+        strong_keywords=("باقات", "packages", "البرامج"),
+        domain_phrases=("available packages", "package list"),
+        blockers=("كم سعر", "وش تشمل", "ايش تشمل", "الفرق بين", "بديل"),
+        ambiguity_penalty=True,
+    )
+    return _detector_pick("general", query_norm, scores, min_score=2.0, legacy_match=legacy)
 
 
 def _is_general_listing_query(query_norm: str) -> bool:
-    return any(_norm(h) in query_norm for h in _GENERAL_LISTING_HINTS)
+    legacy = any(_norm(h) in query_norm for h in _GENERAL_LISTING_HINTS)
+    scores = _detector_score(
+        query_norm,
+        hints=_GENERAL_LISTING_HINTS,
+        strong_keywords=("باقات", "available", "package list"),
+        domain_phrases=("الباقات المتوفرة", "الباقات اللي عندكم", "available packages"),
+        blockers=("كم سعر", "وش تشمل", "ايش تشمل", "الفرق بين"),
+        ambiguity_penalty=True,
+    )
+    return _detector_pick("general_listing", query_norm, scores, min_score=2.0, legacy_match=legacy)
 
 
 def _is_detail_query(query_norm: str) -> bool:
-    return any(_norm(h) in query_norm for h in _DETAIL_HINTS)
+    legacy = any(_norm(h) in query_norm for h in _DETAIL_HINTS)
+    scores = _detector_score(
+        query_norm,
+        hints=_DETAIL_HINTS,
+        strong_keywords=("تفاصيل", "details", "include", "includes"),
+        domain_phrases=("what is included", "what does it include"),
+        blockers=("كم سعر", "الفرق بين"),
+    )
+    return _detector_pick("detail", query_norm, scores, min_score=2.0, legacy_match=legacy)
 
 
 def _is_inclusion_query(query_norm: str) -> bool:
-    return any(_norm(h) in query_norm for h in _INCLUSION_HINTS)
+    legacy = any(_norm(h) in query_norm for h in _INCLUSION_HINTS)
+    scores = _detector_score(
+        query_norm,
+        hints=_INCLUSION_HINTS,
+        strong_keywords=("تشمل", "تحتوي", "contains", "include"),
+        domain_phrases=("هل تحتوي على", "كم تحليل فيها"),
+        blockers=("كم سعر",),
+    )
+    return _detector_pick("inclusion", query_norm, scores, min_score=1.75, legacy_match=legacy)
 
 
 def _is_best_for_query(query_norm: str) -> bool:
@@ -522,7 +692,15 @@ def _is_best_for_query(query_norm: str) -> bool:
         "recommend",
         "recommended",
     ]
-    return any(_norm(k) in query_norm for k in keywords)
+    legacy = any(_norm(k) in query_norm for k in keywords)
+    scores = _detector_score(
+        query_norm,
+        hints=tuple(keywords),
+        strong_keywords=("افضل", "أفضل", "احسن", "انسب", "تنصحني", "recommend", "recommended", "best"),
+        domain_phrases=("best package", "افضل باقة", "احسن باقة"),
+        blockers=("الفرق بين", "قارن"),
+    )
+    return _detector_pick("best_for", query_norm, scores, min_score=2.0, legacy_match=legacy)
 
 
 def _detect_category(query_norm: str, records: list[dict[str, Any]]) -> str:
@@ -587,25 +765,70 @@ def _extract_analyte_terms(query: str) -> list[str]:
 def _is_analyte_query(query_norm: str, analyte_terms: list[str]) -> bool:
     if not analyte_terms:
         return False
-    return any(_norm(h) in query_norm for h in _ANALYTE_QUERY_HINTS)
+    legacy = any(_norm(h) in query_norm for h in _ANALYTE_QUERY_HINTS)
+    scores = _detector_score(
+        query_norm,
+        hints=_ANALYTE_QUERY_HINTS,
+        strong_keywords=("فيها", "تشمل", "contains", "include"),
+        domain_phrases=("هل تحتوي",),
+        blockers=("الفرق بين", "بديل"),
+    )
+    # Slight boost for analyte-rich queries while keeping conservative thresholding.
+    if len(analyte_terms) >= 2:
+        scores["score"] = float(scores.get("score", 0.0)) + 0.5
+    return _detector_pick("analyte", query_norm, scores, min_score=1.75, legacy_match=legacy)
 
 
 def _is_compare_query(query_norm: str) -> bool:
-    return any(_norm(h) in query_norm for h in _COMPARE_HINTS)
+    legacy = any(_norm(h) in query_norm for h in _COMPARE_HINTS)
+    scores = _detector_score(
+        query_norm,
+        hints=_COMPARE_HINTS,
+        strong_keywords=("الفرق", "بين", "compare"),
+        domain_phrases=("الفرق بين",),
+        blockers=("بديل", "مشابه"),
+    )
+    return _detector_pick("compare", query_norm, scores, min_score=2.0, legacy_match=legacy)
 
 
 def _is_alternatives_query(query_norm: str) -> bool:
-    return any(_norm(h) in query_norm for h in _ALTERNATIVE_HINTS)
+    legacy = any(_norm(h) in query_norm for h in _ALTERNATIVE_HINTS)
+    scores = _detector_score(
+        query_norm,
+        hints=_ALTERNATIVE_HINTS,
+        strong_keywords=("بديل", "مشابه", "similar", "alternative"),
+        domain_phrases=("باقة ثانية",),
+        blockers=("الفرق بين", "قارن"),
+    )
+    return _detector_pick("alternatives", query_norm, scores, min_score=1.75, legacy_match=legacy)
 
 
 def _is_ambiguous_package_query(query_norm: str) -> bool:
-    return any(_norm(h) in query_norm for h in _AMBIGUOUS_TERMS)
+    legacy = any(_norm(h) in query_norm for h in _AMBIGUOUS_TERMS)
+    scores = _detector_score(
+        query_norm,
+        hints=_AMBIGUOUS_TERMS,
+        strong_keywords=_AMBIGUOUS_TERMS,
+        domain_phrases=(),
+        blockers=("كم سعر", "وش تشمل", "ايش تشمل"),
+        ambiguity_penalty=True,
+    )
+    return _detector_pick("ambiguous_package", query_norm, scores, min_score=1.5, legacy_match=legacy)
 
 
 def _is_category_like_query(query_norm: str, detected_category: str) -> bool:
     if not query_norm:
         return False
-    if detected_category and _norm(detected_category) in query_norm:
+    legacy_detected = bool(detected_category and _norm(detected_category) in query_norm)
+    if legacy_detected:
+        logger.debug(
+            "packages_resolver.detector name=%s query=%r scores=%s result=%s fallback_reason=%s",
+            "category_like",
+            query_norm,
+            {"score": 3.0, "legacy_detected_category": 1.0},
+            True,
+            "",
+        )
         return True
     category_tokens = (
         "الفئة",
@@ -616,7 +839,15 @@ def _is_category_like_query(query_norm: str, detected_category: str) -> bool:
         "باقات جينية",
         "تحاليل جينية",
     )
-    return any(_norm(t) in query_norm for t in category_tokens)
+    legacy = any(_norm(t) in query_norm for t in category_tokens)
+    scores = _detector_score(
+        query_norm,
+        hints=category_tokens,
+        strong_keywords=("الفئة", "تصنيف", "جينية"),
+        domain_phrases=("نوع الباقات", "باقات رمضان", "تحاليل جينية"),
+        blockers=("كم سعر", "وش تشمل"),
+    )
+    return _detector_pick("category_like", query_norm, scores, min_score=1.75, legacy_match=legacy)
 
 
 def _is_package_like_offering(record: dict[str, Any]) -> bool:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from difflib import SequenceMatcher
 from functools import lru_cache
 from pathlib import Path
@@ -17,6 +18,7 @@ from app.services.runtime.tests_disambiguation import (
 from app.services.runtime.text_normalizer import normalize_arabic
 
 TESTS_BUSINESS_JSONL_PATH = Path("app/data/runtime/rag/tests_business_clean.jsonl")
+logger = logging.getLogger(__name__)
 
 _FASTING_HINTS = ("صيام", "صايم", "كم ساعه الصيام", "كم ساعة الصيام", "fasting")
 _PREPARATION_HINTS = (
@@ -149,23 +151,154 @@ def load_tests_business_records() -> list[dict[str, Any]]:
 
 
 def _has_any_hint(query_norm: str, hints: tuple[str, ...]) -> bool:
-    return any(_norm(h) in query_norm for h in hints)
+    if not query_norm:
+        return False
+    padded = f" {query_norm} "
+    for hint in hints:
+        h = _norm(hint)
+        if not h:
+            continue
+        if query_norm == h:
+            return True
+        if f" {h} " in padded:
+            return True
+        if h in query_norm:
+            return True
+    return False
+
+
+def _score_query_type(query_norm: str, hints: tuple[str, ...], strong_keywords: tuple[str, ...]) -> float:
+    if not query_norm:
+        return 0.0
+
+    score = 0.0
+    padded = f" {query_norm} "
+    query_tokens = set(_tokenize(query_norm))
+    if not query_tokens:
+        return 0.0
+
+    for hint in hints:
+        h = _norm(hint)
+        if not h:
+            continue
+        hint_tokens = set(_tokenize(h))
+
+        # Exact hint phrase match.
+        if query_norm == h:
+            score += 2.0
+            continue
+
+        # Boundary phrase containment (safer than loose substring).
+        if f" {h} " in padded:
+            score += 1.4
+        elif h in query_norm:
+            score += 0.9
+
+        # Token-overlap support signal.
+        if hint_tokens:
+            overlap = query_tokens.intersection(hint_tokens)
+            if overlap:
+                score += min(0.8, 0.25 * len(overlap))
+
+    # Strong keyword boost per intent.
+    for key in strong_keywords:
+        k = _norm(key)
+        if not k:
+            continue
+        if f" {k} " in padded or k in query_norm:
+            score += 0.45
+
+    # Ambiguity penalty for very short/generic queries.
+    if len(query_tokens) <= 2 and not any(k in query_norm for k in ("صيام", "تحضير", "عينه", "عينة", "بديل", "مكمل", "مكمله")):
+        score -= 0.25
+
+    return score
 
 
 def _detect_query_type(query_norm: str) -> str:
-    if _has_any_hint(query_norm, _COMPLEMENTARY_HINTS):
-        return "test_complementary_query"
-    if _has_any_hint(query_norm, _ALTERNATIVE_HINTS):
-        return "test_alternative_query"
-    if _has_any_hint(query_norm, _SAMPLE_TYPE_HINTS):
-        return "test_sample_type_query"
-    if _has_any_hint(query_norm, _FASTING_HINTS):
-        return "test_fasting_query"
-    if _has_any_hint(query_norm, _PREPARATION_HINTS):
-        return "test_preparation_query"
-    if _has_any_hint(query_norm, _SYMPTOMS_HINTS):
-        return "test_symptoms_query"
-    return "no_match"
+    if not query_norm:
+        return "no_match"
+
+    scored: dict[str, float] = {
+        "test_complementary_query": _score_query_type(
+            query_norm,
+            _COMPLEMENTARY_HINTS,
+            ("مكمل", "مكمله", "مكملة", "complementary"),
+        ),
+        "test_alternative_query": _score_query_type(
+            query_norm,
+            _ALTERNATIVE_HINTS,
+            ("بديل", "بديله", "بديلة", "alternative", "مشابه"),
+        ),
+        "test_sample_type_query": _score_query_type(
+            query_norm,
+            _SAMPLE_TYPE_HINTS,
+            ("عينه", "عينة", "sample"),
+        ),
+        "test_fasting_query": _score_query_type(
+            query_norm,
+            _FASTING_HINTS,
+            ("صيام", "صايم", "fasting"),
+        ),
+        "test_preparation_query": _score_query_type(
+            query_norm,
+            _PREPARATION_HINTS,
+            ("تحضير", "استعداد", "لازم", "قبل"),
+        ),
+        "test_symptoms_query": _score_query_type(
+            query_norm,
+            _SYMPTOMS_HINTS,
+            ("اعراض", "أعراض", "لتساقط", "مناسب"),
+        ),
+    }
+
+    ranked = sorted(scored.items(), key=lambda x: x[1], reverse=True)
+    best_type, best_score = ranked[0]
+    second_score = ranked[1][1] if len(ranked) > 1 else 0.0
+    margin = best_score - second_score
+
+    selected = "no_match"
+    fallback_reason = ""
+
+    # Conservative selection: require signal + clear winner.
+    if best_score >= 1.15 and margin >= 0.20:
+        selected = best_type
+    else:
+        # Backward-compatible conservative fallback: previous ordered hint checks.
+        if _has_any_hint(query_norm, _COMPLEMENTARY_HINTS):
+            selected = "test_complementary_query"
+            fallback_reason = "fallback_ordered_hints"
+        elif _has_any_hint(query_norm, _ALTERNATIVE_HINTS):
+            selected = "test_alternative_query"
+            fallback_reason = "fallback_ordered_hints"
+        elif _has_any_hint(query_norm, _SAMPLE_TYPE_HINTS):
+            selected = "test_sample_type_query"
+            fallback_reason = "fallback_ordered_hints"
+        elif _has_any_hint(query_norm, _FASTING_HINTS):
+            selected = "test_fasting_query"
+            fallback_reason = "fallback_ordered_hints"
+        elif _has_any_hint(query_norm, _PREPARATION_HINTS):
+            selected = "test_preparation_query"
+            fallback_reason = "fallback_ordered_hints"
+        elif _has_any_hint(query_norm, _SYMPTOMS_HINTS):
+            selected = "test_symptoms_query"
+            fallback_reason = "fallback_ordered_hints"
+        else:
+            selected = "no_match"
+            fallback_reason = "low_or_ambiguous_score"
+
+    logger.debug(
+        "tests_business query_type_detection | query=%s | scores=%s | best=%s | best_score=%.3f | second=%.3f | margin=%.3f | selected=%s | reason=%s",
+        query_norm,
+        scored,
+        best_type,
+        best_score,
+        second_score,
+        margin,
+        selected,
+        fallback_reason or "scored_selection",
+    )
+    return selected
 
 
 def _score_test_name_match(query_norm: str, test_name_norm: str) -> float:
