@@ -76,6 +76,12 @@ _TARGET_QUERY_ROUTE = {
     "test_alternative_query": "tests_business_alternative",
     "test_sample_type_query": "tests_business_sample_type",
 }
+_RELAXED_BUSINESS_TARGET_TYPES = {
+    "test_fasting_query",
+    "test_preparation_query",
+    "test_sample_type_query",
+}
+_RELAXED_BUSINESS_TARGET_SCORE = 0.58
 
 
 def _safe_str(value: Any) -> str:
@@ -663,6 +669,28 @@ def resolve_tests_business_query(user_text: str, conversation_id: UUID | None = 
 
     query_norm = _normalize_business_query_aliases(query_norm)
     target, score = _find_target_test(query_norm, records)
+    if target is None and query_type in _RELAXED_BUSINESS_TARGET_TYPES:
+        ranked_candidates = _rank_target_candidates(query_norm, records)
+        if ranked_candidates:
+            top_score, top_record = ranked_candidates[0]
+            if top_score >= _RELAXED_BUSINESS_TARGET_SCORE:
+                logger.debug(
+                    "tests_business relaxed_target_accept | query=%s | query_type=%s | top_score=%.3f | threshold=%.3f | accepted=true",
+                    query_norm,
+                    query_type,
+                    top_score,
+                    _RELAXED_BUSINESS_TARGET_SCORE,
+                )
+                target = top_record
+                score = top_score
+            else:
+                logger.debug(
+                    "tests_business relaxed_target_accept | query=%s | query_type=%s | top_score=%.3f | threshold=%.3f | accepted=false",
+                    query_norm,
+                    query_type,
+                    top_score,
+                    _RELAXED_BUSINESS_TARGET_SCORE,
+                )
     if target is None:
         ranked_disambiguation_reply = _build_ranked_disambiguation_reply(
             query_norm,
