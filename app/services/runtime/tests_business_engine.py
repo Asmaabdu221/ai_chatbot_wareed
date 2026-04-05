@@ -81,7 +81,7 @@ _RELAXED_BUSINESS_TARGET_TYPES = {
     "test_preparation_query",
     "test_sample_type_query",
 }
-_RELAXED_BUSINESS_TARGET_SCORE = 0.58
+_RELAXED_BUSINESS_TARGET_SCORE = 0.54
 
 
 def _safe_str(value: Any) -> str:
@@ -401,6 +401,23 @@ def _rank_target_candidates(query_norm: str, records: list[dict[str, Any]]) -> l
     return scored
 
 
+def _extract_target_tokens_for_relevance(query_norm: str) -> set[str]:
+    candidate = _extract_test_candidate(query_norm)
+    if not candidate:
+        return set()
+    return {t for t in _tokenize(candidate) if len(t) > 1 and t not in {"تحليل", "فحص", "اختبار", "عينة", "العينة", "نوع"}}
+
+
+def _record_relevance_score(record: dict[str, Any], target_tokens: set[str]) -> float:
+    if not target_tokens:
+        return 0.0
+    terms_blob = " ".join([_safe_str(record.get("test_name_norm")), " ".join(record.get("match_terms_norm") or [])]).strip()
+    if not terms_blob:
+        return 0.0
+    hits = sum(1 for t in target_tokens if t and t in terms_blob)
+    return hits / max(len(target_tokens), 1)
+
+
 def _find_target_test(query_norm: str, records: list[dict[str, Any]]) -> tuple[dict[str, Any] | None, float]:
     ranked = _rank_target_candidates(query_norm, records)
     if not ranked:
@@ -670,25 +687,37 @@ def resolve_tests_business_query(user_text: str, conversation_id: UUID | None = 
     query_norm = _normalize_business_query_aliases(query_norm)
     target, score = _find_target_test(query_norm, records)
     if target is None and query_type in _RELAXED_BUSINESS_TARGET_TYPES:
-        ranked_candidates = _rank_target_candidates(query_norm, records)
+        target_tokens = _extract_target_tokens_for_relevance(query_norm)
+        if query_type == "test_sample_type_query" and not target_tokens:
+            logger.debug(
+                "tests_business relaxed_target_accept blocked | query=%s | query_type=%s | reason=generic_sample_type_without_target",
+                query_norm,
+                query_type,
+            )
+            ranked_candidates = []
+        else:
+            ranked_candidates = _rank_target_candidates(query_norm, records)
         if ranked_candidates:
             top_score, top_record = ranked_candidates[0]
-            if top_score >= _RELAXED_BUSINESS_TARGET_SCORE:
+            relevance = _record_relevance_score(top_record, target_tokens)
+            if top_score >= _RELAXED_BUSINESS_TARGET_SCORE and relevance >= 0.34:
                 logger.debug(
-                    "tests_business relaxed_target_accept | query=%s | query_type=%s | top_score=%.3f | threshold=%.3f | accepted=true",
+                    "tests_business relaxed_target_accept | query=%s | query_type=%s | top_score=%.3f | relevance=%.3f | threshold=%.3f | accepted=true",
                     query_norm,
                     query_type,
                     top_score,
+                    relevance,
                     _RELAXED_BUSINESS_TARGET_SCORE,
                 )
                 target = top_record
                 score = top_score
             else:
                 logger.debug(
-                    "tests_business relaxed_target_accept | query=%s | query_type=%s | top_score=%.3f | threshold=%.3f | accepted=false",
+                    "tests_business relaxed_target_accept | query=%s | query_type=%s | top_score=%.3f | relevance=%.3f | threshold=%.3f | accepted=false",
                     query_norm,
                     query_type,
                     top_score,
+                    relevance,
                     _RELAXED_BUSINESS_TARGET_SCORE,
                 )
     if target is None:
