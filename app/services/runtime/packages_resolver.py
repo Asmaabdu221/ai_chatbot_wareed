@@ -1680,7 +1680,12 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
             if remembered_package_label:
                 remembered_package_record = _find_package_by_label(remembered_package_label, records)
 
-    if remembered_package_record is not None:
+    explicit_package_match_for_override = _find_specific_package_by_name_pass(query, records)
+    if explicit_package_match_for_override is None:
+        explicit_package_match_for_override = _find_specific_package(query, records)
+    has_explicit_package_in_query = explicit_package_match_for_override is not None
+
+    if remembered_package_record is not None and not has_explicit_package_in_query:
         remembered_id = _safe_str(remembered_package_record.get("id"))
         if _is_package_price_followup_query(query_norm):
             if best_for_context:
