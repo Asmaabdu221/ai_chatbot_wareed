@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+from app.services.runtime.entity_memory import load_entity_memory
 from app.services.runtime.selection_state import load_selection_state, save_selection_state
 from app.services.runtime.text_normalizer import normalize_arabic
 
@@ -58,6 +59,7 @@ _CITY_STOPWORDS = {
     "بال",
 }
 _DISTRICT_QUERY_HINTS = ("حي", "الحي", "منطقة", "منطقه", "قريب من", "قريبه من", "بحي")
+_DIRECTIONAL_TOKENS = ("شمال", "جنوب", "شرق", "غرب", "وسط", "شمالي", "جنوبي", "شرقي", "غربي")
 _CITY_CANONICAL_ALIASES = {
     "الرياض": "الرياض",
     "رياض": "الرياض",
@@ -365,7 +367,7 @@ def _format_branch_name_for_reply(name: str) -> str:
     return value
 
 
-def _extract_area_candidate(query_norm: str) -> str:
+def _extract_area_candidate(query_norm: str, *, allow_single_word: bool = False) -> str:
     patterns = (
         r"(?:بحي|حي|الحي)\s+([^\s]+)",
         r"(?:منطقة|منطقه)\s+([^\s]+)",
@@ -380,10 +382,21 @@ def _extract_area_candidate(query_norm: str) -> str:
             candidate = _safe_str(match.group(1)).strip("-")
             if candidate and candidate not in _CITY_STOPWORDS and candidate not in {"مدينة"}:
                 return candidate
+    if allow_single_word:
+        tokens = [t for t in query_norm.split() if t]
+        if len(tokens) == 1:
+            token = _safe_str(tokens[0]).strip("-")
+            if (
+                token
+                and token not in _CITY_STOPWORDS
+                and normalize_arabic(_normalize_city_token(token)) not in _CITY_ALIAS_NORMS
+                and token not in _DIRECTIONAL_TOKENS
+            ):
+                return token
     return ""
 
 
-def _detect_district(query_norm: str, records: list[dict[str, Any]]) -> str:
+def _detect_district(query_norm: str, records: list[dict[str, Any]], *, allow_single_word: bool = False) -> str:
     if not query_norm:
         return ""
 
@@ -396,8 +409,11 @@ def _detect_district(query_norm: str, records: list[dict[str, Any]]) -> str:
         if district and district in query_norm:
             return district
 
-    candidate = _extract_area_candidate(query_norm)
+    candidate = _extract_area_candidate(query_norm, allow_single_word=allow_single_word)
     if not candidate:
+        return ""
+    # Directional phrases (e.g. "شمال الرياض") should not be treated as district names.
+    if any(candidate.startswith(d) for d in _DIRECTIONAL_TOKENS):
         return ""
     if normalize_arabic(_normalize_city_token(candidate)) in _CITY_ALIAS_NORMS:
         return ""
@@ -572,6 +588,49 @@ def _format_city_reply(city: str, city_records: list[dict[str, Any]], conversati
         lines.append(f"{idx}) {branch_name}")
     lines.append("اختر الرقم الأقرب أو المناسب لك، وأرسل لك رابط الموقع.")
     return _normalize_reply_text("\n".join(lines))
+
+
+def _is_short_locality_refinement_query(query_norm: str) -> bool:
+    if not query_norm:
+        return False
+    words = [w for w in query_norm.split() if w]
+    if not (1 <= len(words) <= 3):
+        return False
+    if re.search(r"[a-zA-Z0-9]", query_norm):
+        return False
+    blocked = {"نعم", "ايوا", "ايوه", "تمام", "اوكي", "ok", "وش", "ايش", "ما", "متى", "كيف", "كم", "سعر", "باقة", "تحليل"}
+    if any(w in blocked for w in words):
+        return False
+    return True
+
+
+def _extract_city_from_directional_phrase(query_norm: str, records: list[dict[str, Any]]) -> str:
+    words = [w for w in query_norm.split() if w]
+    if len(words) < 2:
+        return ""
+    if words[0] not in _DIRECTIONAL_TOKENS:
+        return ""
+    tail = " ".join(words[1:]).strip()
+    if not tail:
+        return ""
+    return _detect_city(tail, records)
+
+
+def _get_recent_branch_city_context(conversation_id: UUID | None) -> str:
+    if conversation_id is None:
+        return ""
+    state = load_selection_state(conversation_id)
+    if _safe_str(state.get("last_selection_type")) == "branch":
+        city_from_state = _safe_str(state.get("city"))
+        if city_from_state:
+            return normalize_arabic(city_from_state)
+    memory = load_entity_memory(conversation_id)
+    if _safe_str(memory.get("last_intent")) != "branch":
+        return ""
+    city_from_memory = _safe_str((memory.get("last_branch") or {}).get("city"))
+    if city_from_memory:
+        return normalize_arabic(city_from_memory)
+    return ""
 
 
 def _format_nearest_city_clarification(city: str) -> str:
@@ -765,7 +824,21 @@ def resolve_branches_query(user_text: str, conversation_id: UUID | None = None) 
 
     city_norm = _detect_city(query_norm, records)
     city_records = [r for r in records if city_norm and _safe_str(r.get("city_norm")) == city_norm]
-    district_norm = _detect_district(query_norm, records)
+
+    refinement_mode = False
+    recent_city_context = _get_recent_branch_city_context(conversation_id)
+    if recent_city_context and _is_short_locality_refinement_query(query_norm):
+        refinement_mode = True
+        directional_city_norm = _extract_city_from_directional_phrase(query_norm, records)
+        if directional_city_norm:
+            city_norm = directional_city_norm
+        elif not city_norm:
+            city_norm = recent_city_context
+        city_records = [r for r in records if city_norm and _safe_str(r.get("city_norm")) == city_norm]
+
+    district_norm = _detect_district(query_norm, city_records if (refinement_mode and city_records) else records, allow_single_word=refinement_mode)
+    if not district_norm:
+        district_norm = _detect_district(query_norm, records, allow_single_word=refinement_mode)
 
     specific = _is_specific_branches_query(query_norm)
     generic = _is_generic_branches_query(query_norm)
@@ -829,6 +902,7 @@ def resolve_branches_query(user_text: str, conversation_id: UUID | None = None) 
         or "مدينة" in query_norm
         or query_norm == city_norm
         or _normalize_city_token(query_norm) == city_norm
+        or (refinement_mode and bool(city_norm))
     )
 
     query_type = classify_branch_query_type(
@@ -924,6 +998,13 @@ def resolve_branches_query(user_text: str, conversation_id: UUID | None = None) 
 
     if query_type == "nearest_city" and city_records:
         city = _safe_str(city_records[0].get("city"))
+        if conversation_id is not None:
+            save_selection_state(
+                conversation_id,
+                options=[],
+                selection_type="branch",
+                city=city,
+            )
         return {
             "matched": True,
             "answer": _format_nearest_city_clarification(city),

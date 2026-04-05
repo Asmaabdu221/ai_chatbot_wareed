@@ -213,6 +213,17 @@ _CONTEXT_BRANCH_FOLLOWUPS = (
     "الموقع",
     "لوكيشن",
     "location",
+    "الرياض",
+    "جده",
+    "جدة",
+    "مكه",
+    "مكة",
+    "الشرقيه",
+    "الشرقية",
+    "شمال الرياض",
+    "شرق الرياض",
+    "غرب الرياض",
+    "جنوب الرياض",
 )
 
 
@@ -238,6 +249,34 @@ def _is_context_followup_query(text: str, triggers: tuple[str, ...]) -> bool:
         min_score=1.75,
         legacy_match=legacy,
     )
+
+
+def _is_short_branch_locality_followup(
+    text: str,
+    *,
+    is_tests_like: bool,
+    is_package_like: bool,
+    is_results_like: bool,
+) -> bool:
+    q = normalize_arabic(_safe_str(text))
+    if not q:
+        return False
+    if is_tests_like or is_package_like or is_results_like:
+        return False
+    words = [w for w in q.split() if w]
+    if not (1 <= len(words) <= 3):
+        return False
+    # Keep heuristic conservative: only Arabic locality-style short follow-ups.
+    if re.search(r"[a-zA-Z0-9]", q):
+        return False
+    blocked_tokens = {
+        "نعم", "ايوا", "ايوه", "تمام", "اوكي", "ok",
+        "وش", "ايش", "ما", "متى", "كيف", "ليه",
+        "سعر", "كم", "تحليل", "باقة", "نتيجة",
+    }
+    if any(token in blocked_tokens for token in words):
+        return False
+    return True
 
 
 def _parse_numeric_selection(text: str) -> int | None:
@@ -981,6 +1020,13 @@ def route_runtime_message(
             is_detail_followup = _is_context_followup_query(text, _CONTEXT_DETAIL_FOLLOWUPS)
             is_price_followup = _is_context_followup_query(text, _CONTEXT_PRICE_FOLLOWUPS)
             is_branch_followup = _is_context_followup_query(text, _CONTEXT_BRANCH_FOLLOWUPS)
+            is_results_like_for_branch_context = looks_like_result_query(text)
+            is_branch_locality_followup = _is_short_branch_locality_followup(
+                text,
+                is_tests_like=is_tests_like,
+                is_package_like=is_package_like,
+                is_results_like=is_results_like_for_branch_context,
+            )
 
             # Context-first routing for short follow-ups (before fallback paths).
             if (
@@ -1029,8 +1075,8 @@ def route_runtime_message(
                     }, "context_followup_tests")
             if (
                 last_intent == "branch"
-                and last_branch
-                and is_branch_followup
+                and (last_branch or is_branch_locality_followup)
+                and (is_branch_followup or is_branch_locality_followup)
                 and not is_package_like
                 and not is_tests_like
             ):
