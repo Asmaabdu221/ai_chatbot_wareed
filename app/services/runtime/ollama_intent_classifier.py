@@ -3,50 +3,31 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import urllib.error
 import urllib.request
 from typing import Any
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
-OLLAMA_MODEL = "qwen2.5:7b"
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/api").rstrip("/")
+OLLAMA_URL = f"{OLLAMA_BASE_URL}/generate"
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
 REQUEST_TIMEOUT_SECONDS = 15
 
 _ALLOWED_INTENTS = {"test", "package", "branch", "faq", "symptoms", "results", "unknown"}
 
-_FALLBACK: dict[str, Any] = {
-    "intent": "unknown",
-    "confidence": 0.0,
-    "is_followup": False,
-}
+_FALLBACK_LABEL = "unknown"
 
 _SYSTEM_PROMPT_TEMPLATE = """You are an intent classifier for a medical lab assistant.
 
-You must return ONLY valid JSON.
+Return ONLY one lowercase label with no punctuation and no explanation.
 
 Allowed intents:
 test, package, branch, faq, symptoms, results, unknown
 
-Definitions:
-- test: question about a lab test (price, fasting, info)
-- package: question about packages
-- branch: location, branches, cities
-- faq: general service questions
-- symptoms: user describes symptoms
-- results: interpreting lab results
-
-Output format ONLY:
-
-{
-  "intent": "...",
-  "confidence": 0.0,
-  "is_followup": false
-}
-
 Rules:
-- Do not explain
-- Do not add text outside JSON
-- Confidence between 0 and 1
+- Output exactly one label from the allowed list.
+- If uncertain, output unknown.
 
 User message:
 {user_text}
@@ -83,35 +64,34 @@ def _extract_json_object(text: str) -> dict[str, Any] | None:
     return None
 
 
-def _validate_output(payload: dict[str, Any] | None) -> dict[str, Any]:
-    if not isinstance(payload, dict):
-        return dict(_FALLBACK)
+def _extract_intent_label(text: str) -> str:
+    value = _safe_str(text).lower()
+    if not value:
+        return _FALLBACK_LABEL
 
-    intent = _safe_str(payload.get("intent")).lower()
-    if intent not in _ALLOWED_INTENTS:
-        intent = "unknown"
+    # Direct label.
+    if value in _ALLOWED_INTENTS:
+        return value
 
-    try:
-        confidence = float(payload.get("confidence", 0.0))
-    except (TypeError, ValueError):
-        confidence = 0.0
-    confidence = max(0.0, min(1.0, confidence))
+    # JSON object fallback.
+    parsed = _extract_json_object(value)
+    if isinstance(parsed, dict):
+        candidate = _safe_str(parsed.get("intent")).lower()
+        if candidate in _ALLOWED_INTENTS:
+            return candidate
 
-    is_followup = bool(payload.get("is_followup", False))
-
-    return {
-        "intent": intent,
-        "confidence": confidence,
-        "is_followup": is_followup,
-    }
+    # Regex fallback inside free text.
+    match = re.search(r"\b(test|package|branch|faq|symptoms|results|unknown)\b", value)
+    if match:
+        return _safe_str(match.group(1)).lower()
+    return _FALLBACK_LABEL
 
 
-def classify_intent(user_text: str, context: dict) -> dict:
-    """Classify user intent via local Ollama. Never raises; returns safe fallback."""
-    _ = context  # reserved for future safe context-aware classification
+def classify_intent_label(user_text: str) -> str:
+    """Classify user query to one allowed label using local Ollama."""
     message = _safe_str(user_text)
     if not message:
-        return dict(_FALLBACK)
+        return _FALLBACK_LABEL
 
     prompt = _SYSTEM_PROMPT_TEMPLATE.format(user_text=message)
     body = {
@@ -132,8 +112,7 @@ def classify_intent(user_text: str, context: dict) -> dict:
             raw = resp.read().decode("utf-8")
         outer = json.loads(raw)
         response_text = _safe_str((outer or {}).get("response"))
-        parsed = _extract_json_object(response_text)
-        return _validate_output(parsed)
+        return _extract_intent_label(response_text)
     except (
         urllib.error.URLError,
         TimeoutError,
@@ -141,5 +120,20 @@ def classify_intent(user_text: str, context: dict) -> dict:
         ValueError,
         OSError,
     ):
-        return dict(_FALLBACK)
+        return _FALLBACK_LABEL
 
+
+def _validate_output(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {"intent": _FALLBACK_LABEL}
+
+    intent = _safe_str(payload.get("intent")).lower()
+    if intent not in _ALLOWED_INTENTS:
+        intent = _FALLBACK_LABEL
+    return {"intent": intent}
+
+
+def classify_intent(user_text: str, context: dict) -> dict:
+    """Backward-compatible wrapper returning dict with `intent` only."""
+    _ = context  # reserved for future safe context-aware classification
+    return _validate_output({"intent": classify_intent_label(user_text)})

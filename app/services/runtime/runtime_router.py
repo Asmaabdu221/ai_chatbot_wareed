@@ -26,7 +26,7 @@ from app.services.runtime.branches_semantic_intent import (
     is_confident_branch_intent,
 )
 from app.services.runtime.faq_resolver import resolve_faq
-from app.services.runtime.ollama_intent_classifier import classify_intent
+from app.services.runtime.ollama_intent_classifier import classify_intent_label
 from app.services.runtime.packages_business_engine import handle_packages_business_query
 from app.services.runtime.packages_resolver import resolve_packages_query
 from app.services.runtime.results_engine import interpret_result_query
@@ -1083,23 +1083,17 @@ def _try_ollama_classifier_fallback(
     if not raw_text:
         return None
 
-    memory = load_entity_memory(conversation_id)
-    cls = classify_intent(raw_text, memory)
-    print("AI classifier:", cls)
+    intent = _safe_str(classify_intent_label(raw_text)).lower()
+    logger.debug("ollama fallback used | query=%s | intent=%s", raw_text, intent)
 
-    intent = _safe_str((cls or {}).get("intent")).lower()
-    try:
-        confidence = float((cls or {}).get("confidence") or 0.0)
-    except (TypeError, ValueError):
-        confidence = 0.0
-
-    if confidence < 0.85:
-        return None
     if intent not in {"test", "package", "branch", "faq", "symptoms", "results", "unknown"}:
+        logger.debug("ollama fallback invalid_intent | intent=%s", intent)
         return None
-    if _has_strong_keyword_conflict(raw_text, intent):
+    if intent == "unknown":
+        logger.debug("ollama fallback unknown_intent | query=%s", raw_text)
         return None
-    if intent in {"faq", "symptoms", "results", "unknown"}:
+    if intent in {"test", "package", "branch"} and _has_strong_keyword_conflict(raw_text, intent):
+        logger.debug("ollama fallback blocked_by_keyword_conflict | intent=%s | query=%s", intent, raw_text)
         return None
 
     if intent == "test":
@@ -1124,6 +1118,7 @@ def _try_ollama_classifier_fallback(
                 "matched": True,
                 "meta": _tests_meta(tests_result.get("meta") or {}),
             }
+        logger.debug("ollama fallback reroute_failed | intent=test")
         return None
 
     if intent == "package":
@@ -1154,6 +1149,7 @@ def _try_ollama_classifier_fallback(
                 "matched": True,
                 "meta": dict(packages_result.get("meta") or {}),
             }
+        logger.debug("ollama fallback reroute_failed | intent=package")
         return None
 
     if intent == "branch":
@@ -1166,6 +1162,77 @@ def _try_ollama_classifier_fallback(
                 "matched": True,
                 "meta": dict(branches_result.get("meta") or {}),
             }
+        logger.debug("ollama fallback reroute_failed | intent=branch")
+        return None
+
+    if intent == "faq":
+        faq_result = resolve_faq(raw_text)
+        if faq_result:
+            return {
+                "reply": format_runtime_answer(_safe_str(faq_result.get("answer"))),
+                "route": "faq_only",
+                "source": "faq",
+                "matched": True,
+                "meta": {
+                    "faq_id": _safe_str(faq_result.get("faq_id")),
+                    "question": _safe_str(faq_result.get("question")),
+                    "score": float(faq_result.get("score") or 0.0),
+                    "margin": float(faq_result.get("margin") or 0.0),
+                    "matched_text": _safe_str(faq_result.get("matched_text")),
+                    "concepts": list(faq_result.get("concepts") or []),
+                },
+            }
+        logger.debug("ollama fallback reroute_failed | intent=faq")
+        return None
+
+    if intent == "symptoms":
+        symptoms_result = handle_symptoms_query(raw_text)
+        if symptoms_result:
+            if _safe_str(symptoms_result.get("type")) == "symptom_clarification":
+                return {
+                    "reply": format_runtime_answer(
+                        _safe_str(symptoms_result.get("answer"))
+                        or "وصف العرض الرئيسي بشكل أوضح (مثل: صداع مستمر، حرارة مع كحة، ألم بطن مع غثيان)."
+                    ),
+                    "route": "symptoms_clarification",
+                    "source": "symptoms_engine",
+                    "matched": True,
+                    "meta": {
+                        "query_type": "symptoms_query",
+                        "symptoms": list(symptoms_result.get("symptoms") or []),
+                        "tests_count": 0,
+                        "packages_count": 0,
+                        "clarification_needed": True,
+                    },
+                }
+            return {
+                "reply": format_runtime_answer(_format_symptoms_suggestions_reply(symptoms_result)),
+                "route": "symptoms_suggestions",
+                "source": "symptoms_engine",
+                "matched": True,
+                "meta": {
+                    "query_type": "symptoms_query",
+                    "symptoms": list(symptoms_result.get("symptoms") or []),
+                    "tests_count": len(list(symptoms_result.get("tests") or [])),
+                    "packages_count": len(list(symptoms_result.get("packages") or [])),
+                },
+            }
+        logger.debug("ollama fallback reroute_failed | intent=symptoms")
+        return None
+
+    if intent == "results":
+        result_answer = _safe_str(interpret_result_query(raw_text))
+        if result_answer:
+            return {
+                "reply": format_runtime_answer(result_answer),
+                "route": "results_interpretation",
+                "source": "results_engine",
+                "matched": True,
+                "meta": {
+                    "query_type": "result_interpretation",
+                },
+            }
+        logger.debug("ollama fallback reroute_failed | intent=results")
         return None
 
     return None
@@ -1558,13 +1625,18 @@ def route_runtime_message(
                 is_package_like,
                 is_tests_like,
             )
-            if False:
-                classifier_result = _try_ollama_classifier_fallback(
-                    _safe_str(user_text),
-                    conversation_id=conversation_id,
+            classifier_result = _try_ollama_classifier_fallback(
+                _safe_str(user_text),
+                conversation_id=conversation_id,
+            )
+            if classifier_result is not None:
+                logger.debug(
+                    "ollama fallback reroute_succeeded | stage=domains_prefilter_no_match | route=%s | source=%s",
+                    _safe_str(classifier_result.get("route")),
+                    _safe_str(classifier_result.get("source")),
                 )
-                if classifier_result is not None:
-                    return classifier_result
+                return _final(classifier_result, "ollama_fallback_domains_prefilter")
+            logger.debug("ollama fallback reroute_failed | stage=domains_prefilter_no_match")
             logger.debug(
                 "domains pre-faq guard fallback faq attempt | q=%s | numeric=%s | branch_like=%s | package_like=%s | tests_like=%s",
                 text,
@@ -1764,13 +1836,18 @@ def route_runtime_message(
                         "matched": True,
                         "meta": _tests_meta(tests_result.get("meta") or {}),
                     }, "after_faq_no_match_tests")
-        if False:
-            classifier_result = _try_ollama_classifier_fallback(
-                _safe_str(user_text),
-                conversation_id=conversation_id,
+        classifier_result = _try_ollama_classifier_fallback(
+            _safe_str(user_text),
+            conversation_id=conversation_id,
+        )
+        if classifier_result is not None:
+            logger.debug(
+                "ollama fallback reroute_succeeded | stage=faq_only_final_no_match | route=%s | source=%s",
+                _safe_str(classifier_result.get("route")),
+                _safe_str(classifier_result.get("source")),
             )
-            if classifier_result is not None:
-                return classifier_result
+            return _final(classifier_result, "ollama_fallback_faq_only_no_match")
+        logger.debug("ollama fallback reroute_failed | stage=faq_only_final_no_match")
         return _final({
             "reply": format_runtime_answer(get_faq_no_match_message()),
             "route": "faq_only_no_match",
@@ -1783,6 +1860,19 @@ def route_runtime_message(
                 "semantic_routing_used": semantic_routing_used,
             },
         }, "faq_only_final_no_match")
+
+    classifier_result = _try_ollama_classifier_fallback(
+        _safe_str(user_text),
+        conversation_id=conversation_id,
+    )
+    if classifier_result is not None:
+        logger.debug(
+            "ollama fallback reroute_succeeded | stage=no_runtime_mode | route=%s | source=%s",
+            _safe_str(classifier_result.get("route")),
+            _safe_str(classifier_result.get("source")),
+        )
+        return _final(classifier_result, "ollama_fallback_no_runtime_mode")
+    logger.debug("ollama fallback reroute_failed | stage=no_runtime_mode")
 
     return _final({
         "reply": format_runtime_answer(get_out_of_scope_message()),
