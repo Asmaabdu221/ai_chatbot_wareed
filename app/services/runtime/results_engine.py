@@ -15,6 +15,7 @@ _CONSULT_TEXT = "يرجى استشارة الطبيب، ولمزيد من الم
 _NEED_MORE_INFO = "أرسل صورة التحليل أو اكتب اسم التحليل مع النتيجة والمرجع الأدنى والأعلى."
 _GENERIC_WORDS = ("نتيجتي", "نتيجة", "النتيجة", "تحليل", "فحص", "test", "result")
 _ALIAS_NOISE_HINTS = ("باقة", "باقه", "package", "offer", "عرض")
+_GENERIC_WORDS_NORM = {normalize_arabic(w) for w in _GENERIC_WORDS}
 _QUALITATIVE_TOKENS = {
     "negative": "negative",
     "non reactive": "non_reactive",
@@ -113,7 +114,7 @@ def _clean_query_for_name_match(query: str) -> str:
     n = _norm(_strip_numbers(query))
     if not n:
         return ""
-    tokens = [t for t in n.split() if t and t not in _GENERIC_WORDS]
+    tokens = [t for t in n.split() if t and t not in _GENERIC_WORDS_NORM]
     return " ".join(tokens).strip()
 
 

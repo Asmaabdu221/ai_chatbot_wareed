@@ -30,7 +30,7 @@ from app.services.runtime.ollama_intent_classifier import classify_intent
 from app.services.runtime.packages_business_engine import handle_packages_business_query
 from app.services.runtime.packages_resolver import resolve_packages_query
 from app.services.runtime.results_engine import interpret_result_query
-from app.services.runtime.results_query_detector import looks_like_result_query
+from app.services.runtime.results_query_detector import analyze_result_query, looks_like_result_query
 from app.services.runtime.response_formatter import format_runtime_answer
 from app.services.runtime.selection_state import load_selection_state
 from app.services.runtime.runtime_fallbacks import (
@@ -1101,13 +1101,29 @@ def route_runtime_message(
                         "meta": dict(branches_result.get("meta") or {}),
                     }, "context_followup_branch")
 
-        if looks_like_result_query(text):
-            if is_tests_like:
+        result_analysis = analyze_result_query(text)
+        result_detected = bool(result_analysis.get("decision"))
+        strong_result_intent = bool(result_analysis.get("strong_result_intent"))
+        has_result_number = bool(result_analysis.get("has_number"))
+        has_result_test_token = bool(result_analysis.get("has_test_like"))
+        force_results_route = bool(strong_result_intent and has_result_number and has_result_test_token)
+
+        if result_detected:
+            if is_tests_like and not force_results_route:
                 logger.debug(
                     "results routing blocked by tests-like query | q=%s | result_detected=true | tests_like=true",
                     text,
                 )
             elif not is_branch_like and not is_package_like and not is_symptoms_like:
+                if is_tests_like and force_results_route:
+                    logger.debug(
+                        "results routing override applied | q=%s | strong_result_intent=%s | has_number=%s | has_test_token=%s | tests_like=%s",
+                        text,
+                        strong_result_intent,
+                        has_result_number,
+                        has_result_test_token,
+                        is_tests_like,
+                    )
                 result_answer = _safe_str(interpret_result_query(text))
                 if result_answer:
                     return _final({

@@ -4,19 +4,23 @@ from __future__ import annotations
 
 import logging
 import re
+from typing import Any
 
 from app.services.runtime.text_normalizer import normalize_arabic
 
 _RESULT_INTENT_HINTS = (
+    "نتيجة",
+    "نتيجه",
     "نتيجتي",
-    "النتيجه",
     "النتيجة",
-    "فسر لي النتيجه",
+    "النتيجه",
+    "النتائج",
     "فسر لي النتيجة",
-    "تفسير نتيجه",
+    "فسر لي النتيجه",
     "تفسير نتيجة",
-    "طلعت النتيجه",
+    "تفسير نتيجه",
     "طلعت النتيجة",
+    "طلعت النتيجه",
     "result",
 )
 
@@ -52,6 +56,9 @@ logger = logging.getLogger(__name__)
 _RESULT_INTENT_HINTS_NORM = tuple(normalize_arabic(h) for h in _RESULT_INTENT_HINTS)
 _TEST_LIKE_HINTS_NORM = tuple(normalize_arabic(h) for h in _TEST_LIKE_HINTS)
 _NON_RESULT_BLOCK_HINTS_NORM = tuple(normalize_arabic(h) for h in _NON_RESULT_BLOCK_HINTS)
+_CANONICAL_RESULT_TOKENS_NORM = {
+    normalize_arabic(v) for v in ("نتيجة", "نتيجه", "نتيجتي", "النتائج")
+}
 
 
 def _has_number(text: str) -> bool:
@@ -92,26 +99,32 @@ def _score_result_intent(query_norm: str, raw_text: str) -> tuple[float, dict[st
         "short_ambiguity_penalty": 0.0,
     }
 
-    # Exact phrase hit.
     if query_norm in _RESULT_INTENT_HINTS_NORM:
-        details["exact_result_phrase"] = 1.2
+        details["exact_result_phrase"] = 1.5
         score += details["exact_result_phrase"]
 
-    # Phrase containment with boundaries.
     padded = f" {query_norm} "
     boundary_hits = sum(1 for h in _RESULT_INTENT_HINTS_NORM if h and f" {h} " in padded)
     if boundary_hits:
-        details["boundary_result_phrase"] = min(1.0, 0.7 + (boundary_hits - 1) * 0.1)
+        details["boundary_result_phrase"] = min(1.3, 1.0 + (boundary_hits - 1) * 0.1)
         score += details["boundary_result_phrase"]
 
-    # Token overlap with result/test lexicon.
     overlap = _token_overlap(query_norm, _TEST_LIKE_HINTS_NORM + _RESULT_INTENT_HINTS_NORM)
     if overlap:
         details["token_overlap"] = min(0.8, overlap * 0.2)
         score += details["token_overlap"]
 
-    # Strong keyword boost.
-    if any(k in query_norm for k in ("النتيجه", "النتيجة", "نتيجتي", "result", "فسر")):
+    if any(
+        k in query_norm
+        for k in (
+            "النتيجة",
+            "النتيجه",
+            "نتيجتي",
+            "النتائج",
+            "result",
+            "فسر",
+        )
+    ):
         details["strong_keyword"] = 0.5
         score += details["strong_keyword"]
 
@@ -121,21 +134,44 @@ def _score_result_intent(query_norm: str, raw_text: str) -> tuple[float, dict[st
         details["number_and_test_like"] = 0.8
         score += details["number_and_test_like"]
 
-    # Penalize short ambiguous queries unless strong result signals exist.
     words = [w for w in query_norm.split() if w]
-    if len(words) <= 2 and details["exact_result_phrase"] == 0.0 and details["strong_keyword"] == 0.0:
+    if (
+        len(words) <= 2
+        and details["exact_result_phrase"] == 0.0
+        and details["strong_keyword"] == 0.0
+        and not (has_number and has_test_like)
+    ):
         details["short_ambiguity_penalty"] = -0.35
         score += details["short_ambiguity_penalty"]
 
     return score, details
 
 
-def looks_like_result_query(text: str) -> bool:
-    query_norm = normalize_arabic(str(text or "").strip())
-    if not query_norm:
-        return False
+def _has_explicit_result_signal(query_norm: str, details: dict[str, float]) -> bool:
+    if details.get("exact_result_phrase", 0.0) > 0.0 or details.get("boundary_result_phrase", 0.0) >= 1.0:
+        return True
+    tokens = {t for t in query_norm.split() if t}
+    if tokens & _CANONICAL_RESULT_TOKENS_NORM:
+        return True
+    return False
 
-    # Hard blockers remain absolute vetoes to avoid package/branch hijacking.
+
+def analyze_result_query(text: str) -> dict[str, Any]:
+    raw_text = str(text or "").strip()
+    query_norm = normalize_arabic(raw_text)
+    if not query_norm:
+        return {
+            "query_norm": "",
+            "score": 0.0,
+            "details": {},
+            "decision": False,
+            "strong_result_intent": False,
+            "has_number": False,
+            "has_test_like": False,
+            "blocked": False,
+            "blockers": [],
+        }
+
     blockers = [h for h in _NON_RESULT_BLOCK_HINTS_NORM if h and h in query_norm]
     if blockers:
         logger.debug(
@@ -143,29 +179,56 @@ def looks_like_result_query(text: str) -> bool:
             query_norm,
             blockers,
         )
-        return False
+        return {
+            "query_norm": query_norm,
+            "score": 0.0,
+            "details": {},
+            "decision": False,
+            "strong_result_intent": False,
+            "has_number": _has_number(raw_text),
+            "has_test_like": any(h in query_norm for h in _TEST_LIKE_HINTS_NORM if h),
+            "blocked": True,
+            "blockers": blockers,
+        }
 
-    score, details = _score_result_intent(query_norm, str(text or ""))
+    score, details = _score_result_intent(query_norm, raw_text)
+    has_number = _has_number(raw_text)
+    has_test_like = any(h in query_norm for h in _TEST_LIKE_HINTS_NORM if h)
 
-    # Conservative thresholds:
-    # - strong explicit intent phrases pass
-    # - numeric + test-like signals must pass a higher bar
-    has_explicit_result_phrase = details["exact_result_phrase"] > 0.0 or details["boundary_result_phrase"] >= 0.7
-    has_number_and_test_like = details["number_and_test_like"] > 0.0
+    has_explicit_result_phrase = _has_explicit_result_signal(query_norm, details)
     decision = bool(
         has_explicit_result_phrase
-        or (has_number_and_test_like and score >= 1.3)
+        or (has_number and has_test_like and score >= 1.0)
         or score >= 1.6
+    )
+    strong_result_intent = bool(
+        has_explicit_result_phrase
+        or (has_number and has_test_like and score >= 1.0 and len([w for w in query_norm.split() if w]) <= 4)
     )
 
     logger.debug(
-        "results_detector score | query=%s | score=%.3f | details=%s | decision=%s",
+        "results_detector score | query=%s | score=%.3f | details=%s | decision=%s | strong_intent=%s | has_number=%s | has_test_like=%s",
         query_norm,
         score,
         details,
         decision,
+        strong_result_intent,
+        has_number,
+        has_test_like,
     )
 
-    if decision:
-        return True
-    return False
+    return {
+        "query_norm": query_norm,
+        "score": float(score),
+        "details": details,
+        "decision": decision,
+        "strong_result_intent": strong_result_intent,
+        "has_number": has_number,
+        "has_test_like": has_test_like,
+        "blocked": False,
+        "blockers": [],
+    }
+
+
+def looks_like_result_query(text: str) -> bool:
+    return bool(analyze_result_query(text).get("decision"))
