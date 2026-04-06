@@ -13,6 +13,7 @@ from app.services.runtime.text_normalizer import normalize_arabic
 
 PACKAGES_BUSINESS_JSONL_PATH = Path("app/data/runtime/rag/packages_business_clean.jsonl")
 TESTS_BUSINESS_JSONL_PATH = Path("app/data/runtime/rag/tests_business_clean.jsonl")
+PRIMARY_PACKAGES_DATASET_PATH = PACKAGES_BUSINESS_JSONL_PATH
 
 _PRICE_HINTS = (
     "كم سعر",
@@ -295,12 +296,12 @@ def match_packages_deterministic(query: str, records: list[dict[str, Any]]) -> l
 
 @lru_cache(maxsize=1)
 def load_packages_business_records() -> list[dict[str, Any]]:
-    """Load packages business records from JSONL with normalized helper fields."""
-    if not PACKAGES_BUSINESS_JSONL_PATH.exists():
+    """Load curated business packages only from packages_business_clean.jsonl."""
+    if not PRIMARY_PACKAGES_DATASET_PATH.exists():
         return []
 
     rows: list[dict[str, Any]] = []
-    with PACKAGES_BUSINESS_JSONL_PATH.open("r", encoding="utf-8") as f:
+    with PRIMARY_PACKAGES_DATASET_PATH.open("r", encoding="utf-8") as f:
         for raw_line in f:
             line = _safe_str(raw_line)
             if not line:
@@ -338,6 +339,11 @@ def load_packages_business_records() -> list[dict[str, Any]]:
 
             rows.append(item)
     return rows
+
+
+def load_primary_packages_records() -> list[dict[str, Any]]:
+    """Primary user-facing package matching dataset (curated business list only)."""
+    return load_packages_business_records()
 
 
 def format_packages_response(
@@ -411,7 +417,7 @@ def handle_packages_business_query(query: str, conversation_id: UUID | None = No
     """Resolve enriched package queries with deterministic business logic."""
     query_text = _safe_str(query)
     query_type = detect_packages_query_type(query_text)
-    records = load_packages_business_records()
+    records = load_primary_packages_records()
 
     if not query_text:
         return {
