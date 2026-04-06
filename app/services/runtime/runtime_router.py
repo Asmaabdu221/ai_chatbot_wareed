@@ -278,6 +278,106 @@ _MIXED_PACKAGE_CUES = (
 )
 
 
+_GREETING_KEYWORDS = (
+    "\u0645\u0631\u062d\u0628\u0627",
+    "\u0627\u0647\u0644\u0627",
+    "\u0623\u0647\u0644\u0627",
+    "\u0627\u0644\u0633\u0644\u0627\u0645 \u0639\u0644\u064a\u0643\u0645",
+    "\u0633\u0644\u0627\u0645 \u0639\u0644\u064a\u0643\u0645",
+    "hi",
+    "hello",
+    "hey",
+)
+_GENERAL_CONVERSATION_KEYWORDS = (
+    "\u0634\u0643\u0631\u0627",
+    "\u064a\u0639\u0637\u064a\u0643 \u0627\u0644\u0639\u0627\u0641\u064a\u0629",
+    "\u062a\u0645\u0627\u0645",
+    "\u0627\u0648\u0643\u064a",
+    "\u0627\u0648\u0643\u064a\u0647",
+    "\u0627\u0648\u0643",
+    "ok",
+    "thanks",
+    "thank you",
+    "\u0645\u0627 \u0641\u0647\u0645\u062a",
+    "\u0645\u0648 \u0641\u0627\u0647\u0645",
+    "\u0645\u0634 \u0641\u0627\u0647\u0645",
+    "\u063a\u064a\u0631 \u0648\u0627\u0636\u062d",
+)
+_GENERAL_LAYER_DOMAIN_BLOCKERS = (
+    "\u0641\u0631\u0639",
+    "\u0641\u0631\u0648\u0639",
+    "\u0645\u0648\u0642\u0639",
+    "\u062d\u064a",
+    "\u0628\u0627\u0642\u0647",
+    "\u0628\u0627\u0642\u0629",
+    "\u0628\u0627\u0642\u0627\u062a",
+    "package",
+    "\u062a\u062d\u0644\u064a\u0644",
+    "\u062a\u062d\u0627\u0644\u064a\u0644",
+    "\u0641\u062d\u0635",
+    "\u0627\u062e\u062a\u0628\u0627\u0631",
+    "hba1c",
+    "tsh",
+    "cbc",
+    "ferritin",
+    "\u0627\u0639\u0631\u0627\u0636",
+    "\u0623\u0639\u0631\u0627\u0636",
+    "\u0646\u062a\u064a\u062c\u0629",
+    "\u0646\u062a\u064a\u062c\u062a\u064a",
+    "\u0646\u062a\u0627\u0626\u062c",
+    "\u0646\u062a\u0627\u064a\u062c",
+)
+
+
+def _has_any_domain_blocker(text: str) -> bool:
+    q = normalize_arabic(_safe_str(text)).lower()
+    if not q:
+        return False
+    for blocker in _GENERAL_LAYER_DOMAIN_BLOCKERS:
+        b = normalize_arabic(_safe_str(blocker)).lower()
+        if not b:
+            continue
+        if q == b or _contains_boundary_phrase(q, b) or b in q:
+            return True
+    return False
+
+
+def _is_short_general_layer_candidate(text: str) -> bool:
+    q = normalize_arabic(_safe_str(text)).lower()
+    if not q:
+        return False
+    tokens = [w for w in q.split() if w]
+    if not (1 <= len(tokens) <= 3):
+        return False
+    return not _has_any_domain_blocker(q)
+
+
+def _is_greeting_query(text: str) -> bool:
+    if not _is_short_general_layer_candidate(text):
+        return False
+    q = normalize_arabic(_safe_str(text)).lower()
+    for keyword in _GREETING_KEYWORDS:
+        k = normalize_arabic(_safe_str(keyword)).lower()
+        if not k:
+            continue
+        if q == k or _contains_boundary_phrase(q, k):
+            return True
+    return False
+
+
+def _is_general_conversation_query(text: str) -> bool:
+    if not _is_short_general_layer_candidate(text):
+        return False
+    q = normalize_arabic(_safe_str(text)).lower()
+    for keyword in _GENERAL_CONVERSATION_KEYWORDS:
+        k = normalize_arabic(_safe_str(keyword)).lower()
+        if not k:
+            continue
+        if q == k or _contains_boundary_phrase(q, k):
+            return True
+    return False
+
+
 def _is_context_followup_query(text: str, triggers: tuple[str, ...]) -> bool:
     q = normalize_arabic(_safe_str(text))
     if not q:
@@ -1076,6 +1176,36 @@ def route_runtime_message(
         }, "system_rebuild_mode")
 
     if faq_only_runtime_mode:
+        if _is_greeting_query(text):
+            logger.debug("runtime_router.general_layer matched | type=greeting | q=%s", text)
+            return _final({
+                "reply": format_runtime_answer(
+                    "\u0645\u0631\u062d\u0628\u0627\u060c \u0645\u0639\u0643 \u0645\u0633\u0627\u0639\u062f \u0645\u062e\u062a\u0628\u0631 \u0648\u0631\u064a\u062f. \u062a\u0642\u062f\u0631 \u062a\u0633\u0623\u0644\u0646\u064a \u0639\u0646 \u062a\u062d\u0644\u064a\u0644\u060c \u0628\u0627\u0642\u0629\u060c \u0641\u0631\u0639\u060c \u0623\u0648 \u0646\u062a\u064a\u062c\u0629."
+                ),
+                "route": "greeting",
+                "source": "runtime_fallback",
+                "matched": True,
+                "meta": {
+                    "query_type": "greeting",
+                    "mode": "faq_only",
+                },
+            }, "general_layer_greeting")
+
+        if _is_general_conversation_query(text):
+            logger.debug("runtime_router.general_layer matched | type=general_conversation | q=%s", text)
+            return _final({
+                "reply": format_runtime_answer(
+                    "\u062a\u0645\u0627\u0645. \u0627\u0643\u062a\u0628 \u0637\u0644\u0628\u0643 \u0628\u0634\u0643\u0644 \u0645\u0628\u0627\u0634\u0631\u060c \u0645\u062b\u0644: \u062a\u062d\u0644\u064a\u0644\u060c \u0628\u0627\u0642\u0629\u060c \u0641\u0631\u0639\u060c \u0623\u0648 \u0646\u062a\u064a\u062c\u0629."
+                ),
+                "route": "general_conversation",
+                "source": "runtime_fallback",
+                "matched": True,
+                "meta": {
+                    "query_type": "general_conversation",
+                    "mode": "faq_only",
+                },
+            }, "general_layer_conversation")
+
         # Strong branch guard before FAQ:
         # - numeric selection (1-2 digits) should be branch-first
         # - explicit branch/location/package/tests phrasing should bypass FAQ
