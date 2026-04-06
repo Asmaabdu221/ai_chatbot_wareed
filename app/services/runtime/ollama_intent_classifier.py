@@ -36,50 +36,45 @@ User message:
 {user_text}
 """
 
-_FORMATTER_PROMPT_TEMPLATE = """You are a receptionist-style response formatter.
+_FORMATTER_PROMPT_TEMPLATE = """You are a receptionist rewriting replies for a Saudi Arabic chat.
 
-Your job is to rewrite the text to be concise, clear, and still informative.
+Your job is to rewrite the text into a clean, natural, concise Arabic reply.
 
 STRICT RULES:
-- Do NOT use phrases like: "نحن نقدم", "نقدم لك", "يقدم المختبر"
-- Do NOT sound like marketing or formal writing
-- Do NOT add any new information
+- Output Arabic only
+- Do NOT use English words like: cleaned, rewrite, formatted, version
+- Do NOT output any Chinese or other foreign-language characters
+- Do NOT mention rewriting or formatting
+- Do NOT add introductions
+- Do NOT add new information
 - Do NOT remove important facts
 - Do NOT repeat content
-- Do NOT add phrases like: "هنا النسخة", "إعادة صياغة", "cleaned"
-- Do NOT explain that you are rewriting
+- Do NOT use marketing language
+- Do NOT use phrases like: نحن نقدم / نقدم لك / يسرنا / يسعدنا
+- Speak directly like a receptionist in chat
+- Keep the meaning exactly the same
 
 STYLE:
-- Natural Saudi tone
-- Like a receptionist talking
-- Simple, clear, direct
+- Natural Saudi-friendly tone
+- Short, clear, and helpful
+- Concise summary with the useful information preserved
 
 FORMAT:
-- Short and well-organized
-- 1–3 sentences (NOT forced to be 1 sentence)
-- Keep important details if they exist
+- Plain reply only
 - No titles
 - No bullet points
-
-GUIDELINE:
-- Give the useful summary
-- Keep what matters, remove only repetition and noise
-
-EXAMPLE:
-Input:
-"تعليمات الصيام لـ HbA1c: لا يتطلب صيام، ويمكن إجراؤه في أي وقت، يفضل تجنب الأطعمة الدسمة قبل ساعات من التحليل."
-
-Output:
-"تحليل HbA1c ما يحتاج صيام، وتقدر تسويه بأي وقت، ويفضل تتجنب الأكل الدسم قبل التحليل."
+- No sections
+- 1 to 3 short sentences maximum
 
 IMPORTANT:
-If the text is already clean -> return it as-is.
+- If the original text is already clean, return it as-is.
+- If you cannot improve it safely, return it as-is.
 
 Input:
 {raw_text}
 
 Output:
-Final clean concise response only.
+Final Arabic reply only.
 """
 
 
@@ -268,6 +263,25 @@ def format_final_response_with_ollama(raw_text: str) -> str:
         response_text = _safe_str((outer or {}).get("response"))
         if not response_text:
             logger.debug("ollama formatter empty_response -> keep_raw")
+            return message
+        unsafe_markers = (
+            "هنا النسخة",
+            "إعادة صياغة",
+            "cleaned",
+            "formatted",
+            "version",
+        )
+        lowered = response_text.lower()
+        has_meta_marker = any(marker in response_text for marker in unsafe_markers[:2]) or any(
+            marker in lowered for marker in unsafe_markers[2:]
+        )
+        has_cjk_chars = bool(re.search(r"[一-鿿㐀-䶿]", response_text))
+        if has_meta_marker or has_cjk_chars:
+            logger.debug(
+                "ollama formatter unsafe_output -> keep_raw | has_meta_marker=%s | has_cjk_chars=%s",
+                has_meta_marker,
+                has_cjk_chars,
+            )
             return message
         logger.debug("ollama formatter success | rewritten_len=%s", len(response_text))
         return response_text
