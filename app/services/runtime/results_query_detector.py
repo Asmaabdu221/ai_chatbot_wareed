@@ -51,6 +51,9 @@ _NON_RESULT_BLOCK_HINTS = (
 )
 
 _NUMBER_RE = re.compile(r"[-+]?\d+(?:[.,]\d+)?")
+_STANDALONE_NUMBER_RE = re.compile(
+    r"(?<![A-Za-z\u0621-\u063A\u0641-\u064A])[-+]?\d+(?:[.,]\d+)?(?![A-Za-z\u0621-\u063A\u0641-\u064A])"
+)
 logger = logging.getLogger(__name__)
 
 _RESULT_INTENT_HINTS_NORM = tuple(normalize_arabic(h) for h in _RESULT_INTENT_HINTS)
@@ -78,7 +81,7 @@ def _has_number(text: str) -> bool:
             }
         )
     )
-    return bool(_NUMBER_RE.search(normalized))
+    return bool(_STANDALONE_NUMBER_RE.search(normalized))
 
 
 def _token_overlap(query_norm: str, lexicon_norm: tuple[str, ...]) -> int:
