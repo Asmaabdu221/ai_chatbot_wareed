@@ -1625,18 +1625,6 @@ def route_runtime_message(
                 is_package_like,
                 is_tests_like,
             )
-            classifier_result = _try_ollama_classifier_fallback(
-                _safe_str(user_text),
-                conversation_id=conversation_id,
-            )
-            if classifier_result is not None:
-                logger.debug(
-                    "ollama fallback reroute_succeeded | stage=domains_prefilter_no_match | route=%s | source=%s",
-                    _safe_str(classifier_result.get("route")),
-                    _safe_str(classifier_result.get("source")),
-                )
-                return _final(classifier_result, "ollama_fallback_domains_prefilter")
-            logger.debug("ollama fallback reroute_failed | stage=domains_prefilter_no_match")
             logger.debug(
                 "domains pre-faq guard fallback faq attempt | q=%s | numeric=%s | branch_like=%s | package_like=%s | tests_like=%s",
                 text,
@@ -1676,6 +1664,18 @@ def route_runtime_message(
                 "domains pre-faq guard fallback faq not matched | q=%s | route=faq_only_no_match_domains_prefilter",
                 text,
             )
+            classifier_result = _try_ollama_classifier_fallback(
+                _safe_str(user_text),
+                conversation_id=conversation_id,
+            )
+            if classifier_result is not None:
+                logger.debug(
+                    "ollama fallback reroute_succeeded | stage=domains_prefilter_after_faq_no_match | route=%s | source=%s",
+                    _safe_str(classifier_result.get("route")),
+                    _safe_str(classifier_result.get("source")),
+                )
+                return _final(classifier_result, "ollama_fallback_domains_prefilter_after_faq")
+            logger.debug("ollama fallback reroute_failed | stage=domains_prefilter_after_faq_no_match")
             return _final({
                 "reply": format_runtime_answer(get_faq_no_match_message()),
                 "route": "faq_only_no_match_domains_prefilter",
