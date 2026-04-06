@@ -940,10 +940,13 @@ def resolve_tests_business_query(user_text: str, conversation_id: UUID | None = 
     if query_type == "test_fasting_query":
         prep = _safe_str(target.get("preparation"))
         if prep and ("صيام" in prep or "الصيام" in prep):
-            answer = _format_target_field("تعليمات الصيام لـ", test_name, prep)
+            answer = f"بالنسبة لتحليل {test_name}، {prep}"
             available = True
         else:
-            answer = _NOT_CLEAR_MESSAGE
+            answer = (
+                f"ما عندي تعليمات صيام مؤكدة لتحليل {test_name} في البيانات الحالية. "
+                "اكتب اسم التحليل أو كوده بشكل أدق."
+            )
             available = False
         return {
             "matched": True,
@@ -960,7 +963,13 @@ def resolve_tests_business_query(user_text: str, conversation_id: UUID | None = 
 
     if query_type == "test_preparation_query":
         prep = _safe_str(target.get("preparation"))
-        answer = _format_target_field("تعليمات التحضير لـ", test_name, prep) if prep else _NOT_CLEAR_MESSAGE
+        if prep:
+            answer = f"قبل تحليل {test_name}، {prep}"
+        else:
+            answer = (
+                f"ما عندي تعليمات تحضير واضحة لتحليل {test_name} في البيانات الحالية. "
+                "اكتب اسم التحليل أو كوده بشكل أدق."
+            )
         return {
             "matched": True,
             "answer": answer,
@@ -1016,7 +1025,13 @@ def resolve_tests_business_query(user_text: str, conversation_id: UUID | None = 
 
     if query_type == "test_sample_type_query":
         sample_type = _safe_str(target.get("sample_type"))
-        answer = _format_target_field("نوع العينة لـ", test_name, sample_type) if sample_type else _NOT_CLEAR_MESSAGE
+        if sample_type:
+            answer = f"عينة تحليل {test_name} تكون عادة: {sample_type}"
+        else:
+            answer = (
+                f"ما عندي نوع عينة موثق لتحليل {test_name} في البيانات الحالية. "
+                "اكتب اسم التحليل أو كوده بشكل أدق."
+            )
         return {
             "matched": True,
             "answer": answer,
