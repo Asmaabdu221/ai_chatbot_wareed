@@ -802,7 +802,64 @@ def _looks_like_symptoms_query(text: str) -> bool:
         blockers=blockers,
         ambiguity_terms=("عندي", "احس", "أحس"),
     )
-    return _detector_pick("symptoms_like", n, scores, min_score=2.0, legacy_match=legacy)
+    decision = _detector_pick("symptoms_like", n, scores, min_score=2.0, legacy_match=legacy)
+    tokens = [t for t in n.split() if t]
+    generic_only_terms = {
+        normalize_arabic("\u0639\u0646\u062f\u064a"),
+        normalize_arabic("\u0627\u062d\u0633"),
+        normalize_arabic("\u0623\u062d\u0633"),
+        normalize_arabic("\u0627\u0639\u0631\u0627\u0636"),
+        normalize_arabic("\u0623\u0639\u0631\u0627\u0636"),
+        normalize_arabic("\u0627\u0639\u0627\u0646\u064a"),
+        normalize_arabic("\u0623\u0639\u0627\u0646\u064a"),
+    }
+    strong_symptom_terms = tuple(
+        normalize_arabic(v)
+        for v in (
+            "\u062a\u0639\u0628",
+            "\u0627\u0631\u0647\u0627\u0642",
+            "\u062f\u0648\u062e\u0629",
+            "\u062a\u0633\u0627\u0642\u0637 \u0627\u0644\u0634\u0639\u0631",
+            "\u0635\u062f\u0627\u0639",
+            "\u062d\u0645\u0649",
+            "\u062d\u0631\u0627\u0631\u0629",
+            "\u0643\u062d\u0629",
+            "\u0627\u0644\u062a\u0647\u0627\u0628 \u062d\u0644\u0642",
+            "\u0627\u0644\u0645 \u0628\u0637\u0646",
+            "\u0645\u063a\u0635",
+            "\u063a\u062b\u064a\u0627\u0646",
+            "\u062e\u0641\u0642\u0627\u0646",
+            "\u0641\u0642\u0631 \u062f\u0645",
+            "\u0646\u0642\u0635 \u0641\u064a\u062a\u0627\u0645\u064a\u0646",
+            "\u062e\u0645\u0648\u0644",
+            "\u0636\u0639\u0641 \u0639\u0627\u0645",
+        )
+        if normalize_arabic(v)
+    )
+    if tokens and all(t in generic_only_terms for t in tokens):
+        logger.debug(
+            "runtime_router.detector name=%s query=%r score=%.3f scores=%s result=%s fallback_reason=%s",
+            "symptoms_like",
+            n,
+            float(scores.get("score", 0.0)),
+            scores,
+            False,
+            "generic_first_person_without_symptom_anchor",
+        )
+        return False
+    has_strong_anchor = any(_contains_boundary_phrase(n, term) or term in n for term in strong_symptom_terms)
+    if decision and not has_strong_anchor and len(tokens) <= 3:
+        logger.debug(
+            "runtime_router.detector name=%s query=%r score=%.3f scores=%s result=%s fallback_reason=%s",
+            "symptoms_like",
+            n,
+            float(scores.get("score", 0.0)),
+            scores,
+            False,
+            "weak_symptom_signal_short_query",
+        )
+        return False
+    return decision
 
 
 def _format_symptoms_suggestions_reply(payload: dict[str, Any]) -> str:
@@ -1565,6 +1622,23 @@ def route_runtime_message(
         if is_symptoms_like:
             symptoms_result = handle_symptoms_query(text)
             if symptoms_result:
+                if _safe_str(symptoms_result.get("type")) == "symptom_clarification":
+                    return _final({
+                        "reply": format_runtime_answer(
+                            _safe_str(symptoms_result.get("answer"))
+                            or "\u0648\u0635\u0651\u0641 \u0627\u0644\u0639\u0631\u0636 \u0627\u0644\u0631\u0626\u064a\u0633\u064a \u0628\u0634\u0643\u0644 \u0623\u0648\u0636\u062d (\u0645\u062b\u0644: \u0635\u062f\u0627\u0639 \u0645\u0633\u062a\u0645\u0631\u060c \u062d\u0631\u0627\u0631\u0629 \u0645\u0639 \u0643\u062d\u0629\u060c \u0623\u0644\u0645 \u0628\u0637\u0646 \u0645\u0639 \u063a\u062b\u064a\u0627\u0646)."
+                        ),
+                        "route": "symptoms_clarification",
+                        "source": "symptoms_engine",
+                        "matched": True,
+                        "meta": {
+                            "query_type": "symptoms_query",
+                            "symptoms": list(symptoms_result.get("symptoms") or []),
+                            "tests_count": 0,
+                            "packages_count": 0,
+                            "clarification_needed": True,
+                        },
+                    }, "symptoms_clarification")
                 return _final({
                     "reply": format_runtime_answer(_format_symptoms_suggestions_reply(symptoms_result)),
                     "route": "symptoms_suggestions",

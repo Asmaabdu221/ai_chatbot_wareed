@@ -82,6 +82,7 @@ _NOT_CLEAR_MESSAGE = "المعلومة غير واضحة بشكل كافٍ في 
 _TEST_NOT_FOUND_MESSAGE = "ما قدرت أحدد التحليل المقصود بدقة. اكتب اسم التحليل بشكل أوضح."
 _FIELD_NOT_AVAILABLE_MESSAGE = "\u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0629 \u063a\u064a\u0631 \u0645\u062a\u0648\u0641\u0631\u0629 \u0644\u0647\u0630\u0627 \u0627\u0644\u062a\u062d\u0644\u064a\u0644"
 _TARGET_QUERY_ROUTE = {
+    "test_price_query": "tests_business_price",
     "test_fasting_query": "tests_business_fasting",
     "test_preparation_query": "tests_business_preparation",
     "test_complementary_query": "tests_business_complementary",
@@ -89,6 +90,7 @@ _TARGET_QUERY_ROUTE = {
     "test_sample_type_query": "tests_business_sample_type",
 }
 _RELAXED_BUSINESS_TARGET_TYPES = {
+    "test_price_query",
     "test_fasting_query",
     "test_preparation_query",
     "test_sample_type_query",
@@ -287,6 +289,11 @@ def _detect_query_type(query_norm: str) -> str:
             _COMPLEMENTARY_HINTS,
             ("مكمل", "مكمله", "مكملة", "complementary"),
         ),
+        "test_price_query": _score_query_type(
+            query_norm,
+            _PRICE_HINTS,
+            ("\u0643\u0645 \u0633\u0639\u0631", "\u0627\u0644\u0633\u0639\u0631", "\u0633\u0639\u0631", "\u0628\u0643\u0645", "\u062a\u0643\u0644\u0641\u0629", "price", "cost"),
+        ),
         "test_alternative_query": _score_query_type(
             query_norm,
             _ALTERNATIVE_HINTS,
@@ -329,6 +336,9 @@ def _detect_query_type(query_norm: str) -> str:
         # Backward-compatible conservative fallback: previous ordered hint checks.
         if _has_any_hint(query_norm, _COMPLEMENTARY_HINTS):
             selected = "test_complementary_query"
+            fallback_reason = "fallback_ordered_hints"
+        elif _has_any_hint(query_norm, _PRICE_HINTS):
+            selected = "test_price_query"
             fallback_reason = "fallback_ordered_hints"
         elif _has_any_hint(query_norm, _ALTERNATIVE_HINTS):
             selected = "test_alternative_query"
@@ -505,6 +515,12 @@ def _clean_candidate_phrase(text: str) -> str:
     if not tokens:
         return ""
     drop = {
+        "\u0633\u0639\u0631",
+        "\u0627\u0644\u0633\u0639\u0631",
+        "\u0628\u0643\u0645",
+        "\u062a\u0643\u0644\u0641\u0629",
+        "price",
+        "cost",
         "هل",
         "كم",
         "ساعه",
@@ -883,7 +899,7 @@ def resolve_tests_business_query(user_text: str, conversation_id: UUID | None = 
     # Deterministic same-domain dual-intent composition.
     if (
         sum(1 for _, v in effective_dual_intents.items() if v) >= 2
-        and query_type in {"test_fasting_query", "test_preparation_query", "test_sample_type_query"}
+        and query_type in {"test_price_query", "test_fasting_query", "test_preparation_query", "test_sample_type_query"}
     ):
         answer = _format_dual_intent_composed_answer(
             query_norm,
@@ -899,6 +915,22 @@ def resolve_tests_business_query(user_text: str, conversation_id: UUID | None = 
                 "matched_test_id": target_id,
                 "matched_test_name": test_name,
                 "score": score,
+            },
+        }
+
+    if query_type == "test_price_query":
+        price_raw = _safe_str(target.get("price_raw"))
+        answer = _format_target_field("\u0633\u0639\u0631 \u0644\u0640", test_name, price_raw) if price_raw else _FIELD_NOT_AVAILABLE_MESSAGE
+        return {
+            "matched": True,
+            "answer": answer,
+            "route": "tests_business_price",
+            "meta": {
+                "query_type": query_type,
+                "matched_test_id": target_id,
+                "matched_test_name": test_name,
+                "score": score,
+                "price_available": bool(price_raw),
             },
         }
 

@@ -14,6 +14,7 @@ from app.services.runtime.tests_disambiguation import (
     format_disambiguation_reply,
     set_tests_disambiguation_state,
 )
+from app.services.runtime.tests_business_engine import resolve_tests_business_query
 from app.services.runtime.text_normalizer import normalize_arabic
 
 TESTS_JSONL_PATH = Path("app/data/runtime/rag/tests_clean.jsonl")
@@ -85,6 +86,15 @@ _SAMPLE_TYPE_HINTS = (
     "من اي عينة",
     "من أي عينة",
     "sample type",
+)
+_PRICE_HINTS = (
+    "\u0643\u0645 \u0633\u0639\u0631",
+    "\u0627\u0644\u0633\u0639\u0631",
+    "\u0633\u0639\u0631",
+    "\u0628\u0643\u0645",
+    "\u062a\u0643\u0644\u0641\u0629",
+    "price",
+    "cost",
 )
 _GENERAL_REPLY = (
     "أقدر أساعدك بمعلومات التحاليل المتاحة. "
@@ -356,6 +366,47 @@ def _is_sample_type_query(query_norm: str) -> bool:
     return decision
 
 
+def _is_price_query(query_norm: str) -> bool:
+    score = _detector_score(
+        query_norm,
+        _PRICE_HINTS,
+        strong_keywords=("\u0633\u0639\u0631", "\u0628\u0643\u0645", "\u062a\u0643\u0644\u0641\u0629", "price", "cost"),
+    )
+    has_price_hint = score >= 0.95 or any(_norm(h) in query_norm for h in _PRICE_HINTS)
+    if not has_price_hint:
+        logger.debug(
+            "tests_resolver price_detector | query=%s | score=%.3f | decision=false | reason=no_price_hint",
+            query_norm,
+            score,
+        )
+        return False
+    has_test_context = any(
+        token in query_norm
+        for token in (
+            "\u062a\u062d\u0644\u064a\u0644",
+            "\u062a\u062d\u0627\u0644\u064a\u0644",
+            "\u0641\u062d\u0635",
+            "\u0627\u062e\u062a\u0628\u0627\u0631",
+            "hba1c",
+            "tsh",
+            "cbc",
+            "ferritin",
+            "vitamin",
+            "\u0641\u064a\u062a\u0627\u0645\u064a\u0646",
+            "\u062d\u062f\u064a\u062f",
+        )
+    )
+    decision = bool(has_price_hint and has_test_context)
+    logger.debug(
+        "tests_resolver price_detector | query=%s | score=%.3f | has_test_context=%s | decision=%s",
+        query_norm,
+        score,
+        has_test_context,
+        decision,
+    )
+    return decision
+
+
 def _vitamin_key(text_norm: str) -> str:
     """Extract deterministic vitamin designator key to avoid cross-vitamin drift."""
     if not text_norm:
@@ -524,8 +575,21 @@ def resolve_tests_query(user_text: str, conversation_id: UUID | None = None) -> 
     explanation_like = _is_explanation_query(query_norm)
     preparation_like = _is_preparation_query(query_norm)
     sample_type_like = _is_sample_type_query(query_norm)
+    price_like = _is_price_query(query_norm)
     specific_match, specific_score = _find_specific_test(query_norm, records)
     general_only = _is_general_only_query(query_norm)
+
+    # Fallback alignment for standalone test price queries when business route is not selected upstream.
+    if price_like:
+        business_result = resolve_tests_business_query(query, conversation_id=conversation_id)
+        business_meta = dict(business_result.get("meta") or {})
+        if bool(business_result.get("matched")) and _safe_str(business_meta.get("query_type")) == "test_price_query":
+            return {
+                "matched": True,
+                "answer": _safe_str(business_result.get("answer")),
+                "route": _safe_str(business_result.get("route")) or "tests_business_price",
+                "meta": business_meta,
+            }
 
     if general_only and not explanation_like and not preparation_like:
         return {
