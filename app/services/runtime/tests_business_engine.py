@@ -15,6 +15,7 @@ from app.services.runtime.tests_disambiguation import (
     format_disambiguation_reply,
     set_tests_disambiguation_state,
 )
+from app.services.runtime.selection_state import load_selection_state
 from app.services.runtime.text_normalizer import normalize_arabic
 
 TESTS_BUSINESS_JSONL_PATH = Path("app/data/runtime/rag/tests_business_clean.jsonl")
@@ -93,6 +94,7 @@ _RELAXED_BUSINESS_TARGET_TYPES = {
     "test_sample_type_query",
 }
 _RELAXED_BUSINESS_TARGET_SCORE = 0.54
+_DUAL_STATE_PREFIX = "dual_intents::"
 
 
 def _safe_str(value: Any) -> str:
@@ -578,6 +580,61 @@ def _format_target_field(title: str, test_name: str, value: str) -> str:
     return f"{title} {test_name}:\n{value}"
 
 
+def _encode_dual_state_query_type(primary_query_type: str, intents: dict[str, bool]) -> str:
+    flags: list[str] = []
+    if intents.get("price"):
+        flags.append("price")
+    if intents.get("fasting_or_preparation"):
+        flags.append("prep")
+    if intents.get("sample_type"):
+        flags.append("sample")
+    if not flags:
+        return _safe_str(primary_query_type)
+    return f"{_DUAL_STATE_PREFIX}{_safe_str(primary_query_type)}|{','.join(flags)}"
+
+
+def _decode_dual_state_query_type(state_query_type: str) -> tuple[str, dict[str, bool]]:
+    raw = _safe_str(state_query_type)
+    if not raw.startswith(_DUAL_STATE_PREFIX):
+        return raw, {"price": False, "fasting_or_preparation": False, "sample_type": False}
+    payload = raw[len(_DUAL_STATE_PREFIX):]
+    if "|" in payload:
+        primary, flags_blob = payload.split("|", 1)
+    else:
+        primary, flags_blob = payload, ""
+    flags = {f.strip() for f in flags_blob.split(",") if f.strip()}
+    return _safe_str(primary), {
+        "price": "price" in flags,
+        "fasting_or_preparation": "prep" in flags,
+        "sample_type": "sample" in flags,
+    }
+
+
+def _load_preserved_dual_intents(conversation_id: UUID | None) -> tuple[str, dict[str, bool]]:
+    if conversation_id is None:
+        return "", {"price": False, "fasting_or_preparation": False, "sample_type": False}
+    state = load_selection_state(conversation_id)
+    if _safe_str(state.get("last_selection_type")) != "test":
+        return "", {"price": False, "fasting_or_preparation": False, "sample_type": False}
+    state_query_type = _safe_str(state.get("query_type"))
+    return _decode_dual_state_query_type(state_query_type)
+
+
+def _likely_selection_label_query(query_norm: str) -> bool:
+    if not query_norm:
+        return False
+    tokens = _tokenize(query_norm)
+    if not tokens or len(tokens) > 6:
+        return False
+    if _has_any_hint(query_norm, _PRICE_HINTS):
+        return False
+    if _has_any_hint(query_norm, _FASTING_HINTS) or _has_any_hint(query_norm, _PREPARATION_HINTS):
+        return False
+    if _has_any_hint(query_norm, _SAMPLE_TYPE_HINTS):
+        return False
+    return True
+
+
 def _detect_supported_dual_intents(query_norm: str) -> dict[str, bool]:
     if not query_norm:
         return {"price": False, "fasting_or_preparation": False, "sample_type": False}
@@ -592,9 +649,14 @@ def _detect_supported_dual_intents(query_norm: str) -> dict[str, bool]:
     }
 
 
-def _format_dual_intent_composed_answer(query_norm: str, target: dict[str, Any]) -> str:
+def _format_dual_intent_composed_answer(
+    query_norm: str,
+    target: dict[str, Any],
+    *,
+    intents_override: dict[str, bool] | None = None,
+) -> str:
     test_name = _safe_str(target.get("test_name_ar"))
-    intents = _detect_supported_dual_intents(query_norm)
+    intents = intents_override or _detect_supported_dual_intents(query_norm)
     prep_text = _safe_str(target.get("preparation"))
     sample_type = _safe_str(target.get("sample_type"))
     price_raw = _safe_str(target.get("price_raw"))
@@ -619,6 +681,7 @@ def _format_dual_intent_composed_answer(query_norm: str, target: dict[str, Any])
 def _build_disambiguation_reply(
     query: str,
     query_type: str,
+    state_query_type: str = "",
     conversation_id: UUID | None = None,
 ) -> str | None:
     payload = find_disambiguation_candidates(query)
@@ -629,7 +692,7 @@ def _build_disambiguation_reply(
         return None
     set_tests_disambiguation_state(
         candidates,
-        query_type=query_type,
+        query_type=_safe_str(state_query_type) or query_type,
         conversation_id=conversation_id,
     )
     return format_disambiguation_reply(payload)
@@ -639,6 +702,7 @@ def _build_ranked_disambiguation_reply(
     query_norm: str,
     *,
     query_type: str,
+    state_query_type: str = "",
     records: list[dict[str, Any]],
     conversation_id: UUID | None = None,
 ) -> str | None:
@@ -665,7 +729,7 @@ def _build_ranked_disambiguation_reply(
 
     set_tests_disambiguation_state(
         candidates,
-        query_type=query_type,
+        query_type=_safe_str(state_query_type) or query_type,
         conversation_id=conversation_id,
     )
     lines = ["ما قدرت أحدد التحليل المقصود بدقة. هل تقصد:"]
@@ -698,6 +762,10 @@ def resolve_tests_business_query(user_text: str, conversation_id: UUID | None = 
         }
 
     query_type = _detect_query_type(query_norm)
+    preserved_primary_query_type, preserved_dual_intents = _load_preserved_dual_intents(conversation_id)
+    preserved_dual_count = sum(1 for _, v in preserved_dual_intents.items() if v)
+    if query_type == "no_match" and preserved_primary_query_type and _likely_selection_label_query(query_norm):
+        query_type = preserved_primary_query_type
     if query_type == "no_match":
         return {
             "matched": False,
@@ -735,7 +803,7 @@ def resolve_tests_business_query(user_text: str, conversation_id: UUID | None = 
 
     query_norm = _normalize_business_query_aliases(query_norm)
     supported_dual_intents = _detect_supported_dual_intents(query_norm)
-    dual_intent_count = sum(1 for _, v in supported_dual_intents.items() if v)
+    effective_dual_intents = preserved_dual_intents if preserved_dual_count >= 2 else supported_dual_intents
     target, score = _find_target_test(query_norm, records)
     if target is None and query_type in _RELAXED_BUSINESS_TARGET_TYPES:
         target_tokens = _extract_target_tokens_for_relevance(query_norm)
@@ -772,15 +840,22 @@ def resolve_tests_business_query(user_text: str, conversation_id: UUID | None = 
                     _RELAXED_BUSINESS_TARGET_SCORE,
                 )
     if target is None:
+        state_query_type = (
+            _encode_dual_state_query_type(query_type, effective_dual_intents)
+            if sum(1 for _, v in effective_dual_intents.items() if v) >= 2
+            else query_type
+        )
         ranked_disambiguation_reply = _build_ranked_disambiguation_reply(
             query_norm,
             query_type=query_type,
+            state_query_type=state_query_type,
             records=records,
             conversation_id=conversation_id,
         )
         fallback_disambiguation_reply = _build_disambiguation_reply(
             query_norm or query,
             query_type=query_type,
+            state_query_type=state_query_type,
             conversation_id=conversation_id,
         )
         disambiguation_reply = ranked_disambiguation_reply or fallback_disambiguation_reply
@@ -807,10 +882,14 @@ def resolve_tests_business_query(user_text: str, conversation_id: UUID | None = 
 
     # Deterministic same-domain dual-intent composition.
     if (
-        dual_intent_count >= 2
+        sum(1 for _, v in effective_dual_intents.items() if v) >= 2
         and query_type in {"test_fasting_query", "test_preparation_query", "test_sample_type_query"}
     ):
-        answer = _format_dual_intent_composed_answer(query_norm, target)
+        answer = _format_dual_intent_composed_answer(
+            query_norm,
+            target,
+            intents_override=effective_dual_intents,
+        )
         return {
             "matched": True,
             "answer": answer,
