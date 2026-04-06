@@ -7,6 +7,7 @@ message_service while preserving behavior.
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,6 +15,7 @@ from typing import Any, Callable
 
 from app.services.runtime.entity_memory import load_entity_memory, save_entity_memory, update_entity_memory
 from app.services.runtime.results_from_report_service import interpret_uploaded_lab_report_text
+from app.services.runtime.selection_state import load_selection_state
 from uuid import UUID
 
 _REPORT_ATTACHMENT_FALLBACK = "لم أتمكن من قراءة القيم بشكل واضح من التقرير..."
@@ -291,7 +293,54 @@ def run_message_runtime_orchestration(
     )
 
     # D. BRANCHES
-    branch_bypass_reply = deps.branch_lookup_bypass_reply(expanded_query, conversation_id, light_intent)
+    query_norm = deps.normalize_text_ar(expanded_query or question_for_ai)
+    query_tokens = [t for t in (query_norm or "").split() if t]
+    short_locality_like = bool(
+        1 <= len(query_tokens) <= 3
+        and not re.search(r"[a-zA-Z0-9]", query_norm or "")
+        and not any(
+            t in {
+                "وش", "ايش", "ما", "متى", "كيف", "ليه",
+                "سعر", "كم", "تحليل", "تحاليل", "فحص", "اختبار",
+                "باقه", "باقة", "باقات", "نتيجه", "نتيجة", "نتايج", "النتائج",
+            }
+            for t in query_tokens
+        )
+    )
+    package_like = any(t in {"باقه", "باقة", "باقات", "package"} for t in query_tokens)
+    tests_like = bool(test_related_for_rag) or any(t in {"تحليل", "تحاليل", "فحص", "اختبار"} for t in query_tokens)
+    results_like = bool(deps.is_report_explanation_request(question_for_ai)) or any(
+        t in {"نتيجه", "نتيجة", "نتايج", "النتائج", "قراءه", "قراءة", "result", "results"}
+        for t in query_tokens
+    )
+    memory = load_entity_memory(conversation_id)
+    state = load_selection_state(conversation_id)
+    has_recent_branch_context = (
+        str(memory.get("last_intent") or "").strip() == "branch"
+        or str(state.get("last_selection_type") or "").strip() == "branch"
+    )
+    force_branch_followup = bool(
+        has_recent_branch_context
+        and short_locality_like
+        and not tests_like
+        and not package_like
+        and not results_like
+    )
+    if force_branch_followup:
+        deps.logger.debug(
+            "non-runtime branch follow-up activation | q=%s | context=%s | short_locality=%s | tests_like=%s | package_like=%s | results_like=%s",
+            question_for_ai,
+            has_recent_branch_context,
+            short_locality_like,
+            tests_like,
+            package_like,
+            results_like,
+        )
+    branch_bypass_reply = deps.branch_lookup_bypass_reply(
+        expanded_query,
+        conversation_id,
+        "branch" if force_branch_followup else light_intent,
+    )
     if branch_bypass_reply:
         print("PATH=branches")
         return deps.save_assistant_reply(branch_bypass_reply)
