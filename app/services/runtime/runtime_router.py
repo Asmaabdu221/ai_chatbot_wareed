@@ -52,6 +52,7 @@ ENABLE_BRANCHES_RUNTIME_AFTER_FAQ = True
 ENABLE_PACKAGES_RUNTIME_AFTER_BRANCHES = True
 ENABLE_TESTS_RUNTIME_AFTER_PACKAGES = True
 _BUSINESS_TEST_QUERY_TYPES = {
+    "test_price_query",
     "test_fasting_query",
     "test_preparation_query",
     "test_symptoms_query",
@@ -866,20 +867,24 @@ def _looks_like_symptoms_query(text: str) -> bool:
 
 
 def _format_symptoms_suggestions_reply(payload: dict[str, Any]) -> str:
-    tests = [str(t).strip() for t in list(payload.get("tests") or []) if str(t).strip()]
-    packages = [str(p).strip() for p in list(payload.get("packages") or []) if str(p).strip()]
+    tests = [str(t).strip() for t in list(payload.get("tests") or []) if str(t).strip()][:3]
+    packages = [str(p).strip() for p in list(payload.get("packages") or []) if str(p).strip()][:1]
 
-    lines: list[str] = ["بناءً على الأعراض اللي ذكرتها، ممكن تعمل التحاليل التالية:", ""]
+    if not tests and not packages:
+        return "وصف الأعراض بشكل أوضح، وأعطيك أفضل التحاليل المناسبة."
+
+    lines: list[str] = []
     if tests:
+        lines.append("بناءً على الأعراض اللي ذكرتها، أفضل 3 تحاليل تبدأ فيها هي:")
+        lines.append("")
         for idx, test_name in enumerate(tests, start=1):
             lines.append(f"{idx}. {test_name}")
     else:
-        lines.append("لا توجد تحاليل مقترحة حالياً في البيانات المتاحة.")
+        lines.append("ما ظهر لي ترشيح واضح للتحاليل من الرسالة الحالية.")
 
     if packages:
-        lines.extend(["", "أو تقدر تختار باقة:"])
-        for package_name in packages:
-            lines.append(f"- {package_name}")
+        lines.append("")
+        lines.append(f"وإذا حبيت، فيه باقة مناسبة: {packages[0]}")
     return "\n".join(lines)
 
 
@@ -1272,6 +1277,16 @@ def _should_apply_ollama_final_formatter(result: dict[str, Any]) -> bool:
 
     eligible_sources = {"packages", "packages_business", "tests", "tests_business", "symptoms_engine"}
     if source not in eligible_sources:
+        return False
+
+    # Keep short sensitive test-business answers exactly as deterministic output.
+    blocked_exact_routes = {
+        "tests_business_fasting",
+        "tests_business_preparation",
+        "tests_business_sample_type",
+        "tests_business_price",
+    }
+    if route in blocked_exact_routes:
         return False
 
     blocked_route_tokens = ("no_match", "error", "rebuild", "fallback", "critical")

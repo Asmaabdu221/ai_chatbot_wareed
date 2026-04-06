@@ -205,6 +205,54 @@ def _looks_like_weak_symptom_query(query_norm: str) -> bool:
     return any(h in query_norm for h in _SYMPTOM_QUERY_HINTS) or any(t in _GENERIC_ONLY_TERMS for t in tokens)
 
 
+def _rank_merged_tests_and_packages(
+    matches: list[tuple[float, dict[str, Any]]],
+) -> tuple[list[str], list[str]]:
+    """Rank merged suggestions deterministically and keep output concise."""
+    test_scores: dict[str, float] = {}
+    test_labels: dict[str, str] = {}
+    test_support: dict[str, int] = {}
+
+    package_scores: dict[str, float] = {}
+    package_labels: dict[str, str] = {}
+    package_support: dict[str, int] = {}
+
+    for match_score, record in matches:
+        for idx, test_name in enumerate(list(record.get("suggested_tests") or [])):
+            value = _safe_str(test_name)
+            key = _norm(value)
+            if not value or not key:
+                continue
+            # Earlier items in mapping are treated as slightly stronger.
+            position_weight = max(0.60, 1.0 - (idx * 0.10))
+            test_scores[key] = test_scores.get(key, 0.0) + (float(match_score) * position_weight)
+            test_support[key] = test_support.get(key, 0) + 1
+            test_labels.setdefault(key, value)
+
+        for idx, package_name in enumerate(list(record.get("suggested_packages") or [])):
+            value = _safe_str(package_name)
+            key = _norm(value)
+            if not value or not key:
+                continue
+            position_weight = max(0.70, 1.0 - (idx * 0.12))
+            package_scores[key] = package_scores.get(key, 0.0) + (float(match_score) * position_weight)
+            package_support[key] = package_support.get(key, 0) + 1
+            package_labels.setdefault(key, value)
+
+    ranked_tests = sorted(
+        test_scores.keys(),
+        key=lambda k: (-test_scores.get(k, 0.0), -test_support.get(k, 0), k),
+    )
+    ranked_packages = sorted(
+        package_scores.keys(),
+        key=lambda k: (-package_scores.get(k, 0.0), -package_support.get(k, 0), k),
+    )
+
+    top_tests = [test_labels[k] for k in ranked_tests[:3] if test_labels.get(k)]
+    top_packages = [package_labels[k] for k in ranked_packages[:1] if package_labels.get(k)]
+    return top_tests, top_packages
+
+
 def handle_symptoms_query(query: str) -> dict[str, Any] | None:
     """Return deterministic symptom mapping result if a symptom is matched."""
     query_norm = _norm(query)
@@ -242,32 +290,12 @@ def handle_symptoms_query(query: str) -> dict[str, Any] | None:
 
     limited_matches = strong_matches[:4]
     symptoms: list[str] = []
-    tests_seen: set[str] = set()
-    packages_seen: set[str] = set()
-    merged_tests: list[str] = []
-    merged_packages: list[str] = []
 
     for _, record in limited_matches:
         symptom = _safe_str(record.get("symptom"))
         if symptom and symptom not in symptoms:
             symptoms.append(symptom)
-
-        for test_name in list(record.get("suggested_tests") or []):
-            value = _safe_str(test_name)
-            key = _norm(value)
-            if value and key not in tests_seen:
-                tests_seen.add(key)
-                merged_tests.append(value)
-
-        for package_name in list(record.get("suggested_packages") or []):
-            value = _safe_str(package_name)
-            key = _norm(value)
-            if value and key not in packages_seen:
-                packages_seen.add(key)
-                merged_packages.append(value)
-
-    merged_tests = merged_tests[:8]
-    merged_packages = merged_packages[:3]
+    merged_tests, merged_packages = _rank_merged_tests_and_packages(limited_matches)
 
     if not merged_tests and not merged_packages:
         return {

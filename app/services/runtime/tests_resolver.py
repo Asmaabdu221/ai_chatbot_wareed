@@ -545,7 +545,10 @@ def _build_disambiguation_reply(query: str, conversation_id: UUID | None = None)
         query_type="test_preparation_query",
         conversation_id=conversation_id,
     )
-    return format_disambiguation_reply(payload)
+    lines = ["تقصد أي تحليل بالضبط؟ هذه أقرب الخيارات:"]
+    for idx, name in enumerate(candidates[:5], start=1):
+        lines.append(f"{idx}) {name}")
+    return "\n".join(lines)
 
 
 def resolve_tests_query(user_text: str, conversation_id: UUID | None = None) -> dict[str, Any]:

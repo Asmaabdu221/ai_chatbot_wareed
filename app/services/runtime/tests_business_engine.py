@@ -79,7 +79,7 @@ _PRICE_HINTS = (
 
 
 _NOT_CLEAR_MESSAGE = "المعلومة غير واضحة بشكل كافٍ في البيانات الحالية."
-_TEST_NOT_FOUND_MESSAGE = "ما قدرت أحدد التحليل المقصود بدقة. اكتب اسم التحليل بشكل أوضح."
+_TEST_NOT_FOUND_MESSAGE = "ما قدرت أحدد التحليل بدقة. اكتب اسم التحليل أو كوده مثل ما هو ظاهر عندك."
 _FIELD_NOT_AVAILABLE_MESSAGE = "\u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0629 \u063a\u064a\u0631 \u0645\u062a\u0648\u0641\u0631\u0629 \u0644\u0647\u0630\u0627 \u0627\u0644\u062a\u062d\u0644\u064a\u0644"
 _TARGET_QUERY_ROUTE = {
     "test_price_query": "tests_business_price",
@@ -711,7 +711,10 @@ def _build_disambiguation_reply(
         query_type=_safe_str(state_query_type) or query_type,
         conversation_id=conversation_id,
     )
-    return format_disambiguation_reply(payload)
+    lines = ["تقصد أي تحليل بالضبط؟ هذه أقرب الخيارات:"]
+    for idx, name in enumerate(candidates[:5], start=1):
+        lines.append(f"{idx}) {name}")
+    return "\n".join(lines)
 
 
 def _build_ranked_disambiguation_reply(
@@ -748,7 +751,7 @@ def _build_ranked_disambiguation_reply(
         query_type=_safe_str(state_query_type) or query_type,
         conversation_id=conversation_id,
     )
-    lines = ["ما قدرت أحدد التحليل المقصود بدقة. هل تقصد:"]
+    lines = ["تقصد أي تحليل بالضبط؟ هذه أقرب الخيارات:"]
     for idx, name in enumerate(candidates, start=1):
         lines.append(f"{idx}) {name}")
     return "\n".join(lines)
@@ -920,7 +923,7 @@ def resolve_tests_business_query(user_text: str, conversation_id: UUID | None = 
 
     if query_type == "test_price_query":
         price_raw = _safe_str(target.get("price_raw"))
-        answer = _format_target_field("\u0633\u0639\u0631 \u0644\u0640", test_name, price_raw) if price_raw else _FIELD_NOT_AVAILABLE_MESSAGE
+        answer = f"سعر تحليل {test_name} هو: {price_raw}." if price_raw else _FIELD_NOT_AVAILABLE_MESSAGE
         return {
             "matched": True,
             "answer": answer,
@@ -974,7 +977,7 @@ def resolve_tests_business_query(user_text: str, conversation_id: UUID | None = 
     if query_type == "test_complementary_query":
         values = _as_str_list(target.get("complementary_tests"))
         answer = (
-            f"التحاليل المكملة لـ {test_name}:\n- " + "\n- ".join(values)
+            f"التحاليل المكملة لـ {test_name} قد تشمل:\n- " + "\n- ".join(values)
             if values
             else _NOT_CLEAR_MESSAGE
         )
@@ -994,7 +997,7 @@ def resolve_tests_business_query(user_text: str, conversation_id: UUID | None = 
     if query_type == "test_alternative_query":
         values = _as_str_list(target.get("alternative_tests"))
         answer = (
-            f"البدائل المتاحة لـ {test_name}:\n- " + "\n- ".join(values)
+            f"البدائل الممكنة لتحليل {test_name} قد تشمل:\n- " + "\n- ".join(values)
             if values
             else _NOT_CLEAR_MESSAGE
         )
