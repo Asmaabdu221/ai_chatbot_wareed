@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import urllib.error
@@ -17,6 +18,7 @@ REQUEST_TIMEOUT_SECONDS = 15
 _ALLOWED_INTENTS = {"test", "package", "branch", "faq", "symptoms", "results", "unknown"}
 
 _FALLBACK_LABEL = "unknown"
+logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT_TEMPLATE = """You are an intent classifier for a medical lab assistant.
 
@@ -91,6 +93,7 @@ def classify_intent_label(user_text: str) -> str:
     """Classify user query to one allowed label using local Ollama."""
     message = _safe_str(user_text)
     if not message:
+        logger.debug("ollama classifier empty_query -> returning unknown")
         return _FALLBACK_LABEL
 
     prompt = _SYSTEM_PROMPT_TEMPLATE.format(user_text=message)
@@ -107,19 +110,82 @@ def classify_intent_label(user_text: str) -> str:
         method="POST",
     )
 
+    logger.debug(
+        "ollama classifier config | base_url=%s | model=%s | request_url=%s | timeout_seconds=%s",
+        OLLAMA_BASE_URL,
+        OLLAMA_MODEL,
+        OLLAMA_URL,
+        REQUEST_TIMEOUT_SECONDS,
+    )
+    logger.debug(
+        "ollama classifier request | query_len=%s",
+        len(message),
+    )
+
     try:
         with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT_SECONDS) as resp:
             raw = resp.read().decode("utf-8")
+        logger.debug(
+            "ollama classifier raw_response_snippet=%s",
+            _safe_str(raw).replace("\n", " ")[:200],
+        )
         outer = json.loads(raw)
         response_text = _safe_str((outer or {}).get("response"))
-        return _extract_intent_label(response_text)
-    except (
-        urllib.error.URLError,
-        TimeoutError,
-        json.JSONDecodeError,
-        ValueError,
-        OSError,
-    ):
+        extracted = _extract_intent_label(response_text)
+        logger.debug(
+            "ollama classifier parsed_response_snippet=%s | extracted_label=%s",
+            response_text.replace("\n", " ")[:200],
+            extracted,
+        )
+        if extracted == _FALLBACK_LABEL:
+            logger.debug(
+                "ollama classifier label_extraction_unrecognized | response_snippet=%s",
+                response_text.replace("\n", " ")[:200],
+            )
+        return extracted
+    except urllib.error.HTTPError as exc:
+        logger.exception(
+            "ollama classifier http_error | status=%s | reason=%s",
+            getattr(exc, "code", ""),
+            getattr(exc, "reason", ""),
+        )
+        logger.debug(
+            "classify_intent_label failed -> returning unknown | error_type=%s | error=%s",
+            type(exc).__name__,
+            _safe_str(exc),
+        )
+        return _FALLBACK_LABEL
+    except urllib.error.URLError as exc:
+        logger.exception("ollama classifier url_error | reason=%s", getattr(exc, "reason", ""))
+        logger.debug(
+            "classify_intent_label failed -> returning unknown | error_type=%s | error=%s",
+            type(exc).__name__,
+            _safe_str(exc),
+        )
+        return _FALLBACK_LABEL
+    except TimeoutError as exc:
+        logger.exception("ollama classifier timeout_error")
+        logger.debug(
+            "classify_intent_label failed -> returning unknown | error_type=%s | error=%s",
+            type(exc).__name__,
+            _safe_str(exc),
+        )
+        return _FALLBACK_LABEL
+    except json.JSONDecodeError as exc:
+        logger.exception("ollama classifier json_decode_error")
+        logger.debug(
+            "classify_intent_label failed -> returning unknown | error_type=%s | error=%s",
+            type(exc).__name__,
+            _safe_str(exc),
+        )
+        return _FALLBACK_LABEL
+    except (ValueError, OSError) as exc:
+        logger.exception("ollama classifier runtime_error")
+        logger.debug(
+            "classify_intent_label failed -> returning unknown | error_type=%s | error=%s",
+            type(exc).__name__,
+            _safe_str(exc),
+        )
         return _FALLBACK_LABEL
 
 
