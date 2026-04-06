@@ -1664,8 +1664,12 @@ def route_runtime_message(
                 "domains pre-faq guard fallback faq not matched | q=%s | route=faq_only_no_match_domains_prefilter",
                 text,
             )
+            logger.debug(
+                "ollama fallback calling | stage=domains_prefilter_after_faq_no_match | q=%s",
+                text,
+            )
             classifier_result = _try_ollama_classifier_fallback(
-                _safe_str(user_text),
+                text,
                 conversation_id=conversation_id,
             )
             if classifier_result is not None:
