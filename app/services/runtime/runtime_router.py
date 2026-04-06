@@ -1505,7 +1505,17 @@ def route_runtime_message(
                         },
                     }, "results_interpretation")
 
-        if is_numeric or is_branch_like or is_package_like or is_tests_like:
+        prefilter_enter = bool(is_numeric or is_branch_like or is_package_like or is_tests_like)
+        logger.debug(
+            "domains prefilter entry check | q=%s | enter=%s | numeric=%s | branch_like=%s | package_like=%s | tests_like=%s",
+            text,
+            prefilter_enter,
+            is_numeric,
+            is_branch_like,
+            is_package_like,
+            is_tests_like,
+        )
+        if prefilter_enter:
             if is_numeric or is_branch_like:
                 branches_result = resolve_branches_query(text, conversation_id=conversation_id)
                 if bool(branches_result.get("matched")):
@@ -1516,6 +1526,7 @@ def route_runtime_message(
                         is_branch_like,
                         _safe_str(branches_result.get("route")),
                     )
+                    logger.debug("domains prefilter early return | stage=branches_match")
                     return _final({
                         "reply": format_runtime_answer(_safe_str(branches_result.get("answer"))),
                         "route": _safe_str(branches_result.get("route")) or "branches",
@@ -1535,6 +1546,7 @@ def route_runtime_message(
                                 conversation_id=conversation_id,
                             )
                             if _is_supported_tests_business_result(tests_business_selected):
+                                logger.debug("domains prefilter early return | stage=numeric_selection_tests_business")
                                 return _final({
                                     "reply": format_runtime_answer(_safe_str(tests_business_selected.get("answer"))),
                                     "route": _safe_str(tests_business_selected.get("route")) or "tests_business",
@@ -1547,6 +1559,7 @@ def route_runtime_message(
                                 conversation_id=conversation_id,
                             )
                             if bool(tests_selected.get("matched")):
+                                logger.debug("domains prefilter early return | stage=numeric_selection_tests")
                                 return _final({
                                     "reply": format_runtime_answer(_safe_str(tests_selected.get("answer"))),
                                     "route": _safe_str(tests_selected.get("route")) or "tests",
@@ -1567,6 +1580,7 @@ def route_runtime_message(
                         is_tests_like,
                         _safe_str(packages_result.get("route")),
                     )
+                    logger.debug("domains prefilter early return | stage=packages_match")
                     return _final({
                         "reply": format_runtime_answer(_safe_str(packages_result.get("answer"))),
                         "route": _safe_str(packages_result.get("route")) or "packages",
@@ -1590,6 +1604,7 @@ def route_runtime_message(
                         is_tests_like,
                         _safe_str(tests_business_result.get("route")),
                     )
+                    logger.debug("domains prefilter early return | stage=tests_business_match")
                     return _final({
                         "reply": format_runtime_answer(_safe_str(tests_business_result.get("answer"))),
                         "route": _safe_str(tests_business_result.get("route")) or "tests_business",
@@ -1609,6 +1624,7 @@ def route_runtime_message(
                         is_tests_like,
                         _safe_str(tests_result.get("route")),
                     )
+                    logger.debug("domains prefilter early return | stage=tests_match")
                     return _final({
                         "reply": format_runtime_answer(_safe_str(tests_result.get("answer"))),
                         "route": _safe_str(tests_result.get("route")) or "tests",
@@ -1639,6 +1655,10 @@ def route_runtime_message(
                 last_assistant_text=last_assistant_text,
                 recent_runtime_messages=recent_runtime_messages,
             )
+            logger.debug(
+                "domains prefilter faq fallback result | matched=%s",
+                bool(faq_fallback_result),
+            )
             if faq_fallback_result:
                 logger.debug(
                     "domains pre-faq guard fallback faq matched | q=%s | selected_faq_id=%s | matched_text=%s | route=faq_only",
@@ -1646,6 +1666,7 @@ def route_runtime_message(
                     _safe_str(faq_fallback_result.get("faq_id")),
                     _safe_str(faq_fallback_result.get("matched_text")),
                 )
+                logger.debug("domains prefilter early return | stage=faq_fallback_match")
                 return _final({
                     "reply": format_runtime_answer(_safe_str(faq_fallback_result.get("answer"))),
                     "route": "faq_only",
@@ -1680,6 +1701,7 @@ def route_runtime_message(
                 )
                 return _final(classifier_result, "ollama_fallback_domains_prefilter_after_faq")
             logger.debug("ollama fallback reroute_failed | stage=domains_prefilter_after_faq_no_match")
+            logger.debug("domains prefilter early return | stage=domains_prefilter_no_match")
             return _final({
                 "reply": format_runtime_answer(get_faq_no_match_message()),
                 "route": "faq_only_no_match_domains_prefilter",
@@ -1694,6 +1716,14 @@ def route_runtime_message(
                     "tests_like_query": is_tests_like,
                 },
             }, "domains_prefilter_no_match")
+        logger.debug(
+            "domains prefilter skipped | q=%s | numeric=%s | branch_like=%s | package_like=%s | tests_like=%s",
+            text,
+            is_numeric,
+            is_branch_like,
+            is_package_like,
+            is_tests_like,
+        )
 
         if is_symptoms_like:
             symptoms_result = handle_symptoms_query(text)
@@ -1764,6 +1794,11 @@ def route_runtime_message(
         semantic_score = 0.0
         semantic_routing_used = False
         if ENABLE_BRANCHES_RUNTIME_AFTER_FAQ:
+            logger.debug(
+                "after_faq_no_match branch/package/tests block entry | q=%s | enabled=%s",
+                text,
+                ENABLE_BRANCHES_RUNTIME_AFTER_FAQ,
+            )
             semantic_result = detect_branch_semantic_intent(text)
             semantic_intent = _safe_str(semantic_result.get("intent"))
             semantic_score = float(semantic_result.get("score") or 0.0)
@@ -1791,6 +1826,7 @@ def route_runtime_message(
                     "matched": True,
                     "meta": meta,
                 }, "after_faq_no_match_branches")
+            logger.debug("after_faq_no_match no branch match | q=%s", text)
 
             if is_package_like and ENABLE_PACKAGES_RUNTIME_AFTER_BRANCHES:
                 packages_result = resolve_packages_query(text, conversation_id=conversation_id)
@@ -1807,6 +1843,7 @@ def route_runtime_message(
                         "matched": True,
                         "meta": dict(packages_result.get("meta") or {}),
                     }, "after_faq_no_match_packages")
+                logger.debug("after_faq_no_match no package match | q=%s", text)
             if ENABLE_TESTS_RUNTIME_AFTER_PACKAGES:
                 tests_business_result = resolve_tests_business_query(
                     text,
@@ -1840,6 +1877,7 @@ def route_runtime_message(
                         "matched": True,
                         "meta": _tests_meta(tests_result.get("meta") or {}),
                     }, "after_faq_no_match_tests")
+                logger.debug("after_faq_no_match no tests match | q=%s", text)
         classifier_result = _try_ollama_classifier_fallback(
             _safe_str(user_text),
             conversation_id=conversation_id,
