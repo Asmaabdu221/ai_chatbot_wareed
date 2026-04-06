@@ -1013,10 +1013,12 @@ def route_runtime_message(
 
         if conversation_id is not None:
             memory = load_entity_memory(conversation_id)
+            state = load_selection_state(conversation_id)
             last_intent = _safe_str(memory.get("last_intent"))
             last_test = _safe_str((memory.get("last_test") or {}).get("label"))
             last_package = _safe_str((memory.get("last_package") or {}).get("label"))
             last_branch = _safe_str((memory.get("last_branch") or {}).get("label"))
+            has_branch_followup_anchor = _safe_str(state.get("last_selection_type")) == "branch"
             is_detail_followup = _is_context_followup_query(text, _CONTEXT_DETAIL_FOLLOWUPS)
             is_price_followup = _is_context_followup_query(text, _CONTEXT_PRICE_FOLLOWUPS)
             is_branch_followup = _is_context_followup_query(text, _CONTEXT_BRANCH_FOLLOWUPS)
@@ -1074,12 +1076,21 @@ def route_runtime_message(
                         "meta": _tests_meta(tests_result.get("meta") or {}),
                     }, "context_followup_tests")
             if (
-                last_intent == "branch"
-                and (last_branch or is_branch_locality_followup)
+                (last_intent == "branch" or has_branch_followup_anchor)
+                and (last_branch or is_branch_locality_followup or has_branch_followup_anchor)
                 and (is_branch_followup or is_branch_locality_followup)
                 and not is_package_like
                 and not is_tests_like
             ):
+                logger.debug(
+                    "branch context follow-up activation | q=%s | last_intent=%s | last_branch=%s | selection_anchor=%s | branch_followup=%s | locality_followup=%s",
+                    text,
+                    last_intent,
+                    bool(last_branch),
+                    has_branch_followup_anchor,
+                    is_branch_followup,
+                    is_branch_locality_followup,
+                )
                 branches_result = resolve_branches_query(text, conversation_id=conversation_id)
                 if bool(branches_result.get("matched")):
                     return _final({

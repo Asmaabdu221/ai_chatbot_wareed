@@ -1058,12 +1058,23 @@ def resolve_branches_query(user_text: str, conversation_id: UUID | None = None) 
         }
 
     if query_type == "generic_overview":
+        if conversation_id is not None:
+            # Save a lightweight branch anchor so the next short city/locality follow-up
+            # is treated as branch refinement context.
+            save_selection_state(
+                conversation_id,
+                options=[],
+                selection_type="branch",
+                city="",
+                query_type="generic_overview",
+            )
         return {
             "matched": True,
             "answer": _format_generic_branches_reply(),
             "meta": _enrich_meta(
                 {
                     "cities_count": len({_safe_str(r.get("city")) for r in records if _safe_str(r.get("city"))}),
+                    "followup_anchor": "branch_generic_overview",
                 },
                 query_type=query_type,
                 has_state=has_state,
