@@ -26,7 +26,10 @@ from app.services.runtime.branches_semantic_intent import (
     is_confident_branch_intent,
 )
 from app.services.runtime.faq_resolver import resolve_faq
-from app.services.runtime.ollama_intent_classifier import classify_intent_label
+from app.services.runtime.ollama_intent_classifier import (
+    classify_intent_label,
+    format_final_response_with_ollama,
+)
 from app.services.runtime.packages_business_engine import handle_packages_business_query
 from app.services.runtime.packages_resolver import resolve_packages_query
 from app.services.runtime.results_engine import interpret_result_query
@@ -1258,6 +1261,36 @@ def _log_final_route_decision(
     )
     return payload
 
+
+def _should_apply_ollama_final_formatter(result: dict[str, Any]) -> bool:
+    route = _safe_str(result.get("route")).lower()
+    source = _safe_str(result.get("source")).lower()
+    reply = _safe_str(result.get("reply"))
+    matched = bool(result.get("matched"))
+    if not matched or not reply:
+        return False
+
+    eligible_sources = {"packages", "packages_business", "tests", "tests_business", "symptoms_engine"}
+    if source not in eligible_sources:
+        return False
+
+    blocked_route_tokens = ("no_match", "error", "rebuild", "fallback", "critical")
+    if any(token in route for token in blocked_route_tokens):
+        return False
+    return True
+
+
+def _apply_ollama_final_formatter_if_needed(result: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(result or {})
+    if not _should_apply_ollama_final_formatter(payload):
+        return payload
+
+    raw_reply = _safe_str(payload.get("reply"))
+    formatted_reply = _safe_str(format_final_response_with_ollama(raw_reply))
+    if formatted_reply:
+        payload["reply"] = formatted_reply
+    return payload
+
 def route_runtime_message(
     user_text: str,
     *,
@@ -1282,8 +1315,9 @@ def route_runtime_message(
     if rewritten:
         text = rewritten
     def _final(result: dict[str, Any], path_stage: str) -> dict[str, Any]:
+        final_result = _apply_ollama_final_formatter_if_needed(result)
         return _log_final_route_decision(
-            result,
+            final_result,
             conversation_id=conversation_id,
             path_stage=path_stage,
         )

@@ -13,6 +13,7 @@ from typing import Any
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/api").rstrip("/")
 OLLAMA_URL = f"{OLLAMA_BASE_URL}/generate"
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
+OLLAMA_FORMATTER_MODEL = os.getenv("OLLAMA_FORMATTER_MODEL", OLLAMA_MODEL)
 REQUEST_TIMEOUT_SECONDS = 15
 
 _ALLOWED_INTENTS = {"test", "package", "branch", "faq", "symptoms", "results", "unknown"}
@@ -33,6 +34,31 @@ Rules:
 
 User message:
 {user_text}
+"""
+
+_FORMATTER_PROMPT_TEMPLATE = """You are a professional medical assistant.
+Your job is to rewrite the following response in a friendly, natural, and clean Arabic style.
+
+Rules:
+- Keep all information EXACTLY as is
+- Do NOT add or remove facts
+- Make it sound human and helpful
+- Remove repetition
+- Use clean formatting:
+  - Title line
+  - Short description
+  - Optional spacing
+
+Tone:
+- Friendly
+- Professional
+- Clear
+
+Input:
+{raw_text}
+
+Output:
+Rewritten response only.
 """
 
 
@@ -187,6 +213,57 @@ def classify_intent_label(user_text: str) -> str:
             _safe_str(exc),
         )
         return _FALLBACK_LABEL
+
+
+def format_final_response_with_ollama(raw_text: str) -> str:
+    """Rewrite final deterministic response for cleaner UX without changing facts."""
+    message = _safe_str(raw_text)
+    if not message:
+        return message
+
+    prompt = _FORMATTER_PROMPT_TEMPLATE.format(raw_text=message)
+    body = {
+        "model": OLLAMA_FORMATTER_MODEL,
+        "prompt": prompt,
+        "stream": False,
+    }
+    req = urllib.request.Request(
+        OLLAMA_URL,
+        data=json.dumps(body).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    logger.debug(
+        "ollama formatter request | model=%s | request_url=%s | timeout_seconds=%s | raw_len=%s",
+        OLLAMA_FORMATTER_MODEL,
+        OLLAMA_URL,
+        REQUEST_TIMEOUT_SECONDS,
+        len(message),
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT_SECONDS) as resp:
+            raw = resp.read().decode("utf-8")
+        outer = json.loads(raw)
+        response_text = _safe_str((outer or {}).get("response"))
+        if not response_text:
+            logger.debug("ollama formatter empty_response -> keep_raw")
+            return message
+        logger.debug("ollama formatter success | rewritten_len=%s", len(response_text))
+        return response_text
+    except (
+        urllib.error.HTTPError,
+        urllib.error.URLError,
+        TimeoutError,
+        json.JSONDecodeError,
+        ValueError,
+        OSError,
+    ) as exc:
+        logger.debug(
+            "ollama formatter failed -> keep_raw | error_type=%s | error=%s",
+            type(exc).__name__,
+            _safe_str(exc),
+        )
+        return message
 
 
 def _validate_output(payload: dict[str, Any] | None) -> dict[str, Any]:
