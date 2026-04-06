@@ -226,6 +226,57 @@ _CONTEXT_BRANCH_FOLLOWUPS = (
     "جنوب الرياض",
 )
 
+_EXPLICIT_BRANCH_ACTION_ANCHORS = (
+    "اقرب فرع",
+    "الاقرب فرع",
+    "وين الفرع",
+    "وين اقرب فرع",
+    "موقع الفرع",
+    "عنوان الفرع",
+    "لوكيشن",
+    "location",
+)
+_LOCATION_MODIFIER_HINTS = (
+    "في الرياض",
+    "بالرياض",
+    "في جده",
+    "بجده",
+    "في جدة",
+    "بجدة",
+    "في مكة",
+    "بمكة",
+    "في مكه",
+    "بمكه",
+    "في المدينة",
+    "بالمدينة",
+    "شمال الرياض",
+    "شرق الرياض",
+    "غرب الرياض",
+    "جنوب الرياض",
+)
+_MIXED_TEST_CUES = (
+    "تحليل",
+    "تحاليل",
+    "فحص",
+    "اختبار",
+    "tsh",
+    "hba1c",
+    "vitamin",
+    "vit d",
+    "cbc",
+    "ferritin",
+    "حديد",
+    "فيتامين",
+)
+_MIXED_PACKAGE_CUES = (
+    "باقه",
+    "باقة",
+    "باقات",
+    "package",
+    "افضل باقه",
+    "أفضل باقة",
+)
+
 
 def _is_context_followup_query(text: str, triggers: tuple[str, ...]) -> bool:
     q = normalize_arabic(_safe_str(text))
@@ -249,6 +300,37 @@ def _is_context_followup_query(text: str, triggers: tuple[str, ...]) -> bool:
         min_score=1.75,
         legacy_match=legacy,
     )
+
+
+def _has_explicit_branch_action_anchor(text: str) -> bool:
+    n = normalize_arabic(_safe_str(text))
+    if not n:
+        return False
+    return any(_contains_boundary_phrase(n, normalize_arabic(anchor)) for anchor in _EXPLICIT_BRANCH_ACTION_ANCHORS)
+
+
+def _has_location_modifier(text: str) -> bool:
+    n = normalize_arabic(_safe_str(text))
+    if not n:
+        return False
+    if any(_contains_boundary_phrase(n, normalize_arabic(h)) for h in _LOCATION_MODIFIER_HINTS):
+        return True
+    # Conservative single-token city forms.
+    return n in {"الرياض", "جده", "جدة", "مكة", "مكه", "المدينة"}
+
+
+def _has_test_intent_cues(text: str) -> bool:
+    n = normalize_arabic(_safe_str(text))
+    if not n:
+        return False
+    return any(_contains_boundary_phrase(n, normalize_arabic(c)) or normalize_arabic(c) in n for c in _MIXED_TEST_CUES)
+
+
+def _has_package_intent_cues(text: str) -> bool:
+    n = normalize_arabic(_safe_str(text))
+    if not n:
+        return False
+    return any(_contains_boundary_phrase(n, normalize_arabic(c)) or normalize_arabic(c) in n for c in _MIXED_PACKAGE_CUES)
 
 
 def _is_short_branch_locality_followup(
@@ -1002,6 +1084,39 @@ def route_runtime_message(
         is_package_like = _looks_like_package_query(text)
         is_tests_like = _looks_like_tests_query(text)
         is_symptoms_like = _looks_like_symptoms_query(text)
+        # Mixed-query arbitration:
+        # location is a secondary modifier unless there is explicit branch-action intent.
+        query_norm = normalize_arabic(text)
+        explicit_branch_action = _has_explicit_branch_action_anchor(query_norm)
+        has_location_modifier = _has_location_modifier(query_norm)
+        mixed_test_cues = _has_test_intent_cues(query_norm)
+        mixed_package_cues = _has_package_intent_cues(query_norm)
+        mixed_result_signals = analyze_result_query(text)
+        mixed_result_primary = bool(
+            mixed_result_signals.get("strong_result_intent")
+            and mixed_result_signals.get("has_number")
+            and mixed_result_signals.get("has_test_like")
+        )
+        if (
+            not is_numeric
+            and is_branch_like
+            and has_location_modifier
+            and not explicit_branch_action
+            and (mixed_test_cues or mixed_package_cues or mixed_result_primary)
+        ):
+            is_branch_like = False
+            if mixed_test_cues:
+                is_tests_like = True
+            if mixed_package_cues:
+                is_package_like = True
+            logger.debug(
+                "mixed_query arbitration applied | q=%s | location_secondary=true | explicit_branch_action=%s | promote_tests=%s | promote_packages=%s | result_primary=%s",
+                text,
+                explicit_branch_action,
+                mixed_test_cues,
+                mixed_package_cues,
+                mixed_result_primary,
+            )
 
         if is_numeric:
             selection_result = _resolve_numeric_selection_from_context(

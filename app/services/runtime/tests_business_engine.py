@@ -66,9 +66,20 @@ _SAMPLE_TYPE_HINTS = (
     "من أي عينة",
     "sample type",
 )
+_PRICE_HINTS = (
+    "\u0643\u0645 \u0633\u0639\u0631",
+    "\u0627\u0644\u0633\u0639\u0631",
+    "\u0633\u0639\u0631",
+    "\u0628\u0643\u0645",
+    "\u062a\u0643\u0644\u0641\u0629",
+    "price",
+    "cost",
+)
+
 
 _NOT_CLEAR_MESSAGE = "المعلومة غير واضحة بشكل كافٍ في البيانات الحالية."
 _TEST_NOT_FOUND_MESSAGE = "ما قدرت أحدد التحليل المقصود بدقة. اكتب اسم التحليل بشكل أوضح."
+_FIELD_NOT_AVAILABLE_MESSAGE = "\u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0629 \u063a\u064a\u0631 \u0645\u062a\u0648\u0641\u0631\u0629 \u0644\u0647\u0630\u0627 \u0627\u0644\u062a\u062d\u0644\u064a\u0644"
 _TARGET_QUERY_ROUTE = {
     "test_fasting_query": "tests_business_fasting",
     "test_preparation_query": "tests_business_preparation",
@@ -567,6 +578,44 @@ def _format_target_field(title: str, test_name: str, value: str) -> str:
     return f"{title} {test_name}:\n{value}"
 
 
+def _detect_supported_dual_intents(query_norm: str) -> dict[str, bool]:
+    if not query_norm:
+        return {"price": False, "fasting_or_preparation": False, "sample_type": False}
+    has_price = _has_any_hint(query_norm, _PRICE_HINTS)
+    has_fasting = _has_any_hint(query_norm, _FASTING_HINTS)
+    has_preparation = _has_any_hint(query_norm, _PREPARATION_HINTS)
+    has_sample_type = _has_any_hint(query_norm, _SAMPLE_TYPE_HINTS)
+    return {
+        "price": bool(has_price),
+        "fasting_or_preparation": bool(has_fasting or has_preparation),
+        "sample_type": bool(has_sample_type),
+    }
+
+
+def _format_dual_intent_composed_answer(query_norm: str, target: dict[str, Any]) -> str:
+    test_name = _safe_str(target.get("test_name_ar"))
+    intents = _detect_supported_dual_intents(query_norm)
+    prep_text = _safe_str(target.get("preparation"))
+    sample_type = _safe_str(target.get("sample_type"))
+    price_raw = _safe_str(target.get("price_raw"))
+
+    lines: list[str] = [f"\u0645\u0639\u0644\u0648\u0645\u0627\u062a {test_name}:"]
+
+    if intents["price"]:
+        price_value = price_raw if price_raw else _FIELD_NOT_AVAILABLE_MESSAGE
+        lines.append(f"1) \u0627\u0644\u0633\u0639\u0631: {price_value}")
+
+    if intents["fasting_or_preparation"]:
+        prep_value = prep_text if prep_text else _FIELD_NOT_AVAILABLE_MESSAGE
+        lines.append(f"2) \u0627\u0644\u062a\u062d\u0636\u064a\u0631/\u0627\u0644\u0635\u064a\u0627\u0645: {prep_value}")
+
+    if intents["sample_type"]:
+        sample_value = sample_type if sample_type else _FIELD_NOT_AVAILABLE_MESSAGE
+        lines.append(f"3) \u0646\u0648\u0639 \u0627\u0644\u0639\u064a\u0646\u0629: {sample_value}")
+
+    return "\n".join(lines)
+
+
 def _build_disambiguation_reply(
     query: str,
     query_type: str,
@@ -685,6 +734,8 @@ def resolve_tests_business_query(user_text: str, conversation_id: UUID | None = 
         }
 
     query_norm = _normalize_business_query_aliases(query_norm)
+    supported_dual_intents = _detect_supported_dual_intents(query_norm)
+    dual_intent_count = sum(1 for _, v in supported_dual_intents.items() if v)
     target, score = _find_target_test(query_norm, records)
     if target is None and query_type in _RELAXED_BUSINESS_TARGET_TYPES:
         target_tokens = _extract_target_tokens_for_relevance(query_norm)
@@ -753,6 +804,24 @@ def resolve_tests_business_query(user_text: str, conversation_id: UUID | None = 
 
     test_name = _safe_str(target.get("test_name_ar"))
     target_id = _safe_str(target.get("id"))
+
+    # Deterministic same-domain dual-intent composition.
+    if (
+        dual_intent_count >= 2
+        and query_type in {"test_fasting_query", "test_preparation_query", "test_sample_type_query"}
+    ):
+        answer = _format_dual_intent_composed_answer(query_norm, target)
+        return {
+            "matched": True,
+            "answer": answer,
+            "route": _TARGET_QUERY_ROUTE.get(query_type, "tests_business_no_match"),
+            "meta": {
+                "query_type": query_type,
+                "matched_test_id": target_id,
+                "matched_test_name": test_name,
+                "score": score,
+            },
+        }
 
     if query_type == "test_fasting_query":
         prep = _safe_str(target.get("preparation"))
