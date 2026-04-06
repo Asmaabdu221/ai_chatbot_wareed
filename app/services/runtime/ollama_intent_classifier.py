@@ -264,6 +264,80 @@ def format_final_response_with_ollama(raw_text: str) -> str:
         if not response_text:
             logger.debug("ollama formatter empty_response -> keep_raw")
             return message
+
+        # 1) Arabic-only guard with controlled English token allowance.
+        # Allow known test-code tokens and any latin tokens already present in raw deterministic text.
+        token_pattern = re.compile(r"\b[A-Za-z][A-Za-z0-9.+\-]*\b")
+        raw_latin_tokens = {t.lower() for t in token_pattern.findall(message)}
+        out_latin_tokens = {t.lower() for t in token_pattern.findall(response_text)}
+        allowed_latin_tokens = {"hba1c", "tsh"}
+        unexpected_latin_tokens = sorted(
+            t for t in out_latin_tokens if t not in allowed_latin_tokens and t not in raw_latin_tokens
+        )
+        if unexpected_latin_tokens:
+            logger.debug(
+                "ollama formatter arabic_only_guard -> keep_raw | unexpected_latin_tokens=%s",
+                unexpected_latin_tokens[:8],
+            )
+            return message
+
+        # 2) Stronger meta/explanation-tone detection.
+        meta_phrases = (
+            "لن أقوم بتعديلها",
+            "كما هو",
+            "هذا النص",
+            "إجابة",
+            "الاجابة",
+            "هذه الإجابة",
+            "هذه الاجابة",
+            "إعادة صياغة",
+            "اعادة صياغة",
+            "تنسيق الرد",
+            "تمت إعادة",
+            "قمت بإعادة",
+            "قمت باعادة",
+            "سأقوم بإعادة",
+            "ساقوم باعادة",
+            "سوف أقوم",
+            "سوف اقوم",
+        )
+        lowered_text = response_text.lower()
+        if any(phrase in response_text for phrase in meta_phrases) or any(
+            phrase in lowered_text for phrase in ("cleaned", "formatted", "rewrite", "rewritten", "version")
+        ):
+            logger.debug("ollama formatter meta_guard -> keep_raw")
+            return message
+
+        # 3) Coverage/length guard: reject over-shortening.
+        raw_len = len(_safe_str(message))
+        out_len = len(_safe_str(response_text))
+        if raw_len > 0 and (out_len / raw_len) < 0.60:
+            logger.debug(
+                "ollama formatter coverage_guard -> keep_raw | raw_len=%s | out_len=%s | ratio=%.3f",
+                raw_len,
+                out_len,
+                (out_len / raw_len),
+            )
+            return message
+
+        # 4) Structure-preservation guard for list/multiline raw responses.
+        raw_has_multiline = "\n" in message
+        raw_has_list_markers = bool(
+            re.search(r"(^|\n)\s*(?:[-•]|\d+[\)\.\-])\s+", message)
+        )
+        out_has_multiline = "\n" in response_text
+        sentence_units = [s for s in re.split(r"[.!؟\n]+", response_text) if _safe_str(s)]
+        out_is_single_short_sentence = (len(sentence_units) <= 1 and out_len <= 140)
+        if (raw_has_multiline or raw_has_list_markers) and (not out_has_multiline) and out_is_single_short_sentence:
+            logger.debug(
+                "ollama formatter structure_guard -> keep_raw | raw_has_multiline=%s | raw_has_list_markers=%s | out_sentences=%s | out_len=%s",
+                raw_has_multiline,
+                raw_has_list_markers,
+                len(sentence_units),
+                out_len,
+            )
+            return message
+
         unsafe_markers = (
             "هنا النسخة",
             "إعادة صياغة",
