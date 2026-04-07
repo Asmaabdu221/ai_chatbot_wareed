@@ -52,6 +52,14 @@ _EXPLANATION_CONTEXT_HINTS = (
     "يفيد في ايش",
     "يفيد في وش",
 )
+_BENEFIT_HINTS = (
+    "\u0627\u064a\u0634 \u0641\u0627\u0626\u062f\u0629",
+    "\u0648\u0634 \u0641\u0627\u0626\u062f\u062a\u0647",
+    "\u0644\u064a\u0634 \u0646\u0633\u0648\u064a",
+    "\u064a\u0641\u064a\u062f \u0641\u064a \u0627\u064a\u0634",
+    "\u064a\u0641\u064a\u062f \u0641\u064a \u0648\u0634",
+    "\u0641\u0627\u0626\u062f\u062a\u0647",
+)
 _PREPARATION_HINTS = (
     "صيام",
     "يحتاج صيام",
@@ -108,6 +116,7 @@ _TEST_NOT_FOUND_REPLY = (
 _PREPARATION_NOT_AVAILABLE_REPLY = (
     "تفاصيل التحضير لهذا التحليل غير واضحة بشكل كافٍ في البيانات الحالية."
 )
+_DEFINITION_NOT_FOUND_REPLY = "\u0645\u0627 \u0639\u0646\u062f\u064a \u0648\u0635\u0641 \u0648\u0627\u0636\u062d \u0644\u0647\u0630\u0627 \u0627\u0644\u062a\u062d\u0644\u064a\u0644 \u0641\u064a \u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u062d\u0627\u0644\u064a\u0629."
 
 
 def _safe_str(value: Any) -> str:
@@ -210,6 +219,7 @@ def load_tests_records() -> list[dict[str, Any]]:
             item["tags"] = tags
             item["code_tokens"] = code_tokens
             item["summary_ar"] = _safe_str(obj.get("summary_ar"))
+            item["benefit_ar"] = _safe_str(obj.get("benefit_ar"))
             item["content_clean"] = _safe_str(obj.get("content_clean"))
             item["url"] = _safe_str(obj.get("url"))
             item["page_type"] = _safe_str(obj.get("page_type"))
@@ -301,6 +311,29 @@ def _is_explanation_query(query_norm: str) -> bool:
         query_norm,
         primary_score,
         context_score,
+        decision,
+    )
+    return decision
+
+
+def _is_benefit_query(query_norm: str) -> bool:
+    score = _detector_score(
+        query_norm,
+        _BENEFIT_HINTS,
+        strong_keywords=(
+            "\u0641\u0627\u0626\u062f\u0629",
+            "\u0641\u0627\u0626\u062f\u062a\u0647",
+            "\u0644\u064a\u0634 \u0646\u0633\u0648\u064a",
+            "\u064a\u0641\u064a\u062f",
+        ),
+    )
+    explicit_phrase = any(_norm(h) in query_norm for h in _BENEFIT_HINTS)
+    has_benefit_keyword = ("\u0641\u0627\u0626\u062f" in query_norm) or ("\u064a\u0641\u064a\u062f" in query_norm)
+    decision = explicit_phrase or (score >= 1.05 and has_benefit_keyword)
+    logger.debug(
+        "tests_resolver benefit_detector | query=%s | score=%.3f | decision=%s",
+        query_norm,
+        score,
         decision,
     )
     return decision
@@ -505,15 +538,24 @@ def _format_test_details(record: dict[str, Any]) -> str:
 
 
 def _format_test_explanation(record: dict[str, Any]) -> str:
-    name = _safe_str(record.get("title")) or _safe_str(record.get("test_name_ar"))
     summary = _safe_str(record.get("summary_ar"))
     if summary:
-        return f"{name}:\n{summary}"
+        return summary
     content = _safe_str(record.get("content_clean"))
     if content:
-        short = content[:420].rstrip()
-        return f"{name}:\n{short}"
-    return f"{name}:\nلا توجد تفاصيل شرح كافية في البيانات الحالية."
+        normalized = content.replace("\n", " ").strip()
+        sentence_parts = [p.strip() for p in normalized.split(".") if p.strip()]
+        if sentence_parts:
+            return ". ".join(sentence_parts[:2]).strip() + "."
+        return normalized[:280].rstrip()
+    return _DEFINITION_NOT_FOUND_REPLY
+
+
+def _format_test_benefit(record: dict[str, Any]) -> str:
+    benefit = _safe_str(record.get("benefit_ar")).strip()
+    if benefit:
+        return "فائدة التحليل:\n" + benefit
+    return _format_test_explanation(record)
 
 
 def _format_preparation(record: dict[str, Any]) -> str:
@@ -576,6 +618,7 @@ def resolve_tests_query(user_text: str, conversation_id: UUID | None = None) -> 
 
     general_like = _is_general_query(query_norm)
     explanation_like = _is_explanation_query(query_norm)
+    benefit_like = _is_benefit_query(query_norm)
     preparation_like = _is_preparation_query(query_norm)
     sample_type_like = _is_sample_type_query(query_norm)
     price_like = _is_price_query(query_norm)
@@ -647,13 +690,47 @@ def resolve_tests_query(user_text: str, conversation_id: UUID | None = None) -> 
                 },
             }
 
-    if explanation_like and specific_match is not None:
+    if (explanation_like or benefit_like) and specific_match is None:
         return {
             "matched": True,
-            "answer": _format_test_explanation(specific_match),
+            "answer": _DEFINITION_NOT_FOUND_REPLY,
             "route": "tests_explanation",
             "meta": {
-                "query_type": "test_explanation",
+                "query_type": "test_explanation" if explanation_like and not benefit_like else "test_benefit",
+                "reason": "definition_or_benefit_without_specific_match",
+            },
+        }
+
+    if (explanation_like or benefit_like) and specific_match is not None:
+        has_definition_marker = any(
+            marker in query_norm
+            for marker in (
+                "\u0627\u064a\u0634 \u0647\u0648",
+                "\u0645\u0627 \u0647\u0648",
+                "\u0648\u0634 \u0647\u0648",
+                "\u064a\u0641\u062d\u0635",
+            )
+        )
+        if explanation_like and benefit_like and has_definition_marker:
+            summary = _format_test_explanation(specific_match).strip()
+            benefit = _safe_str(specific_match.get("benefit_ar")).strip()
+            answer = summary
+            if benefit:
+                answer = f"{summary}\n\nفائدة التحليل:\n{benefit}".strip()
+        elif benefit_like:
+            answer = _format_test_benefit(specific_match)
+        else:
+            answer = _format_test_explanation(specific_match)
+        return {
+            "matched": True,
+            "answer": answer,
+            "route": "tests_explanation",
+            "meta": {
+                "query_type": (
+                    "test_explanation_benefit"
+                    if explanation_like and benefit_like
+                    else ("test_benefit" if benefit_like else "test_explanation")
+                ),
                 "matched_test_id": _safe_str(specific_match.get("id")),
                 "matched_test_name": _safe_str(specific_match.get("title")) or _safe_str(specific_match.get("test_name_ar")),
                 "score": specific_score,
