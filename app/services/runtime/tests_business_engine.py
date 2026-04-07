@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import ast
 from difflib import SequenceMatcher
 from functools import lru_cache
 from pathlib import Path
@@ -81,6 +82,7 @@ _PRICE_HINTS = (
 _NOT_CLEAR_MESSAGE = "المعلومة غير واضحة بشكل كافٍ في البيانات الحالية."
 _TEST_NOT_FOUND_MESSAGE = "ما قدرت أحدد التحليل بدقة. اكتب اسم التحليل أو كوده مثل ما هو ظاهر عندك."
 _FIELD_NOT_AVAILABLE_MESSAGE = "\u0627\u0644\u0645\u0639\u0644\u0648\u0645\u0629 \u063a\u064a\u0631 \u0645\u062a\u0648\u0641\u0631\u0629 \u0644\u0647\u0630\u0627 \u0627\u0644\u062a\u062d\u0644\u064a\u0644"
+_NO_ALTERNATIVE_LAB_MESSAGE = "ما عندي بدائل مخبرية واضحة لهذا التحليل في البيانات الحالية."
 _TARGET_QUERY_ROUTE = {
     "test_price_query": "tests_business_price",
     "test_fasting_query": "tests_business_fasting",
@@ -113,6 +115,58 @@ def _as_str_list(value: Any) -> list[str]:
         return [_safe_str(v) for v in value if _safe_str(v)]
     text = _safe_str(value)
     return [text] if text else []
+
+
+def _normalize_suggestion_list(value: Any) -> list[str]:
+    """Normalize list-like raw values into clean deterministic suggestion items."""
+    raw_items = _as_str_list(value)
+    out: list[str] = []
+    seen: set[str] = set()
+
+    def _push(item: Any) -> None:
+        text = _safe_str(item)
+        if not text:
+            return
+        cleaned = text.strip()
+
+        # Parse true Python-list literal if provided as one string.
+        if cleaned.startswith("[") and cleaned.endswith("]"):
+            try:
+                parsed = ast.literal_eval(cleaned)
+            except (ValueError, SyntaxError):
+                parsed = None
+            if isinstance(parsed, list):
+                for p in parsed:
+                    _push(p)
+                return
+
+        # Clean fragmented list tokens like "['Calcium'" and "'Phosphorus']".
+        cleaned = cleaned.strip("[]")
+        cleaned = cleaned.strip().strip("'\"").strip()
+        cleaned = cleaned.rstrip(",").strip()
+        if not cleaned:
+            return
+        key = _norm(cleaned)
+        if not key or key in seen:
+            return
+        seen.add(key)
+        out.append(cleaned)
+
+    for raw in raw_items:
+        _push(raw)
+    return out
+
+
+def _is_non_test_advice_value(value: str) -> bool:
+    n = _norm(value)
+    if not n:
+        return True
+    blocked_ar = ("استشر الطبيب", "راجع الطبيب", "اسال الطبيب", "استشارة الطبيب", "استشاره الطبيب")
+    blocked_en = ("consult physician", "consult a physician", "consult doctor", "see doctor")
+    if any(term in n for term in blocked_ar):
+        return True
+    low = _safe_str(value).lower()
+    return any(term in low for term in blocked_en)
 
 
 def _vitamin_key(text_norm: str) -> str:
@@ -284,20 +338,20 @@ def _has_complementary_override_intent(query_norm: str) -> bool:
     if not query_norm:
         return False
     phrases = (
-        "???????? ???????",
-        "????",
-        "???? ???",
-        "????",
-        "?? ??? ???????",
-        "?? ?????",
+        "التحاليل المكملة",
+        "مكمل",
+        "يطلب معه",
+        "معاه",
+        "مع هذا التحليل",
+        "مع تحليل",
     )
     normalized_phrases = tuple(_norm(p) for p in phrases if _norm(p))
     if any(p in query_norm for p in normalized_phrases):
         return True
-    # Bare "??" only counts with explicit test context to stay conservative.
-    return " ?? " in f" {query_norm} " and any(
+    # Bare "مع" only counts with explicit test context to stay conservative.
+    return " مع " in f" {query_norm} " and any(
         t in query_norm
-        for t in ("?????", "???", "hba1c", "tsh", "ana", "cbc", "ferritin", "???????", "????")
+        for t in ("تحليل", "فحص", "hba1c", "tsh", "ana", "cbc", "ferritin", "فيتامين", "حديد")
     )
 
 
@@ -305,13 +359,13 @@ def _has_alternative_override_intent(query_norm: str) -> bool:
     if not query_norm:
         return False
     phrases = (
-        "??? ??????",
-        "?? ??????",
-        "?? ??????",
-        "????",
-        "???",
-        "???? ??",
-        "?????",
+        "ايش البديل",
+        "وش البديل",
+        "ما البديل",
+        "بديل",
+        "بدل",
+        "قريب من",
+        "مشابه",
         "alternative",
     )
     normalized_phrases = tuple(_norm(p) for p in phrases if _norm(p))
@@ -1064,9 +1118,9 @@ def resolve_tests_business_query(user_text: str, conversation_id: UUID | None = 
         }
 
     if query_type == "test_complementary_query":
-        values = _as_str_list(target.get("complementary_tests"))
+        values = _normalize_suggestion_list(target.get("complementary_tests"))
         answer = (
-            f"التحاليل المكملة لـ {test_name} قد تشمل:\n- " + "\n- ".join(values)
+            f"التحاليل المكملة لـ {test_name} هي:\n- " + "\n- ".join(values)
             if values
             else _NOT_CLEAR_MESSAGE
         )
@@ -1084,11 +1138,11 @@ def resolve_tests_business_query(user_text: str, conversation_id: UUID | None = 
         }
 
     if query_type == "test_alternative_query":
-        values = _as_str_list(target.get("alternative_tests"))
+        values = [v for v in _normalize_suggestion_list(target.get("alternative_tests")) if not _is_non_test_advice_value(v)]
         answer = (
-            f"البدائل الممكنة لتحليل {test_name} قد تشمل:\n- " + "\n- ".join(values)
+            f"البدائل الممكنة لتحليل {test_name} هي:\n- " + "\n- ".join(values)
             if values
-            else _NOT_CLEAR_MESSAGE
+            else _NO_ALTERNATIVE_LAB_MESSAGE
         )
         return {
             "matched": True,
