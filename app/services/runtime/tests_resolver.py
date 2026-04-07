@@ -14,6 +14,7 @@ from app.services.runtime.tests_disambiguation import (
     format_disambiguation_reply,
     set_tests_disambiguation_state,
 )
+from app.services.runtime.tests_description_index import find_test_description_record
 from app.services.runtime.tests_business_engine import resolve_tests_business_query
 from app.services.runtime.text_normalizer import normalize_arabic
 
@@ -558,6 +559,26 @@ def _format_test_benefit(record: dict[str, Any]) -> str:
     return _format_test_explanation(record)
 
 
+def _find_description_record_for_query(
+    query: str,
+    specific_match: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    # Prefer resolved specific test identity, then fall back to raw query lookup.
+    candidates = [
+        _safe_str((specific_match or {}).get("test_name_ar")),
+        _safe_str((specific_match or {}).get("title")),
+        _safe_str((specific_match or {}).get("h1")),
+        _safe_str(query),
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        record = find_test_description_record(candidate)
+        if record is not None:
+            return record
+    return None
+
+
 def _format_preparation(record: dict[str, Any]) -> str:
     name = _safe_str(record.get("title")) or _safe_str(record.get("test_name_ar"))
     text = " ".join(
@@ -690,7 +711,12 @@ def resolve_tests_query(user_text: str, conversation_id: UUID | None = None) -> 
                 },
             }
 
-    if (explanation_like or benefit_like) and specific_match is None:
+    if explanation_like or benefit_like:
+        description_record = _find_description_record_for_query(query, specific_match)
+    else:
+        description_record = None
+
+    if (explanation_like or benefit_like) and description_record is None:
         return {
             "matched": True,
             "answer": _DEFINITION_NOT_FOUND_REPLY,
@@ -701,7 +727,7 @@ def resolve_tests_query(user_text: str, conversation_id: UUID | None = None) -> 
             },
         }
 
-    if (explanation_like or benefit_like) and specific_match is not None:
+    if (explanation_like or benefit_like) and description_record is not None:
         has_definition_marker = any(
             marker in query_norm
             for marker in (
@@ -712,15 +738,15 @@ def resolve_tests_query(user_text: str, conversation_id: UUID | None = None) -> 
             )
         )
         if explanation_like and benefit_like and has_definition_marker:
-            summary = _format_test_explanation(specific_match).strip()
-            benefit = _safe_str(specific_match.get("benefit_ar")).strip()
+            summary = _format_test_explanation(description_record).strip()
+            benefit = _safe_str(description_record.get("benefit_ar")).strip()
             answer = summary
             if benefit:
                 answer = f"{summary}\n\nفائدة التحليل:\n{benefit}".strip()
         elif benefit_like:
-            answer = _format_test_benefit(specific_match)
+            answer = _format_test_benefit(description_record)
         else:
-            answer = _format_test_explanation(specific_match)
+            answer = _format_test_explanation(description_record)
         return {
             "matched": True,
             "answer": answer,
@@ -731,9 +757,18 @@ def resolve_tests_query(user_text: str, conversation_id: UUID | None = None) -> 
                     if explanation_like and benefit_like
                     else ("test_benefit" if benefit_like else "test_explanation")
                 ),
-                "matched_test_id": _safe_str(specific_match.get("id")),
-                "matched_test_name": _safe_str(specific_match.get("title")) or _safe_str(specific_match.get("test_name_ar")),
-                "score": specific_score,
+                "matched_test_id": _safe_str(description_record.get("id")) or _safe_str((specific_match or {}).get("id")),
+                "matched_test_name": (
+                    _safe_str(description_record.get("title"))
+                    or _safe_str(description_record.get("test_name_ar"))
+                    or _safe_str((specific_match or {}).get("title"))
+                    or _safe_str((specific_match or {}).get("test_name_ar"))
+                ),
+                "score": (
+                    float(description_record.get("_match_score"))
+                    if isinstance(description_record.get("_match_score"), (int, float))
+                    else specific_score
+                ),
             },
         }
 

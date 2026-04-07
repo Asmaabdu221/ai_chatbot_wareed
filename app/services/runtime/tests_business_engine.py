@@ -16,6 +16,7 @@ from app.services.runtime.tests_disambiguation import (
     format_disambiguation_reply,
     set_tests_disambiguation_state,
 )
+from app.services.runtime.tests_description_index import find_test_description_for_business_target
 from app.services.runtime.selection_state import load_selection_state
 from app.services.runtime.text_normalizer import normalize_arabic
 
@@ -104,6 +105,14 @@ _DUAL_STATE_PREFIX = "dual_intents::"
 
 def _safe_str(value: Any) -> str:
     return str(value or "").strip()
+
+
+def get_clean_description_for_business_test(test_name: str) -> dict[str, Any] | None:
+    """
+    Lightweight bridge for future reuse:
+    fetch summary/benefit from tests_clean source of truth for a business test label.
+    """
+    return find_test_description_for_business_target(test_name)
 
 
 def _norm(value: Any) -> str:

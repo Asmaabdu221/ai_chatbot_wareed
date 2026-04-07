@@ -769,6 +769,23 @@ def _looks_like_tests_query(text: str) -> bool:
     return _detector_pick("tests_like", n, scores, min_score=1.75, legacy_match=legacy)
 
 
+def _is_definition_or_benefit_query(query_norm: str) -> bool:
+    if not query_norm:
+        return False
+    hints = (
+        "\u0627\u064a\u0634 \u0647\u0648",
+        "\u0645\u0627 \u0647\u0648",
+        "\u0648\u0634 \u0647\u0648",
+        "\u0641\u0627\u0626\u062f\u0629",
+        "\u0648\u0634 \u0641\u0627\u0626\u062f\u062a\u0647",
+        "\u064a\u0641\u062d\u0635",
+        "\u0627\u064a\u0634 \u064a\u0633\u0648\u064a",
+        "\u0644\u064a\u0634 \u0646\u0633\u0648\u064a",
+        "\u064a\u0641\u064a\u062f",
+    )
+    return any(normalize_arabic(token) in query_norm for token in hints)
+
+
 def _looks_like_symptoms_query(text: str) -> bool:
     n = normalize_arabic(text)
     if not n:
@@ -1105,18 +1122,22 @@ def _try_ollama_classifier_fallback(
         return None
 
     if intent == "test":
-        tests_business_result = resolve_tests_business_query(
-            raw_text,
-            conversation_id=conversation_id,
-        )
-        if bool(tests_business_result.get("matched")):
-            return {
-                "reply": format_runtime_answer(_safe_str(tests_business_result.get("answer"))),
-                "route": _safe_str(tests_business_result.get("route")) or "tests_business",
-                "source": "tests_business",
-                "matched": True,
-                "meta": _tests_business_meta(tests_business_result.get("meta") or {}),
-            }
+        query_norm = normalize_arabic(raw_text)
+        if not _is_definition_or_benefit_query(query_norm):
+            tests_business_result = resolve_tests_business_query(
+                raw_text,
+                conversation_id=conversation_id,
+            )
+            if bool(tests_business_result.get("matched")):
+                return {
+                    "reply": format_runtime_answer(_safe_str(tests_business_result.get("answer"))),
+                    "route": _safe_str(tests_business_result.get("route")) or "tests_business",
+                    "source": "tests_business",
+                    "matched": True,
+                    "meta": _tests_business_meta(tests_business_result.get("meta") or {}),
+                }
+        else:
+            logger.debug("tests business skipped for definition_or_benefit query | stage=ollama_fallback_test | q=%s", raw_text)
         tests_result = resolve_tests_query(raw_text, conversation_id=conversation_id)
         if bool(tests_result.get("matched")):
             return {
@@ -1390,6 +1411,7 @@ def route_runtime_message(
         # Mixed-query arbitration:
         # location is a secondary modifier unless there is explicit branch-action intent.
         query_norm = normalize_arabic(text)
+        is_definition_or_benefit_like = _is_definition_or_benefit_query(query_norm)
         explicit_branch_action = _has_explicit_branch_action_anchor(query_norm)
         has_location_modifier = _has_location_modifier(query_norm)
         mixed_test_cues = _has_test_intent_cues(query_norm)
@@ -1472,18 +1494,21 @@ def route_runtime_message(
                 and not is_package_like
                 and not is_branch_like
             ):
-                tests_business_result = resolve_tests_business_query(
-                    text,
-                    conversation_id=conversation_id,
-                )
-                if _is_supported_tests_business_result(tests_business_result):
-                    return _final({
-                        "reply": format_runtime_answer(_safe_str(tests_business_result.get("answer"))),
-                        "route": _safe_str(tests_business_result.get("route")) or "tests_business",
-                        "source": "tests_business",
-                        "matched": True,
-                        "meta": _tests_business_meta(tests_business_result.get("meta") or {}),
-                    }, "context_followup_tests_business")
+                if not is_definition_or_benefit_like:
+                    tests_business_result = resolve_tests_business_query(
+                        text,
+                        conversation_id=conversation_id,
+                    )
+                    if _is_supported_tests_business_result(tests_business_result):
+                        return _final({
+                            "reply": format_runtime_answer(_safe_str(tests_business_result.get("answer"))),
+                            "route": _safe_str(tests_business_result.get("route")) or "tests_business",
+                            "source": "tests_business",
+                            "matched": True,
+                            "meta": _tests_business_meta(tests_business_result.get("meta") or {}),
+                        }, "context_followup_tests_business")
+                else:
+                    logger.debug("tests business skipped for definition_or_benefit query | stage=context_followup_tests | q=%s", text)
                 tests_result = resolve_tests_query(text, conversation_id=conversation_id)
                 if bool(tests_result.get("matched")):
                     return _final({
@@ -1639,28 +1664,31 @@ def route_runtime_message(
                     }, "domains_prefilter_packages")
 
             if is_tests_like and ENABLE_TESTS_RUNTIME_AFTER_PACKAGES:
-                tests_business_result = resolve_tests_business_query(
-                    text,
-                    conversation_id=conversation_id,
-                )
-                if _is_supported_tests_business_result(tests_business_result):
-                    logger.debug(
-                        "tests business pre-faq guard matched | q=%s | numeric=%s | branch_like=%s | package_like=%s | tests_like=%s | route=%s",
+                if not is_definition_or_benefit_like:
+                    tests_business_result = resolve_tests_business_query(
                         text,
-                        is_numeric,
-                        is_branch_like,
-                        is_package_like,
-                        is_tests_like,
-                        _safe_str(tests_business_result.get("route")),
+                        conversation_id=conversation_id,
                     )
-                    logger.debug("domains prefilter early return | stage=tests_business_match")
-                    return _final({
-                        "reply": format_runtime_answer(_safe_str(tests_business_result.get("answer"))),
-                        "route": _safe_str(tests_business_result.get("route")) or "tests_business",
-                        "source": "tests_business",
-                        "matched": True,
-                        "meta": _tests_business_meta(tests_business_result.get("meta") or {}),
-                    }, "domains_prefilter_tests_business")
+                    if _is_supported_tests_business_result(tests_business_result):
+                        logger.debug(
+                            "tests business pre-faq guard matched | q=%s | numeric=%s | branch_like=%s | package_like=%s | tests_like=%s | route=%s",
+                            text,
+                            is_numeric,
+                            is_branch_like,
+                            is_package_like,
+                            is_tests_like,
+                            _safe_str(tests_business_result.get("route")),
+                        )
+                        logger.debug("domains prefilter early return | stage=tests_business_match")
+                        return _final({
+                            "reply": format_runtime_answer(_safe_str(tests_business_result.get("answer"))),
+                            "route": _safe_str(tests_business_result.get("route")) or "tests_business",
+                            "source": "tests_business",
+                            "matched": True,
+                            "meta": _tests_business_meta(tests_business_result.get("meta") or {}),
+                        }, "domains_prefilter_tests_business")
+                else:
+                    logger.debug("tests business skipped for definition_or_benefit query | stage=domains_prefilter_tests | q=%s", text)
 
                 tests_result = resolve_tests_query(text, conversation_id=conversation_id)
                 if bool(tests_result.get("matched")):
@@ -1894,23 +1922,26 @@ def route_runtime_message(
                     }, "after_faq_no_match_packages")
                 logger.debug("after_faq_no_match no package match | q=%s", text)
             if ENABLE_TESTS_RUNTIME_AFTER_PACKAGES:
-                tests_business_result = resolve_tests_business_query(
-                    text,
-                    conversation_id=conversation_id,
-                )
-                if _is_supported_tests_business_result(tests_business_result):
-                    logger.debug(
-                        "tests business route matched after faq/branches/packages no match | q=%s | route=%s",
+                if not is_definition_or_benefit_like:
+                    tests_business_result = resolve_tests_business_query(
                         text,
-                        _safe_str(tests_business_result.get("route")),
+                        conversation_id=conversation_id,
                     )
-                    return _final({
-                        "reply": format_runtime_answer(_safe_str(tests_business_result.get("answer"))),
-                        "route": _safe_str(tests_business_result.get("route")) or "tests_business",
-                        "source": "tests_business",
-                        "matched": True,
-                        "meta": _tests_business_meta(tests_business_result.get("meta") or {}),
-                    }, "after_faq_no_match_tests_business")
+                    if _is_supported_tests_business_result(tests_business_result):
+                        logger.debug(
+                            "tests business route matched after faq/branches/packages no match | q=%s | route=%s",
+                            text,
+                            _safe_str(tests_business_result.get("route")),
+                        )
+                        return _final({
+                            "reply": format_runtime_answer(_safe_str(tests_business_result.get("answer"))),
+                            "route": _safe_str(tests_business_result.get("route")) or "tests_business",
+                            "source": "tests_business",
+                            "matched": True,
+                            "meta": _tests_business_meta(tests_business_result.get("meta") or {}),
+                        }, "after_faq_no_match_tests_business")
+                else:
+                    logger.debug("tests business skipped for definition_or_benefit query | stage=after_faq_no_match_tests | q=%s", text)
 
                 tests_result = resolve_tests_query(text, conversation_id=conversation_id)
                 if bool(tests_result.get("matched")):
