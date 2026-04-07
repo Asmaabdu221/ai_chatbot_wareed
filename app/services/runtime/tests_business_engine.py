@@ -96,6 +96,7 @@ _RELAXED_BUSINESS_TARGET_TYPES = {
     "test_sample_type_query",
 }
 _RELAXED_BUSINESS_TARGET_SCORE = 0.54
+_RELAXED_COMP_ALT_TARGET_SCORE = 0.52
 _DUAL_STATE_PREFIX = "dual_intents::"
 
 
@@ -279,9 +280,65 @@ def _score_query_type(query_norm: str, hints: tuple[str, ...], strong_keywords: 
     return score
 
 
+def _has_complementary_override_intent(query_norm: str) -> bool:
+    if not query_norm:
+        return False
+    phrases = (
+        "???????? ???????",
+        "????",
+        "???? ???",
+        "????",
+        "?? ??? ???????",
+        "?? ?????",
+    )
+    normalized_phrases = tuple(_norm(p) for p in phrases if _norm(p))
+    if any(p in query_norm for p in normalized_phrases):
+        return True
+    # Bare "??" only counts with explicit test context to stay conservative.
+    return " ?? " in f" {query_norm} " and any(
+        t in query_norm
+        for t in ("?????", "???", "hba1c", "tsh", "ana", "cbc", "ferritin", "???????", "????")
+    )
+
+
+def _has_alternative_override_intent(query_norm: str) -> bool:
+    if not query_norm:
+        return False
+    phrases = (
+        "??? ??????",
+        "?? ??????",
+        "?? ??????",
+        "????",
+        "???",
+        "???? ??",
+        "?????",
+        "alternative",
+    )
+    normalized_phrases = tuple(_norm(p) for p in phrases if _norm(p))
+    return any(p in query_norm for p in normalized_phrases)
+
+
 def _detect_query_type(query_norm: str) -> str:
     if not query_norm:
         return "no_match"
+
+    # Strong deterministic intent override for complementary/alternative wording.
+    if _has_alternative_override_intent(query_norm):
+        logger.debug(
+            "tests_business query_type_detection | query=%s | selected=%s | reason=%s",
+            query_norm,
+            "test_alternative_query",
+            "strong_alternative_override",
+        )
+        return "test_alternative_query"
+    if _has_complementary_override_intent(query_norm):
+        logger.debug(
+            "tests_business query_type_detection | query=%s | selected=%s | reason=%s",
+            query_norm,
+            "test_complementary_query",
+            "strong_complementary_override",
+        )
+        return "test_complementary_query"
 
     scored: dict[str, float] = {
         "test_complementary_query": _score_query_type(
@@ -858,6 +915,29 @@ def resolve_tests_business_query(user_text: str, conversation_id: UUID | None = 
                     relevance,
                     _RELAXED_BUSINESS_TARGET_SCORE,
                 )
+    if target is None and query_type in {"test_complementary_query", "test_alternative_query"}:
+        ranked_candidates = _rank_target_candidates(query_norm, records)
+        if ranked_candidates:
+            top_score, top_record = ranked_candidates[0]
+            if top_score >= _RELAXED_COMP_ALT_TARGET_SCORE:
+                logger.debug(
+                    "tests_business comp_alt_relaxed_target_accept | query=%s | query_type=%s | top_score=%.3f | threshold=%.3f | accepted=true",
+                    query_norm,
+                    query_type,
+                    top_score,
+                    _RELAXED_COMP_ALT_TARGET_SCORE,
+                )
+                target = top_record
+                score = top_score
+            else:
+                logger.debug(
+                    "tests_business comp_alt_relaxed_target_accept | query=%s | query_type=%s | top_score=%.3f | threshold=%.3f | accepted=false",
+                    query_norm,
+                    query_type,
+                    top_score,
+                    _RELAXED_COMP_ALT_TARGET_SCORE,
+                )
+
     if target is None:
         state_query_type = (
             _encode_dual_state_query_type(query_type, effective_dual_intents)

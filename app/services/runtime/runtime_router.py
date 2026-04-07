@@ -871,7 +871,7 @@ def _format_symptoms_suggestions_reply(payload: dict[str, Any]) -> str:
     packages = [str(p).strip() for p in list(payload.get("packages") or []) if str(p).strip()][:1]
 
     if not tests and not packages:
-        return "وصف الأعراض بشكل أوضح، وأعطيك أفضل التحاليل المناسبة."
+        return "اكتب الأعراض بشكل أوضح، وأعطيك أفضل التحاليل المناسبة."
 
     lines: list[str] = []
     if tests:
@@ -1200,7 +1200,7 @@ def _try_ollama_classifier_fallback(
                 return {
                     "reply": format_runtime_answer(
                         _safe_str(symptoms_result.get("answer"))
-                        or "وصف العرض الرئيسي بشكل أوضح (مثل: صداع مستمر، حرارة مع كحة، ألم بطن مع غثيان)."
+                        or "اكتب الأعراض بشكل أوضح، وأعطيك أفضل التحاليل المناسبة."
                     ),
                     "route": "symptoms_clarification",
                     "source": "symptoms_engine",
@@ -1781,7 +1781,7 @@ def route_runtime_message(
                     return _final({
                         "reply": format_runtime_answer(
                             _safe_str(symptoms_result.get("answer"))
-                            or "\u0648\u0635\u0651\u0641 \u0627\u0644\u0639\u0631\u0636 \u0627\u0644\u0631\u0626\u064a\u0633\u064a \u0628\u0634\u0643\u0644 \u0623\u0648\u0636\u062d (\u0645\u062b\u0644: \u0635\u062f\u0627\u0639 \u0645\u0633\u062a\u0645\u0631\u060c \u062d\u0631\u0627\u0631\u0629 \u0645\u0639 \u0643\u062d\u0629\u060c \u0623\u0644\u0645 \u0628\u0637\u0646 \u0645\u0639 \u063a\u062b\u064a\u0627\u0646)."
+                            or "اكتب الأعراض بشكل أوضح، وأعطيك أفضل التحاليل المناسبة."
                         ),
                         "route": "symptoms_clarification",
                         "source": "symptoms_engine",
