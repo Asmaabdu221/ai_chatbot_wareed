@@ -173,24 +173,49 @@ def find_test_description_record(query_or_name: str) -> dict[str, Any] | None:
         out["_match_method"] = "exact_index"
         return out
 
+    def _is_effectively_same_description_entity(
+        first: dict[str, Any] | None,
+        second: dict[str, Any] | None,
+    ) -> bool:
+        if not first or not second:
+            return False
+        identity_equal = (
+            _norm(first.get("test_name_ar")) == _norm(second.get("test_name_ar"))
+            and _norm(first.get("title")) == _norm(second.get("title"))
+            and _norm(first.get("h1")) == _norm(second.get("h1"))
+        )
+        content_equal = (
+            _safe_str(first.get("summary_ar")) == _safe_str(second.get("summary_ar"))
+            and _safe_str(first.get("benefit_ar")) == _safe_str(second.get("benefit_ar"))
+        )
+        return identity_equal and content_equal
+
     best: dict[str, Any] | None = None
     best_score = 0.0
     best_method = ""
     second_score = 0.0
+    second: dict[str, Any] | None = None
     for record in load_test_description_records():
         score, method = _score_description_match(query_norm, record)
         if score > best_score:
             second_score = best_score
+            second = best
             best = record
             best_score = score
             best_method = method
         elif score > second_score:
             second_score = score
+            second = record
 
     if best is None or best_score < 0.72:
         return None
     if second_score >= 0.72 and (best_score - second_score) <= 0.04:
-        return None
+        same_top_duplicate = (
+            abs(best_score - second_score) <= 1e-9
+            and _is_effectively_same_description_entity(best, second)
+        )
+        if not same_top_duplicate:
+            return None
 
     out = dict(best)
     out["_match_score"] = best_score
@@ -201,4 +226,3 @@ def find_test_description_record(query_or_name: str) -> dict[str, Any] | None:
 def find_test_description_for_business_target(test_name: str) -> dict[str, Any] | None:
     """Light helper for business engine reuse without duplicating fields."""
     return find_test_description_record(test_name)
-
