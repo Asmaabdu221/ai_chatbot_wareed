@@ -33,6 +33,32 @@ def _tokenize(text_norm: str) -> list[str]:
     return [tok for tok in _safe_str(text_norm).split() if tok]
 
 
+_GENERIC_AR_CODE_TOKENS = {
+    "تحليل",
+    "في",
+    "من",
+    "على",
+    "الى",
+    "إلى",
+    "عن",
+    "الدم",
+    "مصل",
+}
+
+
+def _is_valid_code_token(token: str) -> bool:
+    token_norm = _norm(token)
+    if len(token_norm) < 3:
+        return False
+    if token_norm in {_norm(t) for t in _GENERIC_AR_CODE_TOKENS}:
+        return False
+    if any(ch.isdigit() for ch in token_norm):
+        return True
+    if any("a" <= ch.lower() <= "z" for ch in token_norm):
+        return True
+    return False
+
+
 def _primary_text(record: dict[str, Any]) -> str:
     return _safe_str(record.get("test_name_ar")) or _safe_str(record.get("title")) or _safe_str(record.get("h1"))
 
@@ -61,11 +87,12 @@ def _score_description_match(query_norm: str, record: dict[str, Any]) -> tuple[f
         if query_norm in value and len(query_norm) >= 4:
             return 0.86, f"contained_by_{method}"
 
-    code_tokens = list(record.get("code_tokens_norm") or [])
-    for token in code_tokens:
-        if not token:
+    record_code_tokens = {t for t in list(record.get("code_tokens_norm") or []) if t}
+    query_tokens_for_code = set(_tokenize(query_norm))
+    for token in query_tokens_for_code:
+        if not _is_valid_code_token(token):
             continue
-        if f" {token} " in padded or token in query_norm:
+        if token in record_code_tokens:
             return 0.95, "code_token"
 
     query_tokens = set(_tokenize(query_norm))
@@ -190,6 +217,44 @@ def find_test_description_record(query_or_name: str) -> dict[str, Any] | None:
         )
         return identity_equal and content_equal
 
+    def _extract_query_concept_phrase(value_norm: str) -> str:
+        generic_tokens = {
+            "ايش",
+            "وش",
+            "ما",
+            "هو",
+            "هذه",
+            "هذا",
+            "تحليل",
+            "تحاليل",
+            "فحص",
+            "اختبار",
+            "يعني",
+            "يفحص",
+            "فايده",
+            "فائدة",
+            "يفيد",
+            "ليش",
+            "نسوي",
+        }
+        broad_single_tokens = {"فيتامين", "هرمون", "فحص", "اختبار"}
+        tokens = [t for t in _tokenize(value_norm) if t and t not in generic_tokens]
+        if not tokens:
+            return ""
+        if len(tokens) == 1 and tokens[0] in broad_single_tokens:
+            return ""
+        return " ".join(tokens).strip()
+
+    def _record_matches_concept_phrase(record: dict[str, Any], concept_phrase_norm: str) -> bool:
+        if not concept_phrase_norm:
+            return False
+        fields = (
+            _safe_str(record.get("test_name_norm")),
+            _safe_str(record.get("title_norm")),
+            _safe_str(record.get("h1_norm")),
+        )
+        return any(concept_phrase_norm in field for field in fields if field)
+
     best: dict[str, Any] | None = None
     best_score = 0.0
     best_method = ""
@@ -215,7 +280,24 @@ def find_test_description_record(query_or_name: str) -> dict[str, Any] | None:
             and _is_effectively_same_description_entity(best, second)
         )
         if not same_top_duplicate:
-            return None
+            concept_phrase = _extract_query_concept_phrase(query_norm)
+            if not concept_phrase:
+                return None
+            tied_candidates: list[dict[str, Any]] = []
+            for record in load_test_description_records():
+                score, _ = _score_description_match(query_norm, record)
+                if abs(score - best_score) <= 1e-9:
+                    tied_candidates.append(record)
+            concept_candidates = [
+                record for record in tied_candidates if _record_matches_concept_phrase(record, concept_phrase)
+            ]
+            if not concept_candidates:
+                return None
+            best = sorted(
+                concept_candidates,
+                key=lambda record: (len(_primary_text(record)), len(_safe_str(record.get("test_name_ar")))),
+            )[0]
+            best_method = "concept_tiebreak"
 
     out = dict(best)
     out["_match_score"] = best_score

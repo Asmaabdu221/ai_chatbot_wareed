@@ -1306,6 +1306,7 @@ def _should_apply_ollama_final_formatter(result: dict[str, Any]) -> bool:
         "tests_business_preparation",
         "tests_business_sample_type",
         "tests_business_price",
+        "tests_explanation",
     }
     if route in blocked_exact_routes:
         return False
