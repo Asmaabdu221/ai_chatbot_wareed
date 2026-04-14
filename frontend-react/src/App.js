@@ -8,6 +8,8 @@ import Login from './components/Login';
 import Register from './components/Register';
 import Dashboard from './components/Dashboard';
 import Help from './components/Help';
+import WareedAiWidgetPreview from './previews/WareedAiWidgetPreview';
+import WareedAiLeadsPreview from './previews/WareedAiLeadsPreview';
 import { formatArabicText } from './utils/arabicFormatters';
 import { isAdminUser } from './utils/adminUtils';
 import {
@@ -410,6 +412,8 @@ function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/wareed-ai-preview" element={<WareedAiWidgetPreview />} />
+      <Route path="/wareed-ai-leads-preview" element={<WareedAiLeadsPreview />} />
       <Route path="/" element={<RequireAuth><ChatView /></RequireAuth>} />
       <Route path="/admin/dashboard" element={<RequireAuth><AdminDashboardView /></RequireAuth>} />
       <Route path="/help" element={<RequireAuth><Help /></RequireAuth>} />
