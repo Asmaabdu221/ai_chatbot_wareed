@@ -107,6 +107,7 @@ async def request_logging_middleware(request: Request, call_next):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "https://wareed-ai-preview.onrender.com",
         "https://ai-chatbot-wareed-1.onrender.com",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
