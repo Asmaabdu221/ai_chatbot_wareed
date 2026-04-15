@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { createConversation, sendConversationMessage } from '../services/api';
+import api from '../services/api';
 import { usePreviewLeads } from '../contexts/PreviewLeadsContext';
 import './WareedAiWidgetPreview.css';
 
@@ -72,11 +72,14 @@ function detectLeadTypeFromText(rawText) {
 export default function WareedAiWidgetPreview() {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
-  const [conversationId, setConversationId] = useState(null);
   const [isSending, setIsSending] = useState(false);
   const [awaitingPhone, setAwaitingPhone] = useState(false);
   const [pendingLeadType, setPendingLeadType] = useState(null);
-  const [leadContext, setLeadContext] = useState({ latestUserQuestion: '', latestAssistantReply: '' });
+  const [leadContext, setLeadContext] = useState({
+    latestUserQuestion: '',
+    latestAssistantReply: '',
+    lastConversationId: null,
+  });
   const [latestLead, setLatestLead] = useState(null);
   const [messages, setMessages] = useState(() => [{ id: 'welcome', role: 'assistant', text: WELCOME_MESSAGE }]);
   const messageCounterRef = useRef(1);
@@ -129,7 +132,7 @@ export default function WareedAiWidgetPreview() {
         leadType: pendingLeadType || LEAD_TYPES.CUSTOMER_SERVICE,
         latestUserQuestion: leadContext.latestUserQuestion || text,
         latestAssistantReply: leadContext.latestAssistantReply || '',
-        conversationId,
+        conversationId: leadContext.lastConversationId || null,
         createdAt: new Date().toISOString(),
       };
       const savedLead = addLead(capturedLead);
@@ -148,19 +151,13 @@ export default function WareedAiWidgetPreview() {
     setIsSending(true);
 
     try {
-      let currentConversationId = conversationId;
-      if (!currentConversationId) {
-        const newConversation = await createConversation();
-        currentConversationId = newConversation?.id;
-        if (!currentConversationId) {
-          throw new Error('Missing conversation id');
-        }
-        setConversationId(currentConversationId);
-      }
-
-      const data = await sendConversationMessage(currentConversationId, text);
-      const assistantText = (data?.assistant_message?.content || '').trim() || CONNECTIVITY_ERROR_MESSAGE;
-      const assistantId = data?.assistant_message?.id || `msg_${messageCounterRef.current++}`;
+      const { data } = await api.post('/api/chat', {
+        message: text,
+        include_knowledge: true,
+      });
+      const assistantText = (data?.reply || data?.response || '').trim() || CONNECTIVITY_ERROR_MESSAGE;
+      const assistantId = data?.message_id || `msg_${messageCounterRef.current++}`;
+      const responseConversationId = data?.conversation_id || null;
       const leadTypeFromFlow = detectLeadTypeFromText(text) || detectLeadTypeFromText(assistantText);
 
       setMessages((prev) =>
@@ -181,6 +178,7 @@ export default function WareedAiWidgetPreview() {
         setLeadContext({
           latestUserQuestion: text,
           latestAssistantReply: assistantText,
+          lastConversationId: responseConversationId,
         });
         const askPhoneId = `msg_${messageCounterRef.current++}`;
         setMessages((prev) => [...prev, { id: askPhoneId, role: 'assistant', text: LEAD_PHONE_REQUEST_MESSAGE }]);
