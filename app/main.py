@@ -107,6 +107,7 @@ async def request_logging_middleware(request: Request, call_next):
 allow_origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://ai-chatbot-wareed.onrender.com",
     "https://ai-chatbot-wareed-1.onrender.com",
     "https://wareed-ai-preview.onrender.com",
 ]
