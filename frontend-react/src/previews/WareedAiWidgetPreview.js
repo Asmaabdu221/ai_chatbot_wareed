@@ -89,6 +89,7 @@ export default function WareedAiWidgetPreview() {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [sessionConversationId, setSessionConversationId] = useState(null);
   const [awaitingPhone, setAwaitingPhone] = useState(false);
   // Prevents asking for phone more than once per session after a lead is captured
   const [leadCaptured, setLeadCaptured] = useState(false);
@@ -164,12 +165,19 @@ export default function WareedAiWidgetPreview() {
       const { data } = await api.post('/api/chat', {
         message: text,
         include_knowledge: true,
+        ...(sessionConversationId ? { conversation_id: sessionConversationId } : {}),
       });
 
       const assistantText =
         (data?.reply || data?.response || '').trim() || CONNECTIVITY_ERROR_MESSAGE;
       const assistantId = data?.message_id || `msg_${messageCounterRef.current++}`;
       const responseConversationId = data?.conversation_id || null;
+
+      // Pin the conversation_id for the rest of this session so the backend
+      // can maintain conversation state (phone capture, CTA suppression, etc.).
+      if (responseConversationId && !sessionConversationId) {
+        setSessionConversationId(responseConversationId);
+      }
 
       setMessages((prev) =>
         prev.map((m) =>

@@ -241,21 +241,82 @@ async def chat_endpoint(
         else:
             logger.info("⚠️ Demo mode: Database operations skipped")
         
+        # === PHASE 2A: Phone submission intercept (before routing) ===
+        # Runs first so a phone reply bypasses the full pipeline entirely.
+        try:
+            from app.services.conversation_state import get_state_store, StateEnum
+            from app.services.conversation_flow import process_phone_submission
+            _state_store = get_state_store()
+            _curr_state = _state_store.get(str(conversation_id))
+            if _curr_state.state == StateEnum.AWAITING_PHONE:
+                _phone_result = process_phone_submission(
+                    request.message, _curr_state, str(conversation_id)
+                )
+                if _phone_result and _phone_result.skip_pipeline:
+                    if db is not None and conversation is not None:
+                        _save_message(
+                            db, conversation, MessageRole.ASSISTANT,
+                            _phone_result.final_reply, token_count=0,
+                        )
+                        db.commit()
+                    return ChatResponse(
+                        reply=_phone_result.final_reply,
+                        success=True,
+                        user_id=user_id,
+                        conversation_id=conversation_id,
+                        message_id=uuid4(),
+                        tokens_used=0,
+                        model="flow",
+                        timestamp=datetime.now(),
+                        error=None,
+                    )
+        except Exception as _phase2a_err:
+            logger.warning("conversation_flow phase2a skipped (non-blocking): %s", _phase2a_err)
+
         # === QUESTION ROUTING (price → fixed response, no API) ===
         route_type, fixed_reply = route_question(request.message)
+
+        # === CONVERSATION MANAGER (Phase 1: classify + log, non-blocking) ===
+        _conv_decision = None
+        try:
+            from app.services.conversation_manager import decide_conversation_action
+            _conv_decision = decide_conversation_action(
+                request.message,
+                detected_route=route_type or "",
+            )
+            logger.info(
+                "conversation_manager | action=%s | reason=%s | route=%s | confidence=%s",
+                _conv_decision.action.value,
+                _conv_decision.reason,
+                _conv_decision.detected_route,
+                _conv_decision.confidence,
+            )
+        except Exception as _cm_err:
+            logger.warning("conversation_manager skipped (non-blocking): %s", _cm_err)
+
         if fixed_reply:
             logger.info("🔀 Routed to fixed response (route=%s) - no API call", route_type)
             cache = get_smart_cache()
             try:
-                cache.set(request.message, fixed_reply)
+                cache.set(request.message, fixed_reply)  # cache base reply (no CTA)
             except Exception:
                 pass
             get_usage_tracker().record("router", 0)
+            # Phase 2B: inject CTA into the reply the user actually sees
+            _fixed_final = fixed_reply
+            try:
+                if _conv_decision is not None:
+                    from app.services.conversation_flow import apply_flow_to_reply
+                    _fixed_final = apply_flow_to_reply(
+                        fixed_reply, _conv_decision, request.message, str(conversation_id)
+                    ).final_reply
+            except Exception as _p2b_err:
+                logger.warning("conversation_flow phase2b(router) skipped: %s", _p2b_err)
             if db is not None and conversation is not None:
-                _save_message(db, conversation, MessageRole.ASSISTANT, fixed_reply, token_count=0)
+                _save_message(db, conversation, MessageRole.ASSISTANT, _fixed_final, token_count=0)
                 db.commit()
             return ChatResponse(
-                reply=fixed_reply,
+                reply=_fixed_final,
                 success=True,
                 user_id=user_id,
                 conversation_id=conversation_id,
@@ -272,11 +333,21 @@ async def chat_endpoint(
         if cached_reply is not None:
             logger.info("📦 Cache HIT - returning cached response (no API call)")
             get_usage_tracker().record("cache", 0)
+            # Phase 2B: CTA on top of cached base reply
+            _cached_final = cached_reply
+            try:
+                if _conv_decision is not None:
+                    from app.services.conversation_flow import apply_flow_to_reply
+                    _cached_final = apply_flow_to_reply(
+                        cached_reply, _conv_decision, request.message, str(conversation_id)
+                    ).final_reply
+            except Exception as _p2b_err:
+                logger.warning("conversation_flow phase2b(cache) skipped: %s", _p2b_err)
             if db is not None and conversation is not None:
-                assistant_msg = _save_message(db, conversation, MessageRole.ASSISTANT, cached_reply, token_count=0)
+                assistant_msg = _save_message(db, conversation, MessageRole.ASSISTANT, _cached_final, token_count=0)
                 db.commit()
                 return ChatResponse(
-                    reply=cached_reply,
+                    reply=_cached_final,
                     success=True,
                     user_id=user_id,
                     conversation_id=conversation_id,
@@ -287,7 +358,7 @@ async def chat_endpoint(
                     error=None
                 )
             return ChatResponse(
-                reply=cached_reply,
+                reply=_cached_final,
                 success=True,
                 user_id=user_id,
                 conversation_id=conversation_id,
@@ -367,29 +438,40 @@ async def chat_endpoint(
         
         if ai_response["success"]:
             try:
-                cache.set(request.message, ai_response["response"])
+                cache.set(request.message, ai_response["response"])  # cache base reply
             except Exception as e:
                 logger.warning("⚠️ Failed to save response to cache: %s", str(e))
-            
+
+            # Phase 2B: CTA on top of AI base reply
+            _ai_final = ai_response["response"]
+            try:
+                if _conv_decision is not None:
+                    from app.services.conversation_flow import apply_flow_to_reply
+                    _ai_final = apply_flow_to_reply(
+                        ai_response["response"], _conv_decision, request.message, str(conversation_id)
+                    ).final_reply
+            except Exception as _p2b_err:
+                logger.warning("conversation_flow phase2b(ai) skipped: %s", _p2b_err)
+
             message_id = uuid4()
             if db is not None and conversation is not None:
                 assistant_message = _save_message(
                     db,
                     conversation,
                     MessageRole.ASSISTANT,
-                    ai_response["response"],
+                    _ai_final,
                     token_count=ai_response["tokens_used"]
                 )
                 db.commit()
                 message_id = assistant_message.id
-            
+
             logger.info(f"✅ Response generated - {ai_response['tokens_used']} tokens")
             get_usage_tracker().record(
                 ai_response.get("model") or "openai",
                 ai_response.get("tokens_used") or 0,
             )
             return ChatResponse(
-                reply=ai_response["response"],
+                reply=_ai_final,
                 success=True,
                 user_id=user_id,
                 conversation_id=conversation_id,
