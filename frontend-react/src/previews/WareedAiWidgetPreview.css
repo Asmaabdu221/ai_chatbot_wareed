@@ -1,6 +1,6 @@
 .wareed-widget-preview {
   min-height: 100vh;
-  padding: 56px 28px 120px;
+  padding: 0;
   position: relative;
   background:
     radial-gradient(circle at 18% 20%, rgba(129, 112, 198, 0.2), transparent 36%),
@@ -349,11 +349,7 @@
 
 @media (max-width: 680px) {
   .wareed-widget-preview {
-    padding: 32px 14px 100px;
-  }
-
-  .wareed-widget-preview__hero-content {
-    padding: 24px 18px;
+    padding: 0;
   }
 
   .wareed-widget-preview__floating-stack {
