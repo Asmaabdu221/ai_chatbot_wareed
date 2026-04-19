@@ -373,8 +373,57 @@ async def chat_endpoint(
                 error=None
             )
         
+        # === RUNTIME ROUTER (branches, FAQ, results, packages, tests) ===
+        # Attempt domain-specific resolution BEFORE falling back to RAG + OpenAI.
+        # matched=True  → return the domain reply (with Phase 2B CTA applied).
+        # matched=False → fall through to existing RAG / AI pipeline unchanged.
+        try:
+            from app.services.runtime.runtime_router import route_runtime_message
+            _runtime_result = route_runtime_message(
+                request.message,
+                conversation_id=conversation_id,
+            )
+            if _runtime_result.get("matched"):
+                _runtime_reply = _runtime_result.get("reply", "")
+                logger.info(
+                    "runtime_router | matched=yes | route=%s | source=%s",
+                    _runtime_result.get("route"),
+                    _runtime_result.get("source"),
+                )
+                get_usage_tracker().record("runtime", 0)
+                # Phase 2B: inject CTA
+                _runtime_final = _runtime_reply
+                try:
+                    if _conv_decision is not None:
+                        from app.services.conversation_flow import apply_flow_to_reply
+                        _runtime_final = apply_flow_to_reply(
+                            _runtime_reply, _conv_decision, request.message, str(conversation_id)
+                        ).final_reply
+                except Exception as _p2b_err:
+                    logger.warning("conversation_flow phase2b(runtime) skipped: %s", _p2b_err)
+                if db is not None and conversation is not None:
+                    _save_message(db, conversation, MessageRole.ASSISTANT, _runtime_final, token_count=0)
+                    db.commit()
+                return ChatResponse(
+                    reply=_runtime_final,
+                    success=True,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    message_id=uuid4(),
+                    tokens_used=0,
+                    model="runtime",
+                    timestamp=datetime.now(),
+                    error=None,
+                )
+            logger.info(
+                "runtime_router | matched=no | route=%s | fallback=rag",
+                _runtime_result.get("route"),
+            )
+        except Exception as _runtime_err:
+            logger.warning("runtime_router skipped (non-blocking): %s", _runtime_err)
+
         # === OPENAI API CALL ===
-        
+
         # Prepare knowledge context: RAG (strict retrieval) or legacy
         knowledge_context = None
         use_rag = request.include_knowledge and is_rag_ready()
