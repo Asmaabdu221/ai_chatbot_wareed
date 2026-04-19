@@ -241,15 +241,18 @@ async def chat_endpoint(
         else:
             logger.info("⚠️ Demo mode: Database operations skipped")
         
-        # === PHASE 2A: Phone submission intercept (before routing) ===
-        # Runs first so a phone reply bypasses the full pipeline entirely.
+        # === PHASE 2A: Phone / topic-switch intercept (before routing) ===
+        # Three outcomes:
+        #   1. Valid phone   → skip pipeline, return confirmation.
+        #   2. Phone attempt → skip pipeline, return soft-invalid message.
+        #   3. New topic     → reset state to IDLE, fall through to normal routing.
         try:
             from app.services.conversation_state import get_state_store, StateEnum
-            from app.services.conversation_flow import process_phone_submission
+            from app.services.conversation_flow import handle_awaiting_phone_state
             _state_store = get_state_store()
             _curr_state = _state_store.get(str(conversation_id))
             if _curr_state.state == StateEnum.AWAITING_PHONE:
-                _phone_result = process_phone_submission(
+                _phone_result = handle_awaiting_phone_state(
                     request.message, _curr_state, str(conversation_id)
                 )
                 if _phone_result and _phone_result.skip_pipeline:
@@ -270,6 +273,7 @@ async def chat_endpoint(
                         timestamp=datetime.now(),
                         error=None,
                     )
+                # None returned → new topic, state already reset to IDLE, fall through
         except Exception as _phase2a_err:
             logger.warning("conversation_flow phase2a skipped (non-blocking): %s", _phase2a_err)
 

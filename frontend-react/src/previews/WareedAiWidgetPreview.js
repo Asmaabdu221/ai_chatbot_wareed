@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import api from '../services/api';
-import { usePreviewLeads } from '../contexts/PreviewLeadsContext';
 import './WareedAiWidgetPreview.css';
 
 const WELCOME_MESSAGE = `حياك الله في مختبرات وريد الطبية
@@ -17,94 +16,17 @@ const QUICK_CHIPS = [
 
 const CONNECTIVITY_ERROR_MESSAGE = 'حصلت مشكلة مؤقتة في الاتصال، حاول مرة أخرى بعد قليل.';
 const TYPING_MESSAGE = 'جاري الكتابة...';
-const LEAD_CONFIRMATION_MESSAGE = 'تم استلام طلبك، وسيتم التواصل معك قريبًا من الفريق المختص.';
-const LEAD_PHONE_INVALID_MESSAGE =
-  'الرقم غير واضح. فضلاً اكتب رقم جوال صحيح بصيغة مثل 05XXXXXXXX أو +9665XXXXXXXX.';
-
-const LEAD_TYPES = {
-  SALES: 'SALES',
-  BOOKING: 'BOOKING',
-  RESULTS: 'RESULTS',
-  CUSTOMER_SERVICE: 'CUSTOMER_SERVICE',
-  DOCTOR_CALLBACK: 'DOCTOR_CALLBACK',
-};
-
-// Per-type escalation messages — each tailored to the context
-const LEAD_PHONE_REQUEST_MESSAGES = {
-  [LEAD_TYPES.SALES]: 'من فضلك زودني برقم جوالك ليتواصل معك أحد المختصين.',
-  [LEAD_TYPES.BOOKING]: 'من فضلك زودني برقم جوالك لتأكيد الحجز ومتابعة الموعد.',
-  [LEAD_TYPES.RESULTS]: 'لاستفسار عن نتيجتك، زودني برقم جوالك وسنتواصل معك في أقرب وقت.',
-  [LEAD_TYPES.CUSTOMER_SERVICE]: 'يسعدنا مساعدتك، زودني برقم جوالك ليتواصل معك أحد فريق خدمة العملاء.',
-  [LEAD_TYPES.DOCTOR_CALLBACK]: 'إذا حابب يتواصل معك أحد المختصين أو طبيب، زودني برقم جوالك.',
-};
-
-function getLeadPhoneMessage(leadType) {
-  return (
-    LEAD_PHONE_REQUEST_MESSAGES[leadType] ||
-    LEAD_PHONE_REQUEST_MESSAGES[LEAD_TYPES.CUSTOMER_SERVICE]
-  );
-}
-
-const EASTERN_DIGIT_MAP = {
-  '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
-  '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
-};
-
-function normalizeDigits(value) {
-  return (value || '').replace(/[٠-٩]/g, (digit) => EASTERN_DIGIT_MAP[digit] || digit);
-}
-
-function normalizePhone(value) {
-  const normalized = normalizeDigits(value);
-  return normalized.replace(/[^\d+]/g, '');
-}
-
-function isLikelyPhone(value) {
-  const normalized = normalizePhone(value);
-  if (!normalized) return false;
-  if (!/^\+?\d+$/.test(normalized)) return false;
-  const digitsOnly = normalized.replace(/\D/g, '');
-  return digitsOnly.length >= 9 && digitsOnly.length <= 14;
-}
-
-// Detects lead routing intent from free text.
-// Returns a LEAD_TYPE or null (no lead needed).
-// "تفسير" alone is intentionally excluded — test-explanation questions should not trigger lead capture.
-function detectLeadTypeFromText(rawText) {
-  const text = (rawText || '').toLowerCase();
-  if (!text.trim()) return null;
-
-  if (/(حجز|موعد|booking|appointment|book)/i.test(text)) return LEAD_TYPES.BOOKING;
-  if (/(نتيجة|نتائج|result|results|تأخرت نتيجتي)/i.test(text)) return LEAD_TYPES.RESULTS;
-  if (/(خدمة العملاء|موظف|تواصل|support|customer service|شكوى)/i.test(text)) return LEAD_TYPES.CUSTOMER_SERVICE;
-  if (/(سعر|أسعار|اسعار|تكلفة|price|pricing|cost|عرض)/i.test(text)) return LEAD_TYPES.SALES;
-  if (/(أعراض|اعراض|ألم|الم|صداع|دوخة|حمى|حرارة|ضيق تنفس|doctor|طبيب)/i.test(text)) {
-    return LEAD_TYPES.DOCTOR_CALLBACK;
-  }
-
-  return null;
-}
 
 export default function WareedAiWidgetPreview() {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [sessionConversationId, setSessionConversationId] = useState(null);
-  const [awaitingPhone, setAwaitingPhone] = useState(false);
-  // Prevents asking for phone more than once per session after a lead is captured
-  const [leadCaptured, setLeadCaptured] = useState(false);
-  const [pendingLeadType, setPendingLeadType] = useState(null);
-  const [leadContext, setLeadContext] = useState({
-    latestUserQuestion: '',
-    latestAssistantReply: '',
-    lastConversationId: null,
-  });
   const [messages, setMessages] = useState(() => [
     { id: 'welcome', role: 'assistant', text: WELCOME_MESSAGE },
   ]);
   const messageCounterRef = useRef(1);
   const messagesContainerRef = useRef(null);
-  const { addLead, newLeadsCount } = usePreviewLeads();
 
   useEffect(() => {
     const container = messagesContainerRef.current;
@@ -121,39 +43,6 @@ export default function WareedAiWidgetPreview() {
     setInput('');
     setIsOpen(true);
 
-    // Phone number capture mode
-    if (awaitingPhone) {
-      if (!isLikelyPhone(text)) {
-        const invalidId = `msg_${messageCounterRef.current++}`;
-        setMessages((prev) => [
-          ...prev,
-          { id: invalidId, role: 'assistant', text: LEAD_PHONE_INVALID_MESSAGE },
-        ]);
-        return;
-      }
-
-      const capturedLead = {
-        phone: normalizePhone(text),
-        leadType: pendingLeadType || LEAD_TYPES.CUSTOMER_SERVICE,
-        latestUserQuestion: leadContext.latestUserQuestion || text,
-        latestAssistantReply: leadContext.latestAssistantReply || '',
-        conversationId: leadContext.lastConversationId || null,
-        createdAt: new Date().toISOString(),
-      };
-      addLead(capturedLead);
-      setLeadCaptured(true);
-      setAwaitingPhone(false);
-      setPendingLeadType(null);
-
-      const confirmId = `msg_${messageCounterRef.current++}`;
-      setMessages((prev) => [
-        ...prev,
-        { id: confirmId, role: 'assistant', text: LEAD_CONFIRMATION_MESSAGE },
-      ]);
-      return;
-    }
-
-    // Normal message — send to backend
     const typingId = `typing_${messageCounterRef.current++}`;
     setMessages((prev) => [
       ...prev,
@@ -171,12 +60,10 @@ export default function WareedAiWidgetPreview() {
       const assistantText =
         (data?.reply || data?.response || '').trim() || CONNECTIVITY_ERROR_MESSAGE;
       const assistantId = data?.message_id || `msg_${messageCounterRef.current++}`;
-      const responseConversationId = data?.conversation_id || null;
 
-      // Pin the conversation_id for the rest of this session so the backend
-      // can maintain conversation state (phone capture, CTA suppression, etc.).
-      if (responseConversationId && !sessionConversationId) {
-        setSessionConversationId(responseConversationId);
+      // Pin the conversation_id so the backend can maintain state across turns.
+      if (data?.conversation_id && !sessionConversationId) {
+        setSessionConversationId(data.conversation_id);
       }
 
       setMessages((prev) =>
@@ -184,26 +71,6 @@ export default function WareedAiWidgetPreview() {
           m.id === typingId ? { id: assistantId, role: 'assistant', text: assistantText } : m
         )
       );
-
-      // Lead routing: detect intent from user text first, then fall back to assistant reply.
-      // Only ask for phone once per session (!leadCaptured) and not while already awaiting.
-      const leadTypeFromFlow =
-        detectLeadTypeFromText(text) || detectLeadTypeFromText(assistantText);
-
-      if (leadTypeFromFlow && !awaitingPhone && !leadCaptured) {
-        setPendingLeadType(leadTypeFromFlow);
-        setAwaitingPhone(true);
-        setLeadContext({
-          latestUserQuestion: text,
-          latestAssistantReply: assistantText,
-          lastConversationId: responseConversationId,
-        });
-        const askPhoneId = `msg_${messageCounterRef.current++}`;
-        setMessages((prev) => [
-          ...prev,
-          { id: askPhoneId, role: 'assistant', text: getLeadPhoneMessage(leadTypeFromFlow) },
-        ]);
-      }
     } catch (error) {
       console.error('Preview widget message send failed:', error);
       setMessages((prev) =>
@@ -239,12 +106,6 @@ export default function WareedAiWidgetPreview() {
               نموذج واجهة محلي لتجربة زر المساعد الذكي والشات العائم،
               بدون أي تعديل على التكامل الإنتاجي الحالي.
             </p>
-            <div className="wareed-widget-preview__header-actions">
-              <Link to="/wareed-ai-leads-preview" className="wareed-widget-preview__leads-link">
-                لوحة المتابعة الداخلية
-              </Link>
-              <span className="wareed-widget-preview__new-badge">NEW: {newLeadsCount}</span>
-            </div>
           </div>
         </main>
 
@@ -261,11 +122,6 @@ export default function WareedAiWidgetPreview() {
             <h2>قابلية الدمج لاحقاً</h2>
             <p>بعد اعتماد الشكل النهائي، نقدر ننقل نفس المكون لواجهة الموقع الفعلية بشكل آمن.</p>
           </article>
-        </section>
-
-        <section className="wareed-widget-preview__lead-debug">
-          <h2>آخر Lead (Preview Only)</h2>
-          ...lead debug grid...
         </section>
 
         — Ghost multi-channel icons (placeholder; restore when channel stack is ready) —

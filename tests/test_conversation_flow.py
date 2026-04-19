@@ -11,7 +11,13 @@ Each test uses a unique conversation_id to avoid state pollution between cases.
 import uuid
 import pytest
 
-from app.services.phone_utils import extract_phone, is_phone_message, normalize_phone
+from app.services.phone_utils import (
+    extract_phone,
+    is_phone_attempt,
+    is_phone_message,
+    normalize_phone,
+    should_exit_awaiting_phone,
+)
 from app.services.conversation_state import (
     ConversationState,
     LeadDraft,
@@ -22,6 +28,7 @@ from app.services.conversation_state import (
 from app.services.conversation_flow import (
     FlowResult,
     apply_flow_to_reply,
+    handle_awaiting_phone_state,
     process_phone_submission,
 )
 from app.services.conversation_manager import ConversationAction, ConversationDecision
@@ -350,4 +357,178 @@ class TestEndToEndScenarios:
         state = get_state_store().get(cid)
         result = process_phone_submission("أبغى أعرف السعر", state, cid)
         assert result is None
+        assert get_state_store().get(cid).state == StateEnum.AWAITING_PHONE
+
+
+# ===========================================================================
+# is_phone_attempt — distinguishes numeric attempts from real messages
+# ===========================================================================
+
+class TestIsPhoneAttempt:
+
+    # --- should be True (failed phone attempts) ---
+    def test_053_is_attempt(self):
+        assert is_phone_attempt("053") is True
+
+    def test_12345_is_attempt(self):
+        assert is_phone_attempt("12345") is True
+
+    def test_0567_is_attempt(self):
+        assert is_phone_attempt("0567") is True
+
+    def test_valid_phone_also_is_attempt(self):
+        # A valid phone passes too — but extract_phone() catches it first
+        assert is_phone_attempt("0512345678") is True
+
+    def test_plus_digits_is_attempt(self):
+        assert is_phone_attempt("+966") is True
+
+    # --- should be False (real messages) ---
+    def test_arabic_branch_query_not_attempt(self):
+        assert is_phone_attempt("وين الفروع؟") is False
+
+    def test_arabic_results_query_not_attempt(self):
+        assert is_phone_attempt("عندي نتيجة تحليل") is False
+
+    def test_arabic_customer_service_not_attempt(self):
+        assert is_phone_attempt("أبغى خدمة العملاء") is False
+
+    def test_english_sentence_not_attempt(self):
+        assert is_phone_attempt("where are your branches") is False
+
+    def test_arabic_with_number_not_attempt(self):
+        # "الفرع رقم 5" — Arabic text present → not a phone attempt
+        assert is_phone_attempt("الفرع رقم 5") is False
+
+    def test_empty_string_not_attempt(self):
+        assert is_phone_attempt("") is False
+
+    def test_no_digits_not_attempt(self):
+        assert is_phone_attempt("مرحبا") is False
+
+
+# ===========================================================================
+# should_exit_awaiting_phone
+# ===========================================================================
+
+class TestShouldExitAwaitingPhone:
+
+    def test_branch_query_exits(self):
+        assert should_exit_awaiting_phone("وين الفروع؟") is True
+
+    def test_results_query_exits(self):
+        assert should_exit_awaiting_phone("عندي نتيجة تحليل") is True
+
+    def test_customer_service_exits(self):
+        assert should_exit_awaiting_phone("أبغى خدمة العملاء") is True
+
+    def test_valid_phone_does_not_exit(self):
+        assert should_exit_awaiting_phone("0512345678") is False
+
+    def test_phone_attempt_does_not_exit(self):
+        assert should_exit_awaiting_phone("053") is False
+
+    def test_short_numeric_does_not_exit(self):
+        assert should_exit_awaiting_phone("12345") is False
+
+
+# ===========================================================================
+# handle_awaiting_phone_state — unified pre-pipeline handler
+# ===========================================================================
+
+class TestHandleAwaitingPhoneState:
+
+    def _put_in_awaiting(self, cid: str, pending: str = "ASK_PHONE") -> ConversationState:
+        get_state_store().update(
+            cid,
+            state=StateEnum.AWAITING_PHONE,
+            pending_action=pending,
+        )
+        return get_state_store().get(cid)
+
+    # --- valid phone ---
+    def test_valid_phone_captured(self):
+        cid = fresh_id()
+        state = self._put_in_awaiting(cid)
+        result = handle_awaiting_phone_state("0512345678", state, cid)
+        assert result is not None
+        assert result.phone_captured is True
+        assert result.skip_pipeline is True
+        assert get_state_store().get(cid).state == StateEnum.PHONE_RECEIVED
+
+    # --- phone attempt (invalid) ---
+    def test_053_gets_soft_message(self):
+        cid = fresh_id()
+        state = self._put_in_awaiting(cid)
+        result = handle_awaiting_phone_state("053", state, cid)
+        assert result is not None
+        assert result.skip_pipeline is True
+        assert result.phone_captured is False
+        # State stays AWAITING_PHONE — user should try again
+        assert get_state_store().get(cid).state == StateEnum.AWAITING_PHONE
+
+    def test_12345_gets_soft_message(self):
+        cid = fresh_id()
+        state = self._put_in_awaiting(cid)
+        result = handle_awaiting_phone_state("12345", state, cid)
+        assert result is not None
+        assert result.skip_pipeline is True
+        assert get_state_store().get(cid).state == StateEnum.AWAITING_PHONE
+
+    def test_soft_message_is_helpful(self):
+        cid = fresh_id()
+        state = self._put_in_awaiting(cid)
+        result = handle_awaiting_phone_state("053", state, cid)
+        # Message should mention correct format or invite other questions
+        assert "05" in result.final_reply or "رقم" in result.final_reply
+
+    # --- new intent / topic switch (THE BUG FIX) ---
+    def test_branch_query_returns_none(self):
+        """User asking about branches must NOT be shown an invalid phone message."""
+        cid = fresh_id()
+        state = self._put_in_awaiting(cid)
+        result = handle_awaiting_phone_state("وين الفروع؟", state, cid)
+        assert result is None  # caller should route normally
+
+    def test_results_query_returns_none(self):
+        cid = fresh_id()
+        state = self._put_in_awaiting(cid)
+        result = handle_awaiting_phone_state("عندي نتيجة تحليل", state, cid)
+        assert result is None
+
+    def test_customer_service_returns_none(self):
+        cid = fresh_id()
+        state = self._put_in_awaiting(cid)
+        result = handle_awaiting_phone_state("أبغى خدمة العملاء", state, cid)
+        assert result is None
+
+    def test_state_reset_to_idle_on_topic_switch(self):
+        cid = fresh_id()
+        state = self._put_in_awaiting(cid)
+        handle_awaiting_phone_state("وين الفروع؟", state, cid)
+        assert get_state_store().get(cid).state == StateEnum.IDLE
+
+    def test_pending_action_cleared_on_topic_switch(self):
+        cid = fresh_id()
+        state = self._put_in_awaiting(cid)
+        handle_awaiting_phone_state("وين الفروع؟", state, cid)
+        assert get_state_store().get(cid).pending_action == ""
+
+    def test_not_in_awaiting_returns_none(self):
+        cid = fresh_id()
+        state = get_state_store().get(cid)  # IDLE
+        result = handle_awaiting_phone_state("0512345678", state, cid)
+        assert result is None
+
+    # --- after topic switch, system can request phone again ---
+    def test_can_ask_phone_again_after_topic_switch(self):
+        cid = fresh_id()
+        state = self._put_in_awaiting(cid)
+        # Topic switch → IDLE
+        handle_awaiting_phone_state("وين الفروع؟", state, cid)
+        assert get_state_store().get(cid).state == StateEnum.IDLE
+        # New price query should trigger ASK_PHONE CTA again
+        decision = make_decision(ConversationAction.ASK_PHONE, "phone_required:price_route")
+        result = apply_flow_to_reply("السعر 200 ريال.", decision, "كم السعر؟", cid)
+        assert "رقم جوالك" in result.final_reply
         assert get_state_store().get(cid).state == StateEnum.AWAITING_PHONE

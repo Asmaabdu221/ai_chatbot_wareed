@@ -42,9 +42,10 @@ from app.services.cta_templates import (
     CONFIRM_PHONE_RECEIVED,
     CONFIRM_TRANSFER_READY,
     OFFER_HUMAN_HELP,
+    PHONE_ATTEMPT_SOFT,
     get_ask_phone_cta,
 )
-from app.services.phone_utils import extract_phone
+from app.services.phone_utils import extract_phone, is_phone_attempt, should_exit_awaiting_phone
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +132,69 @@ def process_phone_submission(
         lead_draft=lead_draft,
         skip_pipeline=True,
     )
+
+
+# ---------------------------------------------------------------------------
+# Entry point A2 — full awaiting_phone handler (replaces raw process_phone_submission
+# in the chat endpoint so the caller never needs to classify the message itself)
+# ---------------------------------------------------------------------------
+
+def handle_awaiting_phone_state(
+    user_text: str,
+    state: ConversationState,
+    conversation_id: str,
+) -> Optional[FlowResult]:
+    """
+    Unified pre-pipeline handler for messages received while state == awaiting_phone.
+
+    Three-way classification
+    ------------------------
+    1. Valid phone  → capture it, return confirmation (skip_pipeline=True).
+    2. Phone attempt (short numeric, no words) → return soft invalid message
+       (skip_pipeline=True, state stays AWAITING_PHONE).
+    3. New intent / topic switch → reset state to IDLE, return None so the
+       caller proceeds with normal routing.  The user is NOT trapped.
+
+    Returns
+    -------
+    FlowResult  — when the reply is fully handled here (caller must skip pipeline).
+    None        — when the message is a new topic; caller resets state and routes normally.
+    """
+    if state.state != StateEnum.AWAITING_PHONE:
+        return None
+
+    # Case 1 — valid phone
+    captured = process_phone_submission(user_text, state, conversation_id)
+    if captured:
+        return captured
+
+    # Case 2 — invalid phone attempt (short numeric, no real words)
+    if is_phone_attempt(user_text):
+        logger.info(
+            "conversation_flow | phone_attempt_invalid | state=awaiting_phone"
+            " | conversation_id=%.8s",
+            conversation_id,
+        )
+        return FlowResult(
+            final_reply=PHONE_ATTEMPT_SOFT,
+            state_before=StateEnum.AWAITING_PHONE,
+            state_after=StateEnum.AWAITING_PHONE,
+            skip_pipeline=True,
+        )
+
+    # Case 3 — new intent / topic switch: exit phone capture mode
+    get_state_store().update(
+        conversation_id,
+        state=StateEnum.IDLE,
+        pending_action="",
+        pending_intent_summary="",
+    )
+    logger.info(
+        "conversation_flow | topic_switch_exits_awaiting_phone | state_reset=idle"
+        " | conversation_id=%.8s",
+        conversation_id,
+    )
+    return None  # caller proceeds with normal routing
 
 
 # ---------------------------------------------------------------------------
