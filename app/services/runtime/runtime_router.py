@@ -599,6 +599,9 @@ def _looks_like_branch_query(text: str) -> bool:
     hints = (
         "فرع",
         "فروع",
+        "فروعكم",
+        "موقعكم",
+        "عنوانكم",
         "موقع",
         "حي",
         "اقرب",
@@ -632,7 +635,7 @@ def _looks_like_branch_query(text: str) -> bool:
     scores = _detector_score(
         n,
         hints=hints,
-        strong_keywords=("فرع", "فروع", "موقع", "العنوان", "location"),
+        strong_keywords=("فرع", "فروع", "فروعكم", "موقعكم", "عنوانكم", "موقع", "العنوان", "location"),
         blockers=blockers,
         ambiguity_terms=("فرع", "موقع", "حي"),
     )

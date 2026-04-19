@@ -382,14 +382,32 @@ async def chat_endpoint(
             _runtime_result = route_runtime_message(
                 request.message,
                 conversation_id=conversation_id,
+                faq_only_runtime_mode=True,  # P0: enables branch/domain pipeline
             )
             if _runtime_result.get("matched"):
                 _runtime_reply = _runtime_result.get("reply", "")
+                _runtime_source = str(_runtime_result.get("source") or "").strip()
+                _runtime_meta = dict(_runtime_result.get("meta") or {})
                 logger.info(
                     "runtime_router | matched=yes | route=%s | source=%s",
                     _runtime_result.get("route"),
-                    _runtime_result.get("source"),
+                    _runtime_source,
                 )
+                # P0: update entity memory so follow-ups work (mirrors message_runtime_orchestrator)
+                if _runtime_source == "branches":
+                    try:
+                        from app.services.runtime.entity_memory import update_entity_memory
+                        update_entity_memory(
+                            conversation_id,
+                            last_intent="branch",
+                            last_branch={
+                                "id": str(_runtime_meta.get("matched_branch_id") or _runtime_meta.get("id") or "").strip(),
+                                "label": str(_runtime_meta.get("branch_name") or "").strip(),
+                                "city": str(_runtime_meta.get("city") or "").strip(),
+                            },
+                        )
+                    except Exception as _em_err:
+                        logger.warning("entity_memory update(branch) skipped: %s", _em_err)
                 get_usage_tracker().record("runtime", 0)
                 # Phase 2B: inject CTA
                 _runtime_final = _runtime_reply

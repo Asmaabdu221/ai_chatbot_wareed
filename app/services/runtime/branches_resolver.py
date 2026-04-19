@@ -26,6 +26,8 @@ _GENERIC_BRANCHES_HINTS = (
     "ايش عندكم فروع",
     "وش عندكم فروع",
     "وين فروعكم",
+    "موقعكم",
+    "عنوانكم",
 )
 _SPECIFIC_BRANCH_HINTS = (
     "اقرب",
@@ -852,7 +854,7 @@ def resolve_branches_query(user_text: str, conversation_id: UUID | None = None) 
     city_norm = _detect_city(query_norm, records)
     city_records = [r for r in records if city_norm and _safe_str(r.get("city_norm")) == city_norm]
     requested_city_candidate = _extract_requested_city_candidate(query_norm)
-    has_branch_anchor = any(t in query_norm for t in ("فرع", "فروع", "الموقع", "العنوان"))
+    has_branch_anchor = any(t in query_norm for t in ("فرع", "فروع", "الموقع", "العنوان", "موقع"))
     tokens = [t for t in query_norm.split() if t]
     is_city_only_query = bool(
         1 <= len(tokens) <= 3
