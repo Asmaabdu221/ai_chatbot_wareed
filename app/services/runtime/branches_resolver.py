@@ -14,9 +14,9 @@ from app.services.runtime.entity_memory import load_entity_memory
 from app.services.runtime.selection_state import load_selection_state, save_selection_state
 from app.services.runtime.text_normalizer import normalize_arabic
 
-_PRIMARY_BRANCHES_PATH = Path("app/data/runtime/rag/branches_with_coordinates.jsonl")
-_NORMALIZED_BRANCHES_PATH = Path("app/data/runtime/rag/branches_clean.normalized.jsonl")
-_LEGACY_BRANCHES_PATH = Path("app/data/runtime/rag/branches_clean.jsonl")
+_PRIMARY_BRANCHES_PATH = Path("app/data/runtime/rag/branches_clean.jsonl")
+_NORMALIZED_BRANCHES_PATH = Path("app/data/runtime/rag/branches_with_coordinates.jsonl")
+_LEGACY_BRANCHES_PATH = Path("app/data/runtime/rag/branches_clean.normalized.jsonl")
 
 _GENERIC_BRANCHES_HINTS = (
     "فروعكم",
@@ -234,7 +234,13 @@ def load_branches_records() -> list[dict[str, Any]]:
                 continue
             city = _safe_str(row.get("city")) or _extract_city_from_section(section)
             district = _safe_str(row.get("district")) or _infer_district_from_branch_name(branch_name)
-            map_url = _safe_str(row.get("maps_url")) or _safe_str(row.get("map_url"))
+            map_url = (
+                _safe_str(row.get("location_url"))
+                or _safe_str(row.get("maps_url"))
+                or _safe_str(row.get("map_url"))
+            )
+            address = _safe_str(row.get("address")) or _safe_str(row.get("raw_text"))
+            working_hours = _safe_str(row.get("working_hours")) or _safe_str(row.get("hours"))
             latitude = _coerce_float(row.get("latitude"))
             longitude = _coerce_float(row.get("longitude"))
             item = dict(row)
@@ -245,7 +251,10 @@ def load_branches_records() -> list[dict[str, Any]]:
             item["section"] = section
             item["city"] = city
             item["district"] = district
-            item["hours"] = _safe_str(row.get("hours"))
+            item["hours"] = working_hours
+            item["working_hours"] = working_hours
+            item["address"] = address
+            item["location_url"] = map_url
             item["maps_url"] = map_url
             item["map_url"] = map_url
             item["latitude"] = latitude
@@ -553,10 +562,21 @@ def _parse_numeric_selection(text: str) -> int | None:
 def _format_generic_branches_reply() -> str:
     return _normalize_reply_text(
         (
-            "عندنا أكثر من 60 فرع حول المملكة في مدن مثل الرياض وجدة والشرقية والمدينة وغيرها.\n\n"
-            "إذا تعطيني اسم المدينة، أقدر أطلع لك الفروع المتاحة فيها."
+            "لدينا أكثر من 60 فرع حول المملكة.\n\n"
+            "أرسل لي اسم المدينة، مثل: الرياض أو جدة، وبعطيك الفروع المتاحة فيها."
         )
     )
+
+
+def _get_all_available_cities(records: list[dict[str, Any]]) -> list[str]:
+    return sorted({_safe_str(r.get("city")) for r in records if _safe_str(r.get("city"))})
+
+
+def _format_available_cities(records: list[dict[str, Any]]) -> str:
+    cities = _get_all_available_cities(records)
+    if not cities:
+        return "-"
+    return "\n".join(f"- {city}" for city in cities)
 
 
 def _format_city_reply(city: str, city_records: list[dict[str, Any]], conversation_id: UUID | None = None) -> str:
@@ -583,10 +603,11 @@ def _format_city_reply(city: str, city_records: list[dict[str, Any]], conversati
             city=city,
         )
 
-    lines = [f"أكيد، هذه الفروع المتاحة في {city}:"]
+    lines = [f"هذه الفروع المتاحة في {city}:", ""]
     for idx, branch_name in enumerate(names, start=1):
         lines.append(f"{idx}) {branch_name}")
-    lines.append("اختر الرقم الأقرب أو المناسب لك، وأرسل لك رابط الموقع.")
+    lines.append("")
+    lines.append("اختر رقم أو اسم الفرع، وبعطيك الموقع.")
     return _normalize_reply_text("\n".join(lines))
 
 
@@ -643,11 +664,13 @@ def _format_nearest_city_clarification(city: str) -> str:
     )
 
 
-def _format_city_not_found_reply() -> str:
+def _format_city_not_found_reply(records: list[dict[str, Any]]) -> str:
     return _normalize_reply_text(
         (
-            "بهذه المدينة مع الأسف لا يوجد لدينا فروع حاليًا.\n\n"
-            "اكتب لي اسم المدينة الأقرب لك، وأساعدك بتحديد أقرب فرع."
+            "حالياً لا يوجد لدينا فروع في هذه المدينة.\n\n"
+            "المدن المتاحة لدينا:\n"
+            f"{_format_available_cities(records)}\n\n"
+            "أرسل اسم المدينة من القائمة، وبعطيك الفروع."
         )
     )
 
@@ -658,26 +681,57 @@ def _format_direct_branch_reply(record: dict[str, Any]) -> str:
 
 def _format_selected_branch_reply(record: dict[str, Any]) -> str:
     name = _format_branch_name_for_reply(_safe_str(record.get("branch_name")))
-    city = _safe_str(record.get("city"))
-    hours = _safe_str(record.get("hours"))
-    map_url = _safe_str(record.get("map_url")) or _safe_str(record.get("maps_url"))
-    phone = _safe_str(record.get("contact_phone"))
+    display_name = name if name.startswith("فرع") else f"فرع {name}"
+    address = _safe_str(record.get("address")) or "غير متوفر حالياً"
+    location_url = (
+        _safe_str(record.get("location_url"))
+        or _safe_str(record.get("map_url"))
+        or _safe_str(record.get("maps_url"))
+        or "غير متوفر حالياً"
+    )
+    hours = _safe_str(record.get("working_hours")) or _safe_str(record.get("hours")) or "غير متوفر حالياً"
 
-    lines = ["هذا الفرع:", f"{name} – {city}" if city else name]
-    if hours:
-        lines.append(f"الدوام: {hours}")
-    if map_url:
-        lines.append(f"الموقع: {map_url}")
-    if phone:
-        lines.append(f"رقم التواصل: {phone}")
+    lines = [
+        display_name,
+        "",
+        f"العنوان: {address}",
+        f"الموقع: {location_url}",
+        f"ساعات العمل: {hours}",
+        "رقم الهاتف: 8001221220",
+    ]
     return _normalize_reply_text("\n".join(lines))
 
 
-def _format_unknown_area_reply() -> str:
+def _format_unknown_area_reply(records: list[dict[str, Any]]) -> str:
     return _normalize_reply_text(
-        "لا يوجد لدينا فرع مطابق بهذا الاسم في البيانات الحالية.\n"
-        "إذا ممكن تعطيني اسم المدينة التي أنت فيها، أقدر أرسل لك الفروع المتاحة فيها."
+        "حالياً لا يوجد لدينا فروع في هذه المدينة.\n\n"
+        "المدن المتاحة لدينا:\n"
+        f"{_format_available_cities(records)}\n\n"
+        "أرسل اسم المدينة من القائمة، وبعطيك الفروع."
     )
+
+
+def _find_last_city_option_by_name(text: str, conversation_id: UUID | None) -> dict[str, Any] | None:
+    if conversation_id is None:
+        return None
+    query_norm = normalize_arabic(_safe_str(text))
+    if not query_norm:
+        return None
+    state = load_selection_state(conversation_id)
+    if _safe_str(state.get("last_selection_type")) != "branch":
+        return None
+    options = list(state.get("last_options") or [])
+    for option in options:
+        if not isinstance(option, dict):
+            continue
+        payload = option.get("selection_payload") if isinstance(option.get("selection_payload"), dict) else option
+        label = _safe_str(option.get("label")) or _safe_str(payload.get("branch_name"))
+        label_norm = normalize_arabic(label)
+        if not label_norm:
+            continue
+        if query_norm == label_norm or query_norm in label_norm or label_norm in query_norm:
+            return payload
+    return None
 
 
 def _enrich_meta(
@@ -766,7 +820,7 @@ def _match_specific_branch(query_norm: str, records: list[dict[str, Any]]) -> di
 
 
 def resolve_branches_query(user_text: str, conversation_id: UUID | None = None) -> dict[str, Any]:
-    """Resolve branches query from branches runtime dataset only."""
+    """Resolve branches query using deterministic 3-step flow."""
     query = _safe_str(user_text)
     query_norm = normalize_arabic(query)
     if not query_norm:
@@ -782,81 +836,106 @@ def resolve_branches_query(user_text: str, conversation_id: UUID | None = None) 
         records = load_branches_records()
     if not records:
         return {
-            "matched": False,
-            "answer": "",
+            "matched": True,
+            "answer": _format_generic_branches_reply(),
             "meta": _enrich_meta(
                 {"reason": "branches_data_unavailable"},
-                query_type="no_match",
+                query_type="generic_overview",
                 has_state=False,
             ),
+            "route": "branches_generic",
+        }
+
+    has_state = _has_valid_city_selection_state(conversation_id)
+    generic = _is_generic_branches_query(query_norm)
+    specific = _is_specific_branches_query(query_norm)
+    city_norm = _detect_city(query_norm, records)
+    city_records = [r for r in records if city_norm and _safe_str(r.get("city_norm")) == city_norm]
+    requested_city_candidate = _extract_requested_city_candidate(query_norm)
+    has_branch_anchor = any(t in query_norm for t in ("فرع", "فروع", "الموقع", "العنوان"))
+    tokens = [t for t in query_norm.split() if t]
+    is_city_only_query = bool(
+        1 <= len(tokens) <= 3
+        and not any(t in query_norm for t in ("فرع", "فروع", "الموقع", "العنوان", "باقة", "تحليل"))
+        and re.search(r"[0-9]", query_norm) is None
+    )
+    is_branch_domain_query = bool(
+        generic
+        or specific
+        or has_branch_anchor
+        or city_norm
+        or (has_state and (is_city_only_query or _parse_numeric_selection(query_norm) is not None))
+    )
+    if not is_branch_domain_query:
+        return {
+            "matched": False,
+            "answer": "",
+            "meta": _enrich_meta({"reason": "not_branches_intent"}, query_type="no_match", has_state=has_state),
             "route": "branches_no_match",
         }
 
-    # Numeric selection should resolve before any generic fallback logic.
+    # STEP 3 (selection): numeric
     numeric_selection = _parse_numeric_selection(query_norm)
-    has_state = _has_valid_city_selection_state(conversation_id)
     selected = _get_last_city_option(numeric_selection, conversation_id) if numeric_selection is not None else None
-    if numeric_selection is not None and selected is not None:
-        selected_id = _safe_str(selected.get("id"))
+    if numeric_selection is not None:
+        if selected is not None:
+            selected_id = _safe_str(selected.get("id"))
+            return {
+                "matched": True,
+                "answer": _format_selected_branch_reply(selected),
+                "meta": _enrich_meta(
+                    {
+                        "id": selected_id,
+                        "city": _safe_str(selected.get("city")),
+                        "branch_name": _safe_str(selected.get("branch_name")),
+                        "selection_number": numeric_selection,
+                    },
+                    query_type="numeric_selection",
+                    has_state=has_state,
+                    matched_branch_id=selected_id,
+                ),
+                "route": "branches_city_number_selection",
+            }
         return {
             "matched": True,
-            "answer": _format_selected_branch_reply(selected),
+            "answer": _format_generic_branches_reply(),
+            "meta": _enrich_meta(
+                {"reason": "numeric_without_state"},
+                query_type="generic_overview",
+                has_state=has_state,
+            ),
+            "route": "branches_generic",
+        }
+
+    # STEP 3 (selection): by name from last listed city options.
+    selected_by_name = _find_last_city_option_by_name(query, conversation_id)
+    if selected_by_name is not None:
+        selected_id = _safe_str(selected_by_name.get("id"))
+        return {
+            "matched": True,
+            "answer": _format_selected_branch_reply(selected_by_name),
             "meta": _enrich_meta(
                 {
                     "id": selected_id,
-                    "source": _safe_str(selected.get("source")),
-                    "city": _safe_str(selected.get("city")),
-                    "district": _safe_str(selected.get("district")),
-                    "branch_name": _safe_str(selected.get("branch_name")),
-                    "map_url": _safe_str(selected.get("map_url")),
-                    "maps_url": _safe_str(selected.get("maps_url")),
-                    "contact_phone": _safe_str(selected.get("contact_phone")),
-                    "latitude": selected.get("latitude"),
-                    "longitude": selected.get("longitude"),
-                    "from_city_numbered_selection": True,
-                    "selection_number": numeric_selection,
+                    "city": _safe_str(selected_by_name.get("city")),
+                    "branch_name": _safe_str(selected_by_name.get("branch_name")),
+                    "from_state_name_selection": True,
                 },
-                query_type="numeric_selection",
+                query_type="name_selection",
                 has_state=has_state,
                 matched_branch_id=selected_id,
             ),
-            "route": "branches_city_number_selection",
+            "route": "branches_city_name_selection",
         }
 
-    city_norm = _detect_city(query_norm, records)
-    city_records = [r for r in records if city_norm and _safe_str(r.get("city_norm")) == city_norm]
-
-    refinement_mode = False
-    recent_city_context = _get_recent_branch_city_context(conversation_id)
-    if recent_city_context and _is_short_locality_refinement_query(query_norm):
-        refinement_mode = True
-        directional_city_norm = _extract_city_from_directional_phrase(query_norm, records)
-        if directional_city_norm:
-            city_norm = directional_city_norm
-        elif not city_norm:
-            city_norm = recent_city_context
-        city_records = [r for r in records if city_norm and _safe_str(r.get("city_norm")) == city_norm]
-
-    district_norm = _detect_district(query_norm, city_records if (refinement_mode and city_records) else records, allow_single_word=refinement_mode)
-    if not district_norm:
-        district_norm = _detect_district(query_norm, records, allow_single_word=refinement_mode)
-
-    specific = _is_specific_branches_query(query_norm)
-    generic = _is_generic_branches_query(query_norm)
-    nearest = _is_nearest_query(query_norm)
-    requested_city_candidate = _extract_requested_city_candidate(query_norm)
-    area_candidate = _extract_area_candidate(query_norm)
-    area_candidate_norm = _normalize_city_token(area_candidate)
-    area_candidate_is_city = bool(area_candidate_norm and area_candidate_norm in _CITY_ALIAS_NORMS)
-
+    # STEP 3 (direct branch): global branch-name match, e.g. "فرع العليا".
     matched_branch = None
-    if "فرع" in query_norm or specific or district_norm:
+    if specific or has_branch_anchor:
         query_branch_tail = _safe_str(query_norm.replace("فرع", ""))
-        search_records = city_records or records
         if query_branch_tail:
             strong_tail_matches = [
                 r
-                for r in search_records
+                for r in records
                 if (
                     query_branch_tail in _safe_str(r.get("branch_norm"))
                     or query_branch_tail in _safe_str(r.get("district_norm"))
@@ -865,235 +944,78 @@ def resolve_branches_query(user_text: str, conversation_id: UUID | None = None) 
             ]
             if len(strong_tail_matches) == 1:
                 matched_branch = strong_tail_matches[0]
-
         if matched_branch is None:
-            candidate_branch = _match_specific_branch(query_norm, search_records)
-            if candidate_branch is not None:
-                candidate_branch_norm = _safe_str(candidate_branch.get("branch_norm"))
-                candidate_district_norm = _safe_str(candidate_branch.get("district_norm"))
-                candidate_raw_norm = _safe_str(candidate_branch.get("raw_norm"))
-                if district_norm:
-                    if (
-                        district_norm in candidate_district_norm
-                        or candidate_district_norm in district_norm
-                        or district_norm in candidate_branch_norm
-                        or district_norm in candidate_raw_norm
-                    ):
-                        matched_branch = candidate_branch
-                elif query_branch_tail and (
-                    query_branch_tail in candidate_branch_norm
-                    or query_branch_tail in candidate_raw_norm
-                ):
-                    matched_branch = candidate_branch
-
-    district_like = (
-        district_norm
-        or (
-            (any(hint in query_norm for hint in _DISTRICT_QUERY_HINTS) or bool(area_candidate))
-            and not area_candidate_is_city
-        )
-    )
-    scoped_records = city_records if city_records else records
-    district_matches = _find_district_matches(district_norm, scoped_records) if district_like and district_norm else []
-
-    city_query_like = (
-        "فرع" in query_norm
-        or "فروع" in query_norm
-        or "مدينه" in query_norm
-        or "مدينة" in query_norm
-        or query_norm == city_norm
-        or _normalize_city_token(query_norm) == city_norm
-        or (refinement_mode and bool(city_norm))
-    )
-
-    query_type = classify_branch_query_type(
-        numeric_selection=numeric_selection,
-        has_numeric_option=selected is not None,
-        has_direct_branch_match=matched_branch is not None,
-        district_like=bool(district_like),
-        district_match_count=len(district_matches),
-        has_city_records=bool(city_records),
-        nearest=bool(nearest),
-        city_query_like=bool(city_query_like),
-        generic=bool(generic),
-        specific=bool(specific),
-        has_requested_city_candidate=bool(
-            requested_city_candidate and requested_city_candidate not in {"", "حي", "منطقه", "منطقة"}
-        ),
-    )
-
-    if query_type == "direct_branch" and matched_branch is not None:
+            matched_branch = _match_specific_branch(query_norm, records)
+    if matched_branch is not None:
         matched_id = _safe_str(matched_branch.get("id"))
         return {
             "matched": True,
-            "answer": _format_direct_branch_reply(matched_branch),
+            "answer": _format_selected_branch_reply(matched_branch),
             "meta": _enrich_meta(
                 {
                     "id": matched_id,
-                    "source": _safe_str(matched_branch.get("source")),
                     "city": _safe_str(matched_branch.get("city")),
-                    "district": _safe_str(matched_branch.get("district")),
                     "branch_name": _safe_str(matched_branch.get("branch_name")),
-                    "map_url": _safe_str(matched_branch.get("map_url")),
-                    "latitude": matched_branch.get("latitude"),
-                    "longitude": matched_branch.get("longitude"),
                 },
-                query_type=query_type,
+                query_type="direct_branch",
                 has_state=has_state,
                 matched_branch_id=matched_id,
             ),
             "route": "branches_specific",
         }
 
-    if query_type == "district_query":
-        if len(district_matches) == 1:
-            record = district_matches[0]
-            return {
-                "matched": True,
-                "answer": _format_branch_card("الأقرب لك في هذا الحي هو:", record),
-                "meta": _enrich_meta(
-                    {
-                        "id": _safe_str(record.get("id")),
-                        "source": _safe_str(record.get("source")),
-                        "city": _safe_str(record.get("city")),
-                        "district": _safe_str(record.get("district")),
-                        "branch_name": _safe_str(record.get("branch_name")),
-                        "map_url": _safe_str(record.get("map_url")),
-                        "latitude": record.get("latitude"),
-                        "longitude": record.get("longitude"),
-                        "from_district_match": True,
-                    },
-                    query_type=query_type,
-                    has_state=has_state,
-                    matched_branch_id=_safe_str(record.get("id")),
-                ),
-                "route": "branches_district_match",
-            }
-        if len(district_matches) > 1:
-            return {
-                "matched": True,
-                "answer": _format_district_options(district_matches),
-                "meta": _enrich_meta(
-                    {
-                        "count": len(district_matches),
-                        "district_norm": district_norm,
-                        "city": _safe_str(city_records[0].get("city")) if city_records else "",
-                    },
-                    query_type=query_type,
-                    has_state=has_state,
-                ),
-                "route": "branches_district_options",
-            }
-
-    if query_type == "unknown_branch_area":
-        return {
-            "matched": True,
-            "answer": _format_unknown_area_reply(),
-            "meta": _enrich_meta(
-                {"reason": "unknown_area_or_district"},
-                query_type=query_type,
-                has_state=has_state,
-            ),
-            "route": "branches_unknown_area",
-        }
-
-    if query_type == "nearest_city" and city_records:
-        city = _safe_str(city_records[0].get("city"))
-        if conversation_id is not None:
-            save_selection_state(
-                conversation_id,
-                options=[],
-                selection_type="branch",
-                city=city,
-            )
-        return {
-            "matched": True,
-            "answer": _format_nearest_city_clarification(city),
-            "meta": _enrich_meta(
-                {"city": city, "count": len(city_records), "nearest_requested": True},
-                query_type=query_type,
-                has_state=has_state,
-            ),
-            "route": "branches_city_list",
-        }
-
-    if query_type == "city_query" and city_records:
+    # STEP 2: city exists -> list branches for city.
+    if city_records:
         city = _safe_str(city_records[0].get("city"))
         return {
             "matched": True,
             "answer": _format_city_reply(city, city_records, conversation_id),
             "meta": _enrich_meta(
-                {"city": city, "count": len(city_records), "nearest_requested": nearest},
-                query_type=query_type,
+                {"city": city, "count": len(city_records)},
+                query_type="city_query",
                 has_state=has_state,
             ),
             "route": "branches_city_list",
         }
 
-    if query_type == "city_not_found":
+    # STEP 2: city not found -> show full cities list from dataset.
+    if requested_city_candidate or is_city_only_query:
         return {
             "matched": True,
-            "answer": _format_city_not_found_reply(),
+            "answer": _format_city_not_found_reply(records),
             "meta": _enrich_meta(
                 {
                     "requested_city": requested_city_candidate,
                     "reason": "city_not_found",
                 },
-                query_type=query_type,
+                query_type="city_not_found",
                 has_state=has_state,
             ),
             "route": "branches_city_not_found",
         }
 
-    if query_type == "specific_clarify":
-        return {
-            "matched": False,
-            "answer": "أقدر أساعدك بفروع المختبر. اذكر المدينة أو الحي (مثال: الرياض - العليا) عشان أعرض الفروع المتاحة.",
-            "meta": _enrich_meta(
-                {"reason": "needs_city_or_district"},
-                query_type=query_type,
-                has_state=has_state,
-            ),
-            "route": "branches_clarify",
-        }
-
-    if query_type == "generic_overview":
-        if conversation_id is not None:
-            # Save a lightweight branch anchor so the next short city/locality follow-up
-            # is treated as branch refinement context.
-            save_selection_state(
-                conversation_id,
-                options=[],
-                selection_type="branch",
-                city="",
-                query_type="generic_overview",
-            )
-        return {
-            "matched": True,
-            "answer": _format_generic_branches_reply(),
-            "meta": _enrich_meta(
-                {
-                    "cities_count": len({_safe_str(r.get("city")) for r in records if _safe_str(r.get("city"))}),
-                    "followup_anchor": "branch_generic_overview",
-                },
-                query_type=query_type,
-                has_state=has_state,
-            ),
-            "route": "branches_generic",
-        }
-
+    # STEP 1: generic branches overview.
+    if conversation_id is not None:
+        save_selection_state(
+            conversation_id,
+            options=[],
+            selection_type="branch",
+            city="",
+            query_type="generic_overview",
+        )
     return {
-        "matched": False,
-        "answer": "",
+        "matched": True,
+        "answer": _format_generic_branches_reply(),
         "meta": _enrich_meta(
-            {"reason": "not_branches_intent"},
-            query_type=query_type,
+            {
+                "cities_count": len(_get_all_available_cities(records)),
+                "followup_anchor": "branch_generic_overview",
+            },
+            query_type="generic_overview",
             has_state=has_state,
         ),
-        "route": "branches_no_match",
+        "route": "branches_generic",
     }
-
-
 if __name__ == "__main__":
     samples = [
         "وين فروعكم",
@@ -1109,3 +1031,5 @@ if __name__ == "__main__":
         print(f"ANSWER: {result.get('answer')}")
         print(f"META: {result.get('meta')}")
         print("-" * 72)
+
+
