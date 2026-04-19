@@ -861,12 +861,30 @@ def resolve_branches_query(user_text: str, conversation_id: UUID | None = None) 
         and not any(t in query_norm for t in ("فرع", "فروع", "الموقع", "العنوان", "باقة", "تحليل"))
         and re.search(r"[0-9]", query_norm) is None
     )
+    non_city_short_tokens = {
+        "سلام",
+        "مرحبا",
+        "اهلا",
+        "هلا",
+        "شكرا",
+        "ممتاز",
+        "تمام",
+        "اوكي",
+        "ok",
+        "نعم",
+        "لا",
+        "متى",
+        "كيف",
+        "كم",
+    }
+    has_non_city_short_token = bool(any(token in non_city_short_tokens for token in tokens))
     is_branch_domain_query = bool(
         generic
         or specific
         or has_branch_anchor
         or city_norm
-        or (has_state and (is_city_only_query or _parse_numeric_selection(query_norm) is not None))
+        or (is_city_only_query and not has_non_city_short_token)
+        or (has_state and _parse_numeric_selection(query_norm) is not None)
     )
     if not is_branch_domain_query:
         return {

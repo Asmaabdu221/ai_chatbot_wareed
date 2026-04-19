@@ -134,6 +134,20 @@ class Settings(BaseSettings):
     STYLE_FALLBACK_MIN_SCORE: float = Field(default=0.25, description="Minimum lexical similarity score for style fallback")
     CUSTOMER_SERVICE_PHONE: str = Field(default="+XXXXXXXX", description="Customer service contact phone")
 
+    # Internal Leads Delivery
+    INTERNAL_LEADS_WEBHOOK_URL: str = Field(
+        default="",
+        description="POST endpoint for lead delivery (empty = log-only stub mode)",
+    )
+    INTERNAL_LEADS_WEBHOOK_TIMEOUT_SECONDS: int = Field(
+        default=5,
+        description="HTTP timeout for lead webhook calls",
+    )
+    INTERNAL_LEADS_API_KEY: str = Field(
+        default="",
+        description="Bearer token required to call /internal/leads endpoints",
+    )
+
     model_config = SettingsConfigDict(
         env_file=None,
         env_file_encoding="utf-8",

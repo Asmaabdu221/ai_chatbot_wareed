@@ -262,6 +262,15 @@ async def chat_endpoint(
                             _phone_result.final_reply, token_count=0,
                         )
                         db.commit()
+                    # Persist + deliver lead when phone was successfully captured
+                    if _phone_result.phone_captured and _phone_result.lead_draft:
+                        try:
+                            from app.services.lead_service import create_lead_from_draft, deliver_lead
+                            _lead = create_lead_from_draft(_phone_result.lead_draft, db)
+                            if _lead is not None:
+                                deliver_lead(_lead, db)
+                        except Exception as _lead_err:
+                            logger.warning("lead_service skipped (non-blocking): %s", _lead_err)
                     return ChatResponse(
                         reply=_phone_result.final_reply,
                         success=True,
@@ -331,6 +340,71 @@ async def chat_endpoint(
                 error=None
             )
         
+        # === RUNTIME ROUTER (branches, FAQ, results, packages, tests) ===
+        # Attempt domain-specific resolution BEFORE cache/RAG/OpenAI so
+        # follow-up selection state (e.g. "2", "23", branch name) is always respected.
+        try:
+            from app.services.runtime.runtime_router import route_runtime_message
+            _runtime_result = route_runtime_message(
+                request.message,
+                conversation_id=conversation_id,
+                faq_only_runtime_mode=True,  # enables branch/domain pipeline
+            )
+            if _runtime_result.get("matched"):
+                _runtime_reply = _runtime_result.get("reply", "")
+                _runtime_source = str(_runtime_result.get("source") or "").strip()
+                _runtime_meta = dict(_runtime_result.get("meta") or {})
+                logger.info(
+                    "runtime_router | matched=yes | route=%s | source=%s",
+                    _runtime_result.get("route"),
+                    _runtime_source,
+                )
+                # update entity memory for branch follow-ups
+                if _runtime_source == "branches":
+                    try:
+                        from app.services.runtime.entity_memory import update_entity_memory
+                        update_entity_memory(
+                            conversation_id,
+                            last_intent="branch",
+                            last_branch={
+                                "id": str(_runtime_meta.get("matched_branch_id") or _runtime_meta.get("id") or "").strip(),
+                                "label": str(_runtime_meta.get("branch_name") or "").strip(),
+                                "city": str(_runtime_meta.get("city") or "").strip(),
+                            },
+                        )
+                    except Exception as _em_err:
+                        logger.warning("entity_memory update(branch) skipped: %s", _em_err)
+                get_usage_tracker().record("runtime", 0)
+                _runtime_final = _runtime_reply
+                try:
+                    if _conv_decision is not None:
+                        from app.services.conversation_flow import apply_flow_to_reply
+                        _runtime_final = apply_flow_to_reply(
+                            _runtime_reply, _conv_decision, request.message, str(conversation_id)
+                        ).final_reply
+                except Exception as _p2b_err:
+                    logger.warning("conversation_flow phase2b(runtime) skipped: %s", _p2b_err)
+                if db is not None and conversation is not None:
+                    _save_message(db, conversation, MessageRole.ASSISTANT, _runtime_final, token_count=0)
+                    db.commit()
+                return ChatResponse(
+                    reply=_runtime_final,
+                    success=True,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    message_id=uuid4(),
+                    tokens_used=0,
+                    model="runtime",
+                    timestamp=datetime.now(),
+                    error=None,
+                )
+            logger.info(
+                "runtime_router | matched=no | route=%s | fallback=cache_rag",
+                _runtime_result.get("route"),
+            )
+        except Exception as _runtime_err:
+            logger.warning("runtime_router skipped (non-blocking): %s", _runtime_err)
+
         # === SMART CACHE CHECK (skip OpenAI if cached) ===
         cache = get_smart_cache()
         cached_reply = cache.get(request.message)
@@ -373,73 +447,6 @@ async def chat_endpoint(
                 error=None
             )
         
-        # === RUNTIME ROUTER (branches, FAQ, results, packages, tests) ===
-        # Attempt domain-specific resolution BEFORE falling back to RAG + OpenAI.
-        # matched=True  → return the domain reply (with Phase 2B CTA applied).
-        # matched=False → fall through to existing RAG / AI pipeline unchanged.
-        try:
-            from app.services.runtime.runtime_router import route_runtime_message
-            _runtime_result = route_runtime_message(
-                request.message,
-                conversation_id=conversation_id,
-                faq_only_runtime_mode=True,  # P0: enables branch/domain pipeline
-            )
-            if _runtime_result.get("matched"):
-                _runtime_reply = _runtime_result.get("reply", "")
-                _runtime_source = str(_runtime_result.get("source") or "").strip()
-                _runtime_meta = dict(_runtime_result.get("meta") or {})
-                logger.info(
-                    "runtime_router | matched=yes | route=%s | source=%s",
-                    _runtime_result.get("route"),
-                    _runtime_source,
-                )
-                # P0: update entity memory so follow-ups work (mirrors message_runtime_orchestrator)
-                if _runtime_source == "branches":
-                    try:
-                        from app.services.runtime.entity_memory import update_entity_memory
-                        update_entity_memory(
-                            conversation_id,
-                            last_intent="branch",
-                            last_branch={
-                                "id": str(_runtime_meta.get("matched_branch_id") or _runtime_meta.get("id") or "").strip(),
-                                "label": str(_runtime_meta.get("branch_name") or "").strip(),
-                                "city": str(_runtime_meta.get("city") or "").strip(),
-                            },
-                        )
-                    except Exception as _em_err:
-                        logger.warning("entity_memory update(branch) skipped: %s", _em_err)
-                get_usage_tracker().record("runtime", 0)
-                # Phase 2B: inject CTA
-                _runtime_final = _runtime_reply
-                try:
-                    if _conv_decision is not None:
-                        from app.services.conversation_flow import apply_flow_to_reply
-                        _runtime_final = apply_flow_to_reply(
-                            _runtime_reply, _conv_decision, request.message, str(conversation_id)
-                        ).final_reply
-                except Exception as _p2b_err:
-                    logger.warning("conversation_flow phase2b(runtime) skipped: %s", _p2b_err)
-                if db is not None and conversation is not None:
-                    _save_message(db, conversation, MessageRole.ASSISTANT, _runtime_final, token_count=0)
-                    db.commit()
-                return ChatResponse(
-                    reply=_runtime_final,
-                    success=True,
-                    user_id=user_id,
-                    conversation_id=conversation_id,
-                    message_id=uuid4(),
-                    tokens_used=0,
-                    model="runtime",
-                    timestamp=datetime.now(),
-                    error=None,
-                )
-            logger.info(
-                "runtime_router | matched=no | route=%s | fallback=rag",
-                _runtime_result.get("route"),
-            )
-        except Exception as _runtime_err:
-            logger.warning("runtime_router skipped (non-blocking): %s", _runtime_err)
-
         # === OPENAI API CALL ===
 
         # Prepare knowledge context: RAG (strict retrieval) or legacy

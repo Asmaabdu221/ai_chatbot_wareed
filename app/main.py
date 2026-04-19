@@ -12,6 +12,7 @@ from app.api.chat import router as chat_router
 from app.api import conversations
 from app.api.auth import router as auth_router
 from app.api.ocr import router as ocr_router
+from app.api.internal_leads import router as internal_leads_router
 from app.core.config import settings
 from app.core.logging_config import configure_logging
 from app.db import init_db
@@ -135,6 +136,7 @@ app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(conversations.router, prefix="/api", tags=["Conversations"])
 app.include_router(chat_router, prefix="/api", tags=["Chat"])
 app.include_router(ocr_router, prefix="/api", tags=["OCR"])
+app.include_router(internal_leads_router, prefix="/api", tags=["Internal Leads"])
 
 @app.get("/")
 def health_check():

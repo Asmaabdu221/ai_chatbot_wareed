@@ -11,7 +11,7 @@ Models:
 import uuid
 import enum
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 from sqlalchemy import (
     String, Boolean, Integer, Text, ForeignKey, Enum as SQLEnum, Index, DateTime, func
 )
@@ -248,3 +248,104 @@ class Message(Base, TimestampMixin):
     def __repr__(self) -> str:
         content_preview = self.content[:50] + "..." if len(self.content) > 50 else self.content
         return f"<Message(id={self.id}, role={self.role.value}, content='{content_preview}')>"
+
+
+class LeadStatus(str, enum.Enum):
+    NEW = "new"
+    DELIVERED = "delivered"
+    FAILED = "failed"
+    CLOSED = "closed"
+
+
+class Lead(Base, TimestampMixin):
+    """
+    Captured sales lead — created when a customer provides their phone number.
+    Persists the LeadDraft that was previously only held in memory.
+    """
+    __tablename__ = "leads"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        comment="Unique lead identifier",
+    )
+
+    conversation_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=False,
+        index=True,
+        comment="Conversation that produced this lead",
+    )
+
+    phone: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        comment="Customer phone number (extracted + normalised)",
+    )
+
+    latest_intent: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="",
+        comment="ConversationAction value that triggered phone collection",
+    )
+
+    latest_action: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="",
+        comment="Final action taken (ask_phone / transfer_to_human)",
+    )
+
+    summary_hint: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+        comment="First ~100 chars of the message that triggered the CTA",
+    )
+
+    source: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="chatbot",
+        comment="Origin of lead (chatbot / api / etc.)",
+    )
+
+    status: Mapped[LeadStatus] = mapped_column(
+        SQLEnum(
+            LeadStatus,
+            name="lead_status",
+            create_type=False,
+            values_callable=lambda x: [e.value for e in x],
+        ),
+        nullable=False,
+        default=LeadStatus.NEW,
+        index=True,
+        comment="Lifecycle status of the lead",
+    )
+
+    delivered_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When the lead was successfully delivered to internal system",
+    )
+
+    delivery_error: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Error message if delivery failed",
+    )
+
+    metadata_json: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Extra context as JSON string (city, branch, etc.)",
+    )
+
+    __table_args__ = (
+        Index("ix_leads_conversation_phone", "conversation_id", "phone"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<Lead(id={self.id}, phone={self.phone}, status={self.status.value})>"

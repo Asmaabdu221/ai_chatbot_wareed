@@ -599,7 +599,11 @@ def _looks_like_branch_query(text: str) -> bool:
     hints = (
         "فرع",
         "فروع",
+        "الفروع",
         "فروعكم",
+        "وين فروعكم",
+        "ابغى اعرف الفروع",
+        "أبغى أعرف الفروع",
         "موقعكم",
         "عنوانكم",
         "موقع",
@@ -2064,4 +2068,3 @@ if __name__ == "__main__":
     )
     print(f"ROUTE : {result.get('route')}")
     print(f"REPLY : {result.get('reply')}")
-
