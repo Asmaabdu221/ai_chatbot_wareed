@@ -10,14 +10,10 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import datetime, timezone
-from typing import Generator
 from unittest.mock import MagicMock, patch
 
 import pytest
-from sqlalchemy import create_engine, event
-from sqlalchemy.orm import Session, sessionmaker
 
-from app.db.base import Base
 from app.db.models import Lead, LeadStatus
 from app.services.conversation_state import LeadDraft
 from app.services.lead_service import (
@@ -28,46 +24,7 @@ from app.services.lead_service import (
     mark_lead_failed,
 )
 
-
-# ---------------------------------------------------------------------------
-# SQLite fixture — patch ENUM to use String for compatibility
-# ---------------------------------------------------------------------------
-
-@pytest.fixture(scope="module")
-def sqlite_engine():
-    engine = create_engine("sqlite:///:memory:", future=True)
-
-    # SQLite doesn't support PostgreSQL ENUM — swap to String for tests
-    from sqlalchemy import String
-    from sqlalchemy.dialects.postgresql import ENUM as PG_ENUM
-
-    @event.listens_for(engine, "connect")
-    def _connect(dbapi_conn, rec):
-        pass
-
-    # Patch LeadStatus column to use String on SQLite
-    Lead.__table__.c.status.type = String(20)
-
-    Base.metadata.create_all(engine)
-    yield engine
-    Base.metadata.drop_all(engine)
-    # Restore type after module tests complete
-    from sqlalchemy import Enum as SAEnum
-    Lead.__table__.c.status.type = SAEnum(
-        LeadStatus,
-        name="lead_status",
-        create_type=False,
-        values_callable=lambda x: [e.value for e in x],
-    )
-
-
-@pytest.fixture()
-def db(sqlite_engine) -> Generator[Session, None, None]:
-    SessionLocal = sessionmaker(bind=sqlite_engine, autocommit=False, autoflush=False)
-    session = SessionLocal()
-    yield session
-    session.rollback()
-    session.close()
+# sqlite_engine and db fixtures are provided by conftest.py
 
 
 @pytest.fixture()
@@ -234,10 +191,10 @@ def test_deliver_lead_stub_mode_logs_and_does_not_raise(db, sample_draft, caplog
         import logging
         with caplog.at_level(logging.INFO, logger="app.services.lead_service"):
             deliver_lead(lead, db)
-    # Status stays NEW in stub mode (we only log)
+    # Status is now DELIVERED in stub mode (lead is tracked as processed)
     db.expire(lead)
     refreshed = db.get(Lead, lead.id)
-    assert refreshed.status == LeadStatus.NEW
+    assert refreshed.status == LeadStatus.DELIVERED
 
 
 # ---------------------------------------------------------------------------

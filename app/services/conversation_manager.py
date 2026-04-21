@@ -316,6 +316,10 @@ def _check_urgent_transfer(text: str, route: str) -> str | None:
     for phrase in urgent_phrases:
         if _normalize_ar(phrase).lower() in norm:
             return f"urgent_phrase:{phrase[:20]}"
+            
+    if _CUSTOMER_SERVICE_RE.search(text):
+        return "customer_service_request"
+        
     return None
 
 
@@ -345,9 +349,6 @@ def _check_human_help(text: str, route: str, source: str) -> str | None:
         return "symptoms_escalation"
     if source == "symptoms_engine" or "symptom" in route:
         return "symptoms_route"
-    # Explicit customer service request
-    if _CUSTOMER_SERVICE_RE.search(text):
-        return "customer_service_request"
     return None
 
 

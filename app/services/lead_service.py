@@ -97,6 +97,7 @@ def create_lead_from_draft(
         lead.phone,
         lead.latest_intent,
     )
+    _emit("lead.created", lead)
     return lead
 
 
@@ -132,6 +133,7 @@ def mark_lead_delivered(lead_id: uuid.UUID, db: Session) -> None:
     lead.delivery_error = None
     db.commit()
     logger.info("lead_service | delivered | lead_id=%s", lead_id)
+    _emit("lead.updated", lead)
 
 
 def mark_lead_failed(lead_id: uuid.UUID, error: str, db: Session) -> None:
@@ -142,6 +144,7 @@ def mark_lead_failed(lead_id: uuid.UUID, error: str, db: Session) -> None:
     lead.delivery_error = error[:1000]
     db.commit()
     logger.warning("lead_service | failed | lead_id=%s | error=%s", lead_id, error[:200])
+    _emit("lead.delivery_failed", lead)
 
 
 # ---------------------------------------------------------------------------
@@ -160,6 +163,12 @@ def deliver_lead(lead: Lead, db: Session) -> None:
 
     if not webhook_url:
         _stub_delivery(lead, payload)
+        # Mark as delivered even in stub mode so the lead is tracked
+        if db is not None:
+            try:
+                mark_lead_delivered(lead.id, db)
+            except Exception as _stub_mark_err:
+                logger.debug("lead_service | stub mark_delivered skipped: %s", _stub_mark_err)
         return
 
     try:
@@ -189,11 +198,21 @@ def deliver_lead(lead: Lead, db: Session) -> None:
 # ---------------------------------------------------------------------------
 
 def _stub_delivery(lead: Lead, payload: dict) -> None:
-    """Log-only delivery when no webhook is configured."""
+    """Log + simulate webhook delivery when no webhook is configured.
+
+    Marks the lead as DELIVERED so downstream systems see it as handled.
+    Prints the full JSON payload to stdout for observability / future integration.
+    """
     logger.info(
         "lead_service | stub_delivery | lead_id=%s | payload=%s",
         lead.id,
         json.dumps(payload, ensure_ascii=False),
+    )
+    # Simulate webhook POST output
+    print(
+        "\n📦 [LEAD WEBHOOK SIMULATION]\n"
+        + json.dumps(payload, ensure_ascii=False, indent=2)
+        + "\n"
     )
 
 
@@ -202,3 +221,12 @@ def _parse_uuid(value: str) -> Optional[uuid.UUID]:
         return uuid.UUID(str(value))
     except (ValueError, AttributeError):
         return None
+
+
+def _emit(event_type: str, lead) -> None:
+    """Fire-and-forget realtime event. Never raises."""
+    try:
+        from app.services.lead_events import lead_event_bus, build_lead_event
+        lead_event_bus.broadcast_sync(build_lead_event(event_type, lead))
+    except Exception as exc:
+        logger.debug("lead_events | emit skipped: %s", exc)

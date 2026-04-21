@@ -1,4 +1,4 @@
-﻿"""
+"""
 Intent Classification + Routing.
 Deterministic Arabic-first heuristics with optional LLM fallback.
 """
@@ -462,9 +462,8 @@ def route(message: str) -> Tuple[str, Optional[str]]:
     if intent == "upload_report_guidance":
         return "upload_guide", ATTACHMENT_GUIDE_RESPONSE
 
-    if intent == "working_hours":
-        hours = _resolve_hours_answer(message)
-        return "working_hours", (hours or HOURS_FALLBACK_RESPONSE)
+    # working_hours is now handled by FAQ / runtime_router for richer answers
+    # (removed from question_router to prevent premature fixed-response)
 
     return "general", None
 

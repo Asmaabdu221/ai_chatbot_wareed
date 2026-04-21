@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 from pathlib import Path
@@ -63,6 +64,11 @@ async def lifespan(app: FastAPI):
         # Start Knowledge Base auto-reload (reload when JSON file changes)
         from app.services.kb_auto_reload import start_kb_auto_reload
         start_kb_auto_reload()
+
+        # Register running event loop with the lead event bus (enables SSE broadcasts)
+        from app.services.lead_events import lead_event_bus
+        lead_event_bus.set_event_loop(asyncio.get_event_loop())
+        logger.info("✅ Lead event bus ready (SSE stream: /api/internal/leads/stream)")
         
     except Exception as e:
         logger.error("Failed to initialize application: %s", str(e))

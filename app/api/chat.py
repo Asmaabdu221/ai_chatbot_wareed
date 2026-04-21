@@ -354,11 +354,50 @@ async def chat_endpoint(
                 _runtime_reply = _runtime_result.get("reply", "")
                 _runtime_source = str(_runtime_result.get("source") or "").strip()
                 _runtime_meta = dict(_runtime_result.get("meta") or {})
+                _runtime_route = str(_runtime_result.get("route") or "").strip()
                 logger.info(
                     "runtime_router | matched=yes | route=%s | source=%s",
-                    _runtime_result.get("route"),
+                    _runtime_route,
                     _runtime_source,
                 )
+
+                # --- FIX 2: Re-run conversation_manager with ACTUAL runtime route ---
+                try:
+                    from app.services.conversation_manager import decide_conversation_action
+                    _conv_decision = decide_conversation_action(
+                        request.message,
+                        detected_route=_runtime_route,
+                        runtime_source=_runtime_source,
+                        runtime_meta=_runtime_meta,
+                        runtime_reply=_runtime_reply,
+                    )
+                    logger.info(
+                        "conversation_manager(post-runtime) | action=%s | reason=%s | route=%s",
+                        _conv_decision.action.value,
+                        _conv_decision.reason,
+                        _conv_decision.detected_route,
+                    )
+                except Exception as _cm2_err:
+                    logger.warning("conversation_manager(post-runtime) skipped: %s", _cm2_err)
+
+                # --- FIX 5: Clear selection state on domain change ---
+                try:
+                    from app.services.runtime.selection_state import (
+                        load_selection_state,
+                        clear_selection_state,
+                    )
+                    _prev_sel = load_selection_state(conversation_id)
+                    _prev_domain = str(_prev_sel.get("last_selection_type") or "").strip()
+                    _curr_domain = _runtime_source  # e.g. "branches", "tests", "packages"
+                    if _prev_domain and _curr_domain and _prev_domain != _curr_domain:
+                        clear_selection_state(conversation_id)
+                        logger.info(
+                            "selection_state cleared | prev=%s | curr=%s | conversation_id=%.8s",
+                            _prev_domain, _curr_domain, str(conversation_id),
+                        )
+                except Exception as _sel_err:
+                    logger.debug("selection_state domain-change check skipped: %s", _sel_err)
+
                 # update entity memory for branch follow-ups
                 if _runtime_source == "branches":
                     try:
@@ -465,10 +504,67 @@ async def chat_endpoint(
                         include_prices=True,
                     )
                     if not has_relevant:
-                        # Below threshold: do NOT call OpenAI, return fixed message
-                        # Do NOT cache NO_INFO_MESSAGE - allows re-retrieval after code fixes
-                        logger.info("📚 RAG: no relevant info (below threshold) - returning no-info message")
+                        # --- FIX 6: LLM fallback before NO_INFO ---
+                        # RAG found nothing — try LLM with strict prompt before giving up
+                        logger.info("📚 RAG: no relevant info (below threshold) - trying strict LLM fallback")
                         get_usage_tracker().record("rag_no_match", 0)
+                        try:
+                            _strict_response = openai_service.generate_response(
+                                user_message=request.message,
+                                knowledge_context=(
+                                    "أنت مساعد مختبر وريد الطبي. أجب فقط إذا كنت متأكداً من الإجابة. "
+                                    "إذا لم تكن متأكداً، قل: لا أملك معلومات كافية عن هذا الموضوع حالياً."
+                                ),
+                                conversation_history=conversation_history,
+                            )
+                            if _strict_response["success"]:
+                                _strict_reply = _strict_response["response"]
+                                # Check if LLM admitted it doesn't know
+                                _no_info_markers = (
+                                    "لا أملك معلومات",
+                                    "ما عندي معلومات",
+                                    "لا أستطيع الإجابة",
+                                    "ليس لدي معلومات",
+                                )
+                                _llm_gave_up = any(m in _strict_reply for m in _no_info_markers)
+                                if not _llm_gave_up and len(_strict_reply.strip()) > 20:
+                                    logger.info("📚 Strict LLM fallback produced a confident answer")
+                                    # Apply CTA if needed
+                                    _rag_fb_final = _strict_reply
+                                    try:
+                                        if _conv_decision is not None:
+                                            from app.services.conversation_flow import apply_flow_to_reply
+                                            _rag_fb_final = apply_flow_to_reply(
+                                                _strict_reply, _conv_decision,
+                                                request.message, str(conversation_id),
+                                            ).final_reply
+                                    except Exception:
+                                        pass
+                                    get_usage_tracker().record(
+                                        _strict_response.get("model") or "openai",
+                                        _strict_response.get("tokens_used") or 0,
+                                    )
+                                    if db is not None and conversation is not None:
+                                        _save_message(db, conversation, MessageRole.ASSISTANT,
+                                                      _rag_fb_final,
+                                                      token_count=_strict_response.get("tokens_used"))
+                                        db.commit()
+                                    return ChatResponse(
+                                        reply=_rag_fb_final,
+                                        success=True,
+                                        user_id=user_id,
+                                        conversation_id=conversation_id,
+                                        message_id=uuid4(),
+                                        tokens_used=_strict_response.get("tokens_used") or 0,
+                                        model=_strict_response.get("model") or "openai",
+                                        timestamp=datetime.now(),
+                                        error=None,
+                                    )
+                                logger.info("📚 Strict LLM also gave up - returning NO_INFO")
+                        except Exception as _llm_fb_err:
+                            logger.warning("Strict LLM fallback failed: %s", _llm_fb_err)
+
+                        # Both RAG and LLM failed — return NO_INFO
                         if db is not None and conversation is not None:
                             _save_message(db, conversation, MessageRole.ASSISTANT, NO_INFO_MESSAGE, token_count=0)
                             db.commit()

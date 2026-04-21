@@ -338,5 +338,42 @@ export const sendVoiceMessage = async (audioBlob, userId = null, conversationId 
   return response.data;
 };
 
+/**
+ * Internal Leads — GET /api/internal/leads
+ * Requires X-Internal-Api-Key header. Returns { items, total, page, page_size }.
+ */
+export const getInternalLeads = async (apiKey, { status = null, page = 1, pageSize = 50 } = {}) => {
+  const params = { page, page_size: pageSize };
+  if (status) params.status = status;
+  const { data } = await api.get('/api/internal/leads', {
+    params,
+    headers: { 'X-Internal-Api-Key': apiKey || '' },
+    timeout: 10000,
+  });
+  return data;
+};
+
+/**
+ * Internal Leads — GET /api/internal/leads/{id}
+ */
+export const getInternalLead = async (apiKey, leadId) => {
+  const { data } = await api.get(`/api/internal/leads/${leadId}`, {
+    headers: { 'X-Internal-Api-Key': apiKey || '' },
+    timeout: 10000,
+  });
+  return data;
+};
+
+/**
+ * Internal Leads — POST /api/internal/leads/{id}/close
+ */
+export const closeInternalLead = async (apiKey, leadId) => {
+  const { data } = await api.post(`/api/internal/leads/${leadId}/close`, {}, {
+    headers: { 'X-Internal-Api-Key': apiKey || '' },
+    timeout: 10000,
+  });
+  return data;
+};
+
 export default api;
 
