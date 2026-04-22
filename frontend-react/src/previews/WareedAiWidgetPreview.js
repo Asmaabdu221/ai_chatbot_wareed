@@ -17,10 +17,41 @@ const QUICK_CHIPS = [
 const CONNECTIVITY_ERROR_MESSAGE = 'حصلت مشكلة مؤقتة في الاتصال، حاول مرة أخرى بعد قليل.';
 const TYPING_MESSAGE = 'جاري الكتابة...';
 
+const WIDGET_USER_ID_STORAGE_KEY = 'wareed_preview_widget_user_id';
+const UUID_V4_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function generateWidgetUserId() {
+  if (typeof window !== 'undefined' && window.crypto?.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+
+  // Fallback UUID v4 generator for older browsers.
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = char === 'x' ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
+}
+
+function getOrCreateWidgetUserId() {
+  if (typeof window === 'undefined') return null;
+
+  const existing = window.localStorage.getItem(WIDGET_USER_ID_STORAGE_KEY);
+  if (existing && UUID_V4_REGEX.test(existing)) {
+    return existing;
+  }
+
+  const generated = generateWidgetUserId();
+  window.localStorage.setItem(WIDGET_USER_ID_STORAGE_KEY, generated);
+  return generated;
+}
+
 export default function WareedAiWidgetPreview() {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [sessionUserId] = useState(() => getOrCreateWidgetUserId());
   const [sessionConversationId, setSessionConversationId] = useState(null);
   const [messages, setMessages] = useState(() => [
     { id: 'welcome', role: 'assistant', text: WELCOME_MESSAGE },
@@ -54,6 +85,7 @@ export default function WareedAiWidgetPreview() {
       const { data } = await api.post('/api/chat', {
         message: text,
         include_knowledge: true,
+        ...(sessionUserId ? { user_id: sessionUserId } : {}),
         ...(sessionConversationId ? { conversation_id: sessionConversationId } : {}),
       });
 
