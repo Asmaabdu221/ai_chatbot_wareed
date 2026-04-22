@@ -178,6 +178,16 @@ class Settings(BaseSettings):
         description="Maximum failed leads processed per retry worker cycle",
     )
 
+    # Redis
+    REDIS_URL: str = Field(
+        default="",
+        description="Redis connection URL for shared conversation state (e.g. rediss://... or redis://...)",
+    )
+    CONVERSATION_STATE_TTL_SECONDS: int = Field(
+        default=3600,
+        description="TTL in seconds for persisted conversation state records",
+    )
+
     model_config = SettingsConfigDict(
         env_file=None,
         env_file_encoding="utf-8",
