@@ -35,7 +35,7 @@ from app.services.runtime.packages_resolver import resolve_packages_query
 from app.services.runtime.results_engine import interpret_result_query
 from app.services.runtime.results_query_detector import analyze_result_query, looks_like_result_query
 from app.services.runtime.response_formatter import format_runtime_answer
-from app.services.runtime.selection_state import load_selection_state
+from app.services.runtime.selection_state import load_selection_state, clear_selection_state
 from app.services.runtime.runtime_fallbacks import (
     get_faq_no_match_message,
     get_out_of_scope_message,
@@ -1477,6 +1477,24 @@ def route_runtime_message(
                 is_package_like=is_package_like,
                 is_results_like=is_results_like_for_branch_context,
             )
+
+            # --- CROSS-DOMAIN BUG PREVENTION ---
+            # If active selection state exists, input is not numeric, 
+            # and a new domain is detected, clear the selection state.
+            if not is_numeric and _safe_str(state.get("last_selection_type")):
+                # Check if this query is clearly switching domains or starting a fresh query.
+                # A context follow-up (like asking for a price or details) shouldn't clear it.
+                if (
+                    is_tests_like 
+                    or is_package_like 
+                    or is_branch_like 
+                    or is_symptoms_like
+                    or _is_general_conversation_query(text)
+                    or _is_greeting_query(text)
+                ) and not (is_detail_followup or is_price_followup or is_branch_followup or is_branch_locality_followup):
+                    logger.debug("cross-domain detected -> clearing selection state for conversation %s", conversation_id)
+                    clear_selection_state(conversation_id)
+                    state = {}  # Update local state reference
 
             # Context-first routing for short follow-ups (before fallback paths).
             if (

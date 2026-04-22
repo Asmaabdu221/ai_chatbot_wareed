@@ -243,6 +243,29 @@ def run_message_runtime_orchestration(
 
     history = deps.get_history_for_ai()
 
+    # --- ADDED: INTERCEPT NUMERIC SELECTION CONTEXT ---
+    from app.services.runtime.runtime_router import _is_numeric_selection_query, _resolve_numeric_selection_from_context
+    if _is_numeric_selection_query(question_for_ai):
+        selection_result = _resolve_numeric_selection_from_context(
+            question_for_ai,
+            conversation_id=conversation_id,
+        )
+        if selection_result is not None:
+            deps.logger.info("numeric selection matched in legacy mode")
+            return deps.save_assistant_reply(str(selection_result.get("reply") or "").strip())
+
+    # Prevent cross-domain bugs: clear selection state if starting a new domain query
+    from app.services.runtime.selection_state import clear_selection_state, load_selection_state
+    current_state = load_selection_state(conversation_id)
+    if current_state.get("last_selection_type"):
+        # We are in legacy mode. Any non-numeric input that falls through to here 
+        # and isn't a simple branch/price follow-up should clear the selection.
+        # Since legacy mode relies heavily on domain-specific bypasses, it's safer to clear
+        # the state if the user asks any new question.
+        if not deps.is_simple_greeting(question_for_ai):
+            deps.logger.debug("cross-domain detected in legacy mode -> clearing selection state for conversation %s", conversation_id)
+            clear_selection_state(conversation_id)
+
     # A. GREETING
     if deps.is_simple_greeting(question_for_ai):
         print("PATH=greeting")
