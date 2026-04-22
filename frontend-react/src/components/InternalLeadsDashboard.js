@@ -441,40 +441,6 @@ export default function InternalLeadsDashboard() {
   }, [removeToast]);
 
   // ---------------------------------------------------------------------------
-  // Lead event handler (SSE)
-  // ---------------------------------------------------------------------------
-
-  const handleLeadEvent = useCallback((event) => {
-    const { event_type } = event;
-    if (!event_type || event_type === 'ping' || event_type === 'connected') return;
-
-    // Refetch from REST so active filters are respected (safer than local state mutation)
-    // apiKeyRef holds '' when using bearer auth
-    fetchLeads(apiKeyRef.current, statusFilterRef.current);
-
-    const leadData = normalizeEventToLead(event);
-
-    // Sync open detail panel immediately (no need to wait for refetch)
-    setSelectedLead((prev) =>
-      prev && prev.id === leadData.id ? { ...prev, ...leadData } : prev
-    );
-
-    // Notifications and unread count
-    if (event_type === 'lead.created') {
-      setUnreadCount((c) => c + 1);
-      addToast({ type: 'new', message: `Lead جديد — ${leadData.phone}` });
-    } else if (event_type === 'lead.delivery_failed') {
-      addToast({ type: 'error', message: `فشل تسليم Lead — ${leadData.phone}` });
-    } else if (event_type === 'lead.closed') {
-      addToast({ type: 'info', message: `تم إغلاق Lead — ${leadData.phone}` });
-    }
-  }, [addToast, fetchLeads]);
-
-  // Stable ref so the EventSource effect doesn't need handleLeadEvent in its deps
-  const handleLeadEventRef = useRef(handleLeadEvent);
-  useEffect(() => { handleLeadEventRef.current = handleLeadEvent; }, [handleLeadEvent]);
-
-  // ---------------------------------------------------------------------------
   // REST fetch (initial load + 30s authoritative sync)
   // ---------------------------------------------------------------------------
 
@@ -518,6 +484,40 @@ export default function InternalLeadsDashboard() {
       setLoading(false);
     }
   }, []);
+
+  // ---------------------------------------------------------------------------
+  // Lead event handler (SSE)
+  // ---------------------------------------------------------------------------
+
+  const handleLeadEvent = useCallback((event) => {
+    const { event_type } = event;
+    if (!event_type || event_type === 'ping' || event_type === 'connected') return;
+
+    // Refetch from REST so active filters are respected (safer than local state mutation)
+    // apiKeyRef holds '' when using bearer auth
+    fetchLeads(apiKeyRef.current, statusFilterRef.current);
+
+    const leadData = normalizeEventToLead(event);
+
+    // Sync open detail panel immediately (no need to wait for refetch)
+    setSelectedLead((prev) =>
+      prev && prev.id === leadData.id ? { ...prev, ...leadData } : prev
+    );
+
+    // Notifications and unread count
+    if (event_type === 'lead.created') {
+      setUnreadCount((c) => c + 1);
+      addToast({ type: 'new', message: `Lead جديد — ${leadData.phone}` });
+    } else if (event_type === 'lead.delivery_failed') {
+      addToast({ type: 'error', message: `فشل تسليم Lead — ${leadData.phone}` });
+    } else if (event_type === 'lead.closed') {
+      addToast({ type: 'info', message: `تم إغلاق Lead — ${leadData.phone}` });
+    }
+  }, [addToast, fetchLeads]);
+
+  // Stable ref so the EventSource effect doesn't need handleLeadEvent in its deps
+  const handleLeadEventRef = useRef(handleLeadEvent);
+  useEffect(() => { handleLeadEventRef.current = handleLeadEvent; }, [handleLeadEvent]);
 
   // Effective key: empty when using bearer (axios interceptor handles auth)
   const effectiveKey = authMode === 'bearer' ? '' : apiKey;
