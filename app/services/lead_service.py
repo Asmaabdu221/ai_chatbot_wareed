@@ -98,6 +98,13 @@ def create_lead_from_draft(
         lead.latest_intent,
     )
     _emit("lead.created", lead)
+    try:
+        from app.core.config import settings
+        if settings.CRM_SYNC_ENABLED:
+            from app.services.crm_sync_service import trigger_crm_sync_for_lead
+            trigger_crm_sync_for_lead(lead.id)
+    except Exception as exc:
+        logger.debug("crm_sync | trigger skipped: %s", exc)
     return lead
 
 

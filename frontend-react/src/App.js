@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useLayoutEffect } from 'react';
+﻿import React, { useState, useEffect, useCallback, useLayoutEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import ChatLayout from './layouts/ChatLayout';
 import AdminLayout from './layouts/AdminLayout';
@@ -11,6 +11,7 @@ import Help from './components/Help';
 import WareedAiWidgetPreview from './previews/WareedAiWidgetPreview';
 import WareedAiLeadsPreview from './previews/WareedAiLeadsPreview';
 import InternalLeadsDashboard from './components/InternalLeadsDashboard';
+import InternalAnalyticsDashboard from './components/InternalAnalyticsDashboard';
 import { formatArabicText } from './utils/arabicFormatters';
 import { isAdminUser } from './utils/adminUtils';
 import {
@@ -416,6 +417,8 @@ function App() {
       <Route path="/wareed-ai-preview" element={<WareedAiWidgetPreview />} />
       <Route path="/wareed-ai-leads-preview" element={<WareedAiLeadsPreview />} />
       <Route path="/internal/leads" element={<InternalLeadsDashboard />} />
+      <Route path="/internal/analytics" element={<InternalAnalyticsDashboard />} />
+      {/* /internal/leads handles its own auth (Bearer role OR API key form) */}
       <Route path="/" element={<RequireAuth><ChatView /></RequireAuth>} />
       <Route path="/admin/dashboard" element={<RequireAuth><AdminDashboardView /></RequireAuth>} />
       <Route path="/help" element={<RequireAuth><Help /></RequireAuth>} />

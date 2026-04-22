@@ -21,6 +21,13 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, TimestampMixin, UpdateTimestampMixin
 
 
+class UserRole(str, enum.Enum):
+    """Internal staff role. NULL on User.role = regular chat user, no internal access."""
+    ADMIN = "admin"
+    SUPERVISOR = "supervisor"
+    STAFF = "staff"
+
+
 class MessageRole(str, enum.Enum):
     """
     Message role enumeration
@@ -88,7 +95,14 @@ class User(Base, TimestampMixin):
         nullable=True,
         comment="URL or path to profile avatar image"
     )
-    
+
+    role: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+        index=True,
+        comment="Internal staff role (admin/supervisor/staff). NULL = regular chat user with no internal access.",
+    )
+
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -335,6 +349,45 @@ class Lead(Base, TimestampMixin):
         Text,
         nullable=True,
         comment="Error message if delivery failed",
+    )
+
+    crm_status: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        default="pending",
+        index=True,
+        comment="CRM sync state (pending/synced/failed/disabled)",
+    )
+
+    crm_provider: Mapped[Optional[str]] = mapped_column(
+        String(50),
+        nullable=True,
+        comment="CRM provider key used for the last sync attempt",
+    )
+
+    crm_external_id: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="External CRM lead identifier returned by provider",
+    )
+
+    crm_last_attempt_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Timestamp of the latest CRM sync attempt",
+    )
+
+    crm_error_message: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Latest CRM sync error message when crm_status=failed",
+    )
+
+    crm_retry_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        comment="Number of CRM retry attempts after initial sync failure",
     )
 
     metadata_json: Mapped[Optional[str]] = mapped_column(

@@ -70,6 +70,7 @@ class UserMeResponse(BaseModel):
     avatar_url: Optional[str] = None
     is_active: bool
     created_at: datetime
+    role: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -267,6 +268,7 @@ def me(
         avatar_url=current_user.avatar_url,
         is_active=current_user.is_active,
         created_at=current_user.created_at,
+        role=current_user.role,
     )
 
 
@@ -322,6 +324,7 @@ async def update_profile(
         avatar_url=updated.avatar_url,
         is_active=updated.is_active,
         created_at=updated.created_at,
+        role=updated.role,
     )
 
 

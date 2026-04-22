@@ -1,4 +1,4 @@
-/**
+﻿/**
  * InternalLeadsDashboard — V1.5 (Realtime)
  *
  * Staff dashboard for reviewing and actioning captured leads.
@@ -18,8 +18,10 @@
  *   3. On-screen entry form → saved to sessionStorage
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { getInternalLeads, closeInternalLead, API_BASE_URL } from '../services/api';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { getInternalLeads, closeInternalLead, retryInternalLeadCrm, getMe, API_BASE_URL } from '../services/api';
+import { getAccessToken } from '../services/auth';
 import './InternalLeadsDashboard.css';
 
 const ENV_API_KEY = process.env.REACT_APP_INTERNAL_API_KEY || '';
@@ -28,11 +30,27 @@ const REFRESH_INTERVAL_MS = 30000;
 const TOAST_DURATION_MS = 5000;
 const SSE_MAX_ERRORS = 6; // after this many consecutive errors → declare offline
 
+// Roles that may access the internal dashboard
+const INTERNAL_ROLES = new Set(['admin', 'supervisor', 'staff']);
+
+// Permissions derived from role (all roles equal for now; structure ready for differentiation)
+function rolePermissions(role) {
+  if (!INTERNAL_ROLES.has(role)) return { canView: false, canClose: false };
+  return { canView: true, canClose: true };
+}
+
 const STATUS_LABELS = {
   new: 'جديد',
   delivered: 'مُسلَّم',
   failed: 'فاشل',
   closed: 'مغلق',
+};
+
+const CRM_STATUS_LABELS = {
+  pending: 'قيد المزامنة',
+  synced: 'متزامن',
+  failed: 'فشل المزامنة',
+  disabled: 'معطّل',
 };
 
 const INTENT_LABELS = {
@@ -74,6 +92,12 @@ function normalizeEventToLead(event) {
     created_at: event.created_at,
     delivered_at: event.delivered_at,
     delivery_error: event.delivery_error,
+    crm_status: event.crm_status,
+    crm_provider: event.crm_provider,
+    crm_external_id: event.crm_external_id,
+    crm_last_attempt_at: event.crm_last_attempt_at,
+    crm_error_message: event.crm_error_message,
+    crm_retry_count: event.crm_retry_count,
   };
 }
 
@@ -85,6 +109,15 @@ function StatusBadge({ status }) {
   return (
     <span className={`ild-badge ild-badge--${status}`}>
       {STATUS_LABELS[status] || status}
+    </span>
+  );
+}
+
+function CrmStatusBadge({ status }) {
+  const effective = status || 'pending';
+  return (
+    <span className={`ild-badge ild-badge--${effective}`}>
+      {CRM_STATUS_LABELS[effective] || effective}
     </span>
   );
 }
@@ -177,7 +210,25 @@ function ApiKeyForm({ onSubmit }) {
   );
 }
 
-function LeadDetailPanel({ lead, onClose, onCloseLead, closing }) {
+function AccessDenied({ onSwitchToApiKey }) {
+  return (
+    <div className="ild-keyform-wrap" dir="rtl">
+      <div className="ild-keyform">
+        <img src="/images/wareed-logo.png" alt="وريد" className="ild-keyform__logo" />
+        <h1 className="ild-keyform__title">غير مصرح بالوصول</h1>
+        <p className="ild-keyform__sub">حسابك الحالي لا يمتلك صلاحية الوصول للوحة الـ Leads الداخلية.</p>
+        <p className="ild-keyform__sub" style={{ fontSize: '12px', marginTop: '-4px' }}>
+          تواصل مع مدير النظام لإضافة الصلاحية، أو استخدم مفتاح وصول مباشر.
+        </p>
+        <button type="button" className="ild-keyform__btn" onClick={onSwitchToApiKey}>
+          استخدام مفتاح وصول مباشر
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function LeadDetailPanel({ lead, onClose, onCloseLead, onRetryCrm, closing, retryingCrm, canClose }) {
   if (!lead) return null;
   return (
     <div className="ild-panel" dir="rtl" role="complementary" aria-label="تفاصيل الـ Lead">
@@ -207,7 +258,7 @@ function LeadDetailPanel({ lead, onClose, onCloseLead, closing }) {
           <span className="ild-panel__value ild-panel__value--mono">{lead.id}</span>
         </div>
       </div>
-      {lead.status !== 'closed' && (
+      {lead.status !== 'closed' && canClose && (
         <div className="ild-panel__footer">
           <button
             type="button"
@@ -219,6 +270,65 @@ function LeadDetailPanel({ lead, onClose, onCloseLead, closing }) {
           </button>
         </div>
       )}
+      {lead.crm_status === 'failed' && canClose && (
+        <div className="ild-panel__footer">
+          <button
+            type="button"
+            className="ild-btn ild-btn--refresh"
+            onClick={() => onRetryCrm(lead.id)}
+            disabled={retryingCrm}
+          >
+            {retryingCrm ? '...' : 'Retry CRM'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FilterBar({ filters, onChange, onClear }) {
+  const hasActive = !!(filters.q || filters.intent || filters.action || filters.dateFrom || filters.dateTo);
+  return (
+    <div className="ild-filter-bar">
+      <input
+        type="search"
+        className="ild-filter-bar__search"
+        placeholder="بحث بالهاتف أو الملخص..."
+        value={filters.q}
+        onChange={(e) => onChange({ ...filters, q: e.target.value })}
+      />
+      <select
+        className="ild-filter-bar__select"
+        value={filters.intent}
+        onChange={(e) => onChange({ ...filters, intent: e.target.value })}
+      >
+        <option value="">كل النوايا</option>
+        <option value="ask_phone">طلب حجز</option>
+        <option value="transfer_to_human">تحويل لموظف</option>
+        <option value="offer_human_help">مساعدة بشرية</option>
+      </select>
+      <div className="ild-filter-bar__dates">
+        <input
+          type="date"
+          className="ild-filter-bar__date"
+          value={filters.dateFrom}
+          onChange={(e) => onChange({ ...filters, dateFrom: e.target.value })}
+          title="من تاريخ"
+        />
+        <span className="ild-filter-bar__date-sep">—</span>
+        <input
+          type="date"
+          className="ild-filter-bar__date"
+          value={filters.dateTo}
+          onChange={(e) => onChange({ ...filters, dateTo: e.target.value })}
+          title="إلى تاريخ"
+        />
+      </div>
+      {hasActive && (
+        <button type="button" className="ild-filter-bar__clear" onClick={onClear}>
+          مسح الفلاتر ✕
+        </button>
+      )}
     </div>
   );
 }
@@ -228,7 +338,18 @@ function LeadDetailPanel({ lead, onClose, onCloseLead, closing }) {
 // ---------------------------------------------------------------------------
 
 export default function InternalLeadsDashboard() {
-  // --- API key ---
+  const navigate = useNavigate();
+
+  // --- Auth mode ---
+  // 'checking'  → resolving whether user has an internal role
+  // 'bearer'    → authenticated via JWT Bearer (role-based)
+  // 'apikey'    → authenticated via X-Internal-Api-Key
+  // 'denied'    → logged in but no internal role (prompt to switch to API key)
+  const [authMode, setAuthMode] = useState('checking');
+  const [currentUser, setCurrentUser] = useState(null);   // User from /auth/me (bearer path)
+  const [forceApiKey, setForceApiKey] = useState(false);  // user chose API key despite having no role
+
+  // --- API key (apikey auth mode) ---
   const [apiKey, setApiKey] = useState(() =>
     ENV_API_KEY || sessionStorage.getItem(SESSION_KEY) || ''
   );
@@ -242,7 +363,10 @@ export default function InternalLeadsDashboard() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedLead, setSelectedLead] = useState(null);
   const [closingIds, setClosingIds] = useState(new Set());
+  const [retryingCrmIds, setRetryingCrmIds] = useState(new Set());
   const [lastRefreshed, setLastRefreshed] = useState(null);
+  const [filters, setFilters] = useState({ q: '', intent: '', action: '', dateFrom: '', dateTo: '' });
+  const [debouncedQ, setDebouncedQ] = useState('');
 
   // --- Realtime ---
   const [connectionStatus, setConnectionStatus] = useState('connecting');
@@ -250,6 +374,57 @@ export default function InternalLeadsDashboard() {
   const [unreadCount, setUnreadCount] = useState(0);
 
   const refreshTimerRef = useRef(null);
+  const apiKeyRef = useRef(apiKey);
+  const statusFilterRef = useRef(statusFilter);
+  const effectiveFiltersRef = useRef(filters);
+
+  // --- Resolve auth mode on mount ---
+  useEffect(() => {
+    const token = getAccessToken();
+    if (!token) {
+      // Not logged in → fall back to API key path
+      setAuthMode('apikey');
+      return;
+    }
+    getMe()
+      .then((user) => {
+        if (user && INTERNAL_ROLES.has(user.role)) {
+          setCurrentUser(user);
+          setAuthMode('bearer');
+        } else if (user) {
+          // Logged in but no internal role
+          setAuthMode('denied');
+        } else {
+          setAuthMode('apikey');
+        }
+      })
+      .catch(() => setAuthMode('apikey'));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Derive permissions from current auth mode
+  const permissions = useMemo(() => {
+    if (authMode === 'bearer' && currentUser) return rolePermissions(currentUser.role);
+    if (authMode === 'apikey' && (apiKey || !ENV_API_KEY)) return { canView: true, canClose: true };
+    return { canView: false, canClose: false };
+  }, [authMode, currentUser, apiKey]);
+
+  // Debounce search query
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(filters.q), 300);
+    return () => clearTimeout(t);
+  }, [filters.q]);
+
+  // Effective filters: use debounced q but immediate values for dropdowns/dates
+  const effectiveFilters = useMemo(
+    () => ({ ...filters, q: debouncedQ }),
+    [filters, debouncedQ]
+  );
+
+  // Keep refs up-to-date so callbacks always read current values
+  // apiKeyRef holds '' when using bearer auth (effectiveKey)
+  useEffect(() => { apiKeyRef.current = authMode === 'bearer' ? '' : apiKey; }, [authMode, apiKey]);
+  useEffect(() => { statusFilterRef.current = statusFilter; }, [statusFilter]);
+  useEffect(() => { effectiveFiltersRef.current = effectiveFilters; }, [effectiveFilters]);
 
   // ---------------------------------------------------------------------------
   // Toast system
@@ -273,23 +448,13 @@ export default function InternalLeadsDashboard() {
     const { event_type } = event;
     if (!event_type || event_type === 'ping' || event_type === 'connected') return;
 
+    // Refetch from REST so active filters are respected (safer than local state mutation)
+    // apiKeyRef holds '' when using bearer auth
+    fetchLeads(apiKeyRef.current, statusFilterRef.current);
+
     const leadData = normalizeEventToLead(event);
 
-    // Merge into leads list (upsert by id — no duplicates)
-    setLeads((prev) => {
-      const idx = prev.findIndex((l) => l.id === leadData.id);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = { ...next[idx], ...leadData };
-        return next;
-      }
-      if (event_type === 'lead.created') {
-        return [leadData, ...prev];
-      }
-      return prev;
-    });
-
-    // Sync open detail panel
+    // Sync open detail panel immediately (no need to wait for refetch)
     setSelectedLead((prev) =>
       prev && prev.id === leadData.id ? { ...prev, ...leadData } : prev
     );
@@ -303,7 +468,7 @@ export default function InternalLeadsDashboard() {
     } else if (event_type === 'lead.closed') {
       addToast({ type: 'info', message: `تم إغلاق Lead — ${leadData.phone}` });
     }
-  }, [addToast]);
+  }, [addToast, fetchLeads]);
 
   // Stable ref so the EventSource effect doesn't need handleLeadEvent in its deps
   const handleLeadEventRef = useRef(handleLeadEvent);
@@ -314,25 +479,34 @@ export default function InternalLeadsDashboard() {
   // ---------------------------------------------------------------------------
 
   const fetchLeads = useCallback(async (key, filter, { resetUnread = false } = {}) => {
-    if (!key) return;
+    // key is empty string when using bearer auth (axios interceptor injects the Bearer header)
+    const af = effectiveFiltersRef.current;
     setLoading(true);
     setError(null);
     try {
       const res = await getInternalLeads(key, {
         status: filter === 'all' ? null : filter,
         pageSize: 100,
+        intent: af.intent || null,
+        action: af.action || null,
+        q: af.q || null,
+        dateFrom: af.dateFrom || null,
+        dateTo: af.dateTo || null,
       });
       setLeads(res.items || []);
       setLastRefreshed(new Date());
       setKeyRejected(false);
       if (resetUnread) setUnreadCount(0);
 
-      // Recompute stats from full result (authoritative)
-      if (filter === 'all') {
-        const s = { all: res.total || (res.items || []).length, new: 0, delivered: 0, failed: 0, closed: 0 };
-        (res.items || []).forEach((l) => { if (s[l.status] !== undefined) s[l.status]++; });
-        setStats(s);
-      }
+      // status_counts comes from backend regardless of active status tab
+      const counts = res.status_counts || {};
+      setStats({
+        all: Object.values(counts).reduce((a, b) => a + b, 0),
+        new: counts.new || 0,
+        delivered: counts.delivered || 0,
+        failed: counts.failed || 0,
+        closed: counts.closed || 0,
+      });
     } catch (err) {
       if (err.response?.status === 403) {
         setKeyRejected(true);
@@ -345,21 +519,26 @@ export default function InternalLeadsDashboard() {
     }
   }, []);
 
-  // Initial fetch + when filter changes
+  // Effective key: empty when using bearer (axios interceptor handles auth)
+  const effectiveKey = authMode === 'bearer' ? '' : apiKey;
+
+  // Initial fetch + when auth mode, status tab, or any filter changes
   useEffect(() => {
-    if (!apiKey) return;
-    fetchLeads(apiKey, statusFilter, { resetUnread: true });
-  }, [apiKey, statusFilter, fetchLeads]);
+    if (authMode === 'checking' || authMode === 'denied') return;
+    if (authMode === 'apikey' && !apiKey) return;
+    fetchLeads(effectiveKey, statusFilter, { resetUnread: true });
+  }, [authMode, effectiveKey, statusFilter, fetchLeads, effectiveFilters]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 30-second authoritative polling (fallback even when SSE is live)
   useEffect(() => {
-    if (!apiKey) return;
+    if (authMode === 'checking' || authMode === 'denied') return;
+    if (authMode === 'apikey' && !apiKey) return;
     refreshTimerRef.current = setInterval(
-      () => fetchLeads(apiKey, statusFilter),
+      () => fetchLeads(effectiveKey, statusFilter),
       REFRESH_INTERVAL_MS
     );
     return () => clearInterval(refreshTimerRef.current);
-  }, [apiKey, statusFilter, fetchLeads]);
+  }, [authMode, effectiveKey, statusFilter, fetchLeads]);
 
   // Sync selected lead when polling updates the list
   useEffect(() => {
@@ -374,14 +553,19 @@ export default function InternalLeadsDashboard() {
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
-    if (!apiKey) return;
+    if (authMode === 'checking' || authMode === 'denied') return;
+    if (authMode === 'apikey' && !apiKey) return;
 
-    const url = `${API_BASE_URL}/api/internal/leads/stream?api_key=${encodeURIComponent(apiKey)}`;
+    // Bearer path: pass JWT via ?token= (EventSource cannot send Authorization header)
+    const sseUrl = authMode === 'bearer'
+      ? `${API_BASE_URL}/api/internal/leads/stream?token=${encodeURIComponent(getAccessToken() || '')}`
+      : `${API_BASE_URL}/api/internal/leads/stream?api_key=${encodeURIComponent(apiKey)}`;
+
     let es = null;
     let errorCount = 0;
 
     function connect() {
-      es = new window.EventSource(url);
+      es = new window.EventSource(sseUrl);
 
       es.onopen = () => {
         setConnectionStatus('live');
@@ -411,7 +595,7 @@ export default function InternalLeadsDashboard() {
 
     connect();
     return () => { if (es) es.close(); };
-  }, [apiKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [authMode, apiKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------------------------------------------------------
   // Actions
@@ -437,18 +621,28 @@ export default function InternalLeadsDashboard() {
   function handleFilterChange(key) {
     setStatusFilter(key);
     setSelectedLead(null);
-    if (key === 'new') setUnreadCount(0); // mark as seen
+    if (key === 'new') setUnreadCount(0);
+  }
+
+  function handleFiltersChange(newFilters) {
+    setFilters(newFilters);
+    setSelectedLead(null);
+  }
+
+  function handleClearFilters() {
+    setFilters({ q: '', intent: '', action: '', dateFrom: '', dateTo: '' });
+    setSelectedLead(null);
   }
 
   function handleManualRefresh() {
     setUnreadCount(0);
-    fetchLeads(apiKey, statusFilter, { resetUnread: true });
+    fetchLeads(effectiveKey, statusFilter, { resetUnread: true });
   }
 
   async function handleCloseLead(leadId) {
     setClosingIds((prev) => new Set([...prev, leadId]));
     try {
-      const updated = await closeInternalLead(apiKey, leadId);
+      const updated = await closeInternalLead(effectiveKey, leadId);
       setLeads((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
       if (selectedLead?.id === updated.id) setSelectedLead(updated);
     } catch {
@@ -462,13 +656,43 @@ export default function InternalLeadsDashboard() {
     }
   }
 
+  async function handleRetryCrm(leadId) {
+    setRetryingCrmIds((prev) => new Set([...prev, leadId]));
+    try {
+      const updated = await retryInternalLeadCrm(effectiveKey, leadId);
+      setLeads((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+      if (selectedLead?.id === updated.id) setSelectedLead(updated);
+    } catch {
+      setError('تعذّرت إعادة محاولة مزامنة CRM.');
+    } finally {
+      setRetryingCrmIds((prev) => {
+        const next = new Set(prev);
+        next.delete(leadId);
+        return next;
+      });
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
 
-  if (!apiKey || keyRejected) {
+  // Auth-state gates
+  if (authMode === 'checking') {
+    return <div className="ild-keyform-wrap" dir="rtl"><div className="ild-keyform"><p>جاري التحقق من الصلاحيات...</p></div></div>;
+  }
+  if (authMode === 'denied' && !forceApiKey) {
+    return <AccessDenied onSwitchToApiKey={() => setForceApiKey(true)} />;
+  }
+  // forceApiKey=true falls through to API key form below
+  if ((authMode === 'apikey' || forceApiKey) && (!apiKey || keyRejected)) {
     return <ApiKeyForm onSubmit={handleSaveApiKey} />;
   }
+
+  const hasActiveFilters = !!(
+    effectiveFilters.q || effectiveFilters.intent || effectiveFilters.action ||
+    effectiveFilters.dateFrom || effectiveFilters.dateTo
+  );
 
   const statTabs = [
     { key: 'all', label: 'الكل', count: stats.all },
@@ -510,7 +734,20 @@ export default function InternalLeadsDashboard() {
           >
             {loading ? '...' : '↺ تحديث'}
           </button>
-          {!ENV_API_KEY && (
+          <button
+            type="button"
+            className="ild-btn ild-btn--signout"
+            onClick={() => navigate('/internal/analytics')}
+            title="لوحة التحليلات"
+          >
+            📊 تحليلات
+          </button>
+          {authMode === 'bearer' && currentUser && (
+            <span className="ild-header__user-role" title={currentUser.email || ''}>
+              {currentUser.role}
+            </span>
+          )}
+          {authMode !== 'bearer' && !ENV_API_KEY && (
             <button type="button" className="ild-btn ild-btn--signout" onClick={handleClearApiKey}>
               خروج
             </button>
@@ -531,6 +768,13 @@ export default function InternalLeadsDashboard() {
         ))}
       </div>
 
+      {/* Filter bar */}
+      <FilterBar
+        filters={filters}
+        onChange={handleFiltersChange}
+        onClear={handleClearFilters}
+      />
+
       {/* Error banner */}
       {error && (
         <div className="ild-error-banner" role="alert">
@@ -549,8 +793,13 @@ export default function InternalLeadsDashboard() {
             </div>
           ) : leads.length === 0 ? (
             <div className="ild-empty">
-              <p className="ild-empty__icon">📭</p>
-              <p>لا توجد نتائج</p>
+              <p className="ild-empty__icon">{hasActiveFilters ? '🔍' : '📭'}</p>
+              <p>{hasActiveFilters ? 'لا توجد نتائج تطابق الفلاتر المحددة' : 'لا توجد Leads بعد'}</p>
+              {hasActiveFilters && (
+                <button type="button" className="ild-btn ild-btn--link" onClick={handleClearFilters}>
+                  مسح الفلاتر
+                </button>
+              )}
             </div>
           ) : (
             <table className="ild-table" data-testid="leads-table">
@@ -560,8 +809,9 @@ export default function InternalLeadsDashboard() {
                   <th>نية التواصل</th>
                   <th>ملخص الطلب</th>
                   <th>المصدر</th>
-                  <th>الحالة</th>
                   <th>وقت الاستلام</th>
+                  <th>الحالة</th>
+                  <th>CRM</th>
                   <th />
                 </tr>
               </thead>
@@ -584,10 +834,11 @@ export default function InternalLeadsDashboard() {
                     <td>{formatIntent(lead.latest_intent)}</td>
                     <td className="ild-table__hint">{lead.summary_hint || '—'}</td>
                     <td>{lead.source}</td>
-                    <td><StatusBadge status={lead.status} /></td>
                     <td className="ild-table__date">{formatDate(lead.created_at)}</td>
+                    <td><StatusBadge status={lead.status} /></td>
+                    <td><CrmStatusBadge status={lead.crm_status} /></td>
                     <td>
-                      {lead.status !== 'closed' && (
+                      {lead.status !== 'closed' && permissions.canClose && (
                         <button
                           type="button"
                           className="ild-btn ild-btn--inline-close"
@@ -611,7 +862,10 @@ export default function InternalLeadsDashboard() {
             lead={selectedLead}
             onClose={() => setSelectedLead(null)}
             onCloseLead={handleCloseLead}
+            onRetryCrm={handleRetryCrm}
             closing={closingIds.has(selectedLead.id)}
+            retryingCrm={retryingCrmIds.has(selectedLead.id)}
+            canClose={permissions.canClose}
           />
         )}
       </div>

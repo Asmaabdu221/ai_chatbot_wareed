@@ -1,4 +1,4 @@
-"""
+﻿"""
 Lead Event Bus — thread-safe asyncio pub/sub for realtime internal lead events.
 
 Architecture
@@ -144,4 +144,10 @@ def build_lead_event(event_type: str, lead) -> dict:
         "created_at": _iso(lead.created_at),
         "delivered_at": _iso(getattr(lead, "delivered_at", None)),
         "delivery_error": getattr(lead, "delivery_error", None),
+        "crm_status": getattr(lead, "crm_status", None),
+        "crm_provider": getattr(lead, "crm_provider", None),
+        "crm_external_id": getattr(lead, "crm_external_id", None),
+        "crm_last_attempt_at": _iso(getattr(lead, "crm_last_attempt_at", None)),
+        "crm_error_message": getattr(lead, "crm_error_message", None),
+        "crm_retry_count": getattr(lead, "crm_retry_count", 0),
     }

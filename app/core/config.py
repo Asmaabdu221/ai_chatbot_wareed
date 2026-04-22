@@ -148,6 +148,36 @@ class Settings(BaseSettings):
         description="Bearer token required to call /internal/leads endpoints",
     )
 
+    # CRM Sync
+    CRM_SYNC_ENABLED: bool = Field(
+        default=False,
+        description="Enable CRM sync pipeline for newly captured leads",
+    )
+    CRM_PROVIDER: str = Field(
+        default="dummy",
+        description="CRM provider key (dummy | real placeholder)",
+    )
+    CRM_SYNC_MAX_RETRIES: int = Field(
+        default=3,
+        description="Maximum CRM retries after initial sync failure",
+    )
+    CRM_RETRY_WORKER_ENABLED: bool = Field(
+        default=True,
+        description="Enable background worker for automatic CRM retries",
+    )
+    CRM_RETRY_WORKER_INTERVAL_SECONDS: int = Field(
+        default=30,
+        description="Retry worker polling interval in seconds",
+    )
+    CRM_RETRY_BASE_DELAY_SECONDS: int = Field(
+        default=30,
+        description="Base backoff delay in seconds for CRM retries",
+    )
+    CRM_RETRY_BATCH_SIZE: int = Field(
+        default=25,
+        description="Maximum failed leads processed per retry worker cycle",
+    )
+
     model_config = SettingsConfigDict(
         env_file=None,
         env_file_encoding="utf-8",

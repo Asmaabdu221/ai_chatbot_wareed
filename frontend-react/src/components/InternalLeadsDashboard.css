@@ -1,4 +1,4 @@
-/* =============================================================
+﻿/* =============================================================
    InternalLeadsDashboard — V1.5 (Realtime)
    Internal-tool style: clean, readable, functional.
    Uses global CSS variables from index.css.
@@ -811,4 +811,148 @@
 
 [data-theme="dark"] .ild-table__row--new {
   border-right-color: #166534;
+}
+
+/* ── Filter bar ── */
+.ild-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-lg);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  flex-direction: row-reverse;
+  flex-wrap: wrap;
+}
+
+.ild-filter-bar__search {
+  flex: 1;
+  min-width: 160px;
+  max-width: 280px;
+  padding: 6px var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-family: inherit;
+  direction: rtl;
+  text-align: right;
+  outline: none;
+  transition: border-color var(--transition-base);
+}
+
+.ild-filter-bar__search:focus {
+  border-color: var(--brand-500);
+}
+
+.ild-filter-bar__select {
+  padding: 6px var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-family: inherit;
+  direction: rtl;
+  outline: none;
+  cursor: pointer;
+  transition: border-color var(--transition-base);
+}
+
+.ild-filter-bar__select:focus {
+  border-color: var(--brand-500);
+}
+
+.ild-filter-bar__dates {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  direction: rtl;
+}
+
+.ild-filter-bar__date-sep {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.ild-filter-bar__date {
+  padding: 6px var(--space-sm);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+  transition: border-color var(--transition-base);
+}
+
+.ild-filter-bar__date:focus {
+  border-color: var(--brand-500);
+}
+
+.ild-filter-bar__clear {
+  padding: 6px var(--space-sm);
+  background: none;
+  border: 1px solid #fca5a5;
+  border-radius: var(--radius-md);
+  color: #b91c1c;
+  font-size: var(--text-xs);
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--transition-base);
+}
+
+.ild-filter-bar__clear:hover {
+  background: #fff1f2;
+}
+
+[data-theme="dark"] .ild-filter-bar__clear {
+  border-color: rgba(252, 165, 165, 0.3);
+  color: #fca5a5;
+}
+
+[data-theme="dark"] .ild-filter-bar__clear:hover {
+  background: rgba(185, 28, 28, 0.15);
+}
+
+/* ── User role badge in header ── */
+.ild-header__user-role {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  background: var(--brand-50);
+  border: 1px solid var(--brand-200);
+  color: var(--brand-700);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+}
+
+[data-theme="dark"] .ild-header__user-role {
+  background: rgba(var(--brand-500-rgb, 99, 102, 241), 0.12);
+  border-color: rgba(var(--brand-500-rgb, 99, 102, 241), 0.25);
+  color: var(--brand-300);
+}
+
+/* ── Link-style button (used in empty state) ── */
+.ild-btn--link {
+  background: none;
+  border: none;
+  color: var(--brand-500);
+  font-size: var(--text-sm);
+  font-family: inherit;
+  cursor: pointer;
+  padding: var(--space-xs) 0;
+  text-decoration: underline;
+}
+
+.ild-btn--link:hover {
+  color: var(--brand-600);
 }

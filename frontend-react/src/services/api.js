@@ -1,4 +1,4 @@
-import axios from "axios";
+﻿import axios from "axios";
 import { getAccessToken } from "./auth";
 
 const API_BASE_URL =
@@ -342,9 +342,18 @@ export const sendVoiceMessage = async (audioBlob, userId = null, conversationId 
  * Internal Leads — GET /api/internal/leads
  * Requires X-Internal-Api-Key header. Returns { items, total, page, page_size }.
  */
-export const getInternalLeads = async (apiKey, { status = null, page = 1, pageSize = 50 } = {}) => {
+export const getInternalLeads = async (apiKey, {
+  status = null, page = 1, pageSize = 50,
+  intent = null, action = null, q = null,
+  dateFrom = null, dateTo = null,
+} = {}) => {
   const params = { page, page_size: pageSize };
   if (status) params.status = status;
+  if (intent) params.latest_intent = intent;
+  if (action) params.latest_action = action;
+  if (q) params.q = q;
+  if (dateFrom) params.date_from = dateFrom;
+  if (dateTo) params.date_to = dateTo;
   const { data } = await api.get('/api/internal/leads', {
     params,
     headers: { 'X-Internal-Api-Key': apiKey || '' },
@@ -375,5 +384,32 @@ export const closeInternalLead = async (apiKey, leadId) => {
   return data;
 };
 
-export default api;
+/**
+ * Internal Leads — POST /api/internal/leads/{id}/crm/retry
+ */
+export const retryInternalLeadCrm = async (apiKey, leadId) => {
+  const { data } = await api.post(`/api/internal/leads/${leadId}/crm/retry`, {}, {
+    headers: { 'X-Internal-Api-Key': apiKey || '' },
+    timeout: 10000,
+  });
+  return data;
+};
 
+/**
+ * Internal Analytics — GET /api/internal/analytics/leads
+ */
+export const getLeadAnalytics = async (apiKey, { dateFrom = null, dateTo = null } = {}) => {
+  const params = {};
+  if (dateFrom) params.date_from = dateFrom;
+  if (dateTo) params.date_to = dateTo;
+  const headers = {};
+  if (apiKey) headers['X-Internal-Api-Key'] = apiKey;
+  const { data } = await api.get('/api/internal/analytics/leads', {
+    params,
+    headers,
+    timeout: 15000,
+  });
+  return data;
+};
+
+export default api;

@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import logging
 import time
 from pathlib import Path
@@ -14,6 +14,7 @@ from app.api import conversations
 from app.api.auth import router as auth_router
 from app.api.ocr import router as ocr_router
 from app.api.internal_leads import router as internal_leads_router
+from app.api.internal_analytics import router as internal_analytics_router
 from app.core.config import settings
 from app.core.logging_config import configure_logging
 from app.db import init_db
@@ -69,6 +70,8 @@ async def lifespan(app: FastAPI):
         from app.services.lead_events import lead_event_bus
         lead_event_bus.set_event_loop(asyncio.get_event_loop())
         logger.info("✅ Lead event bus ready (SSE stream: /api/internal/leads/stream)")
+        from app.services.crm_retry_worker import start_crm_retry_worker
+        start_crm_retry_worker()
         
     except Exception as e:
         logger.error("Failed to initialize application: %s", str(e))
@@ -80,6 +83,11 @@ async def lifespan(app: FastAPI):
     try:
         from app.services.kb_auto_reload import stop_kb_auto_reload
         stop_kb_auto_reload()
+    except Exception:
+        pass
+    try:
+        from app.services.crm_retry_worker import stop_crm_retry_worker
+        stop_crm_retry_worker()
     except Exception:
         pass
     logger.info("Application shutdown")
@@ -143,6 +151,7 @@ app.include_router(conversations.router, prefix="/api", tags=["Conversations"])
 app.include_router(chat_router, prefix="/api", tags=["Chat"])
 app.include_router(ocr_router, prefix="/api", tags=["OCR"])
 app.include_router(internal_leads_router, prefix="/api", tags=["Internal Leads"])
+app.include_router(internal_analytics_router, prefix="/api", tags=["Internal Analytics"])
 
 @app.get("/")
 def health_check():

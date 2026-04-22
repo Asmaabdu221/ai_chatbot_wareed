@@ -1,4 +1,4 @@
-"""
+﻿"""
 Internal Leads API — staff/dashboard integration endpoint.
 
 All routes require an `X-Internal-Api-Key` header matching
@@ -21,42 +21,32 @@ import asyncio
 import json
 import logging
 import uuid
-from datetime import datetime
-from typing import List, Optional
+from datetime import date, datetime
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.permissions import require_internal_access, require_internal_access_sse
 from app.db import get_db
-from app.db.models import Lead, LeadStatus
+from app.db.models import Lead, LeadStatus, User
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/internal/leads", tags=["internal-leads"])
 
 
 # ---------------------------------------------------------------------------
-# Auth helpers
+# Auth note
 # ---------------------------------------------------------------------------
-
-def _require_api_key(x_internal_api_key: str = Header(default="")) -> None:
-    """Dependency for non-SSE routes (reads from header only)."""
-    expected = (settings.INTERNAL_LEADS_API_KEY or "").strip()
-    if not expected:
-        return  # dev mode: no key configured → open
-    if x_internal_api_key != expected:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid API key")
-
-
-def _check_key(key: str) -> None:
-    """Validate key value directly (used where the source varies)."""
-    expected = (settings.INTERNAL_LEADS_API_KEY or "").strip()
-    if not expected:
-        return
-    if key != expected:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid API key")
+# All routes use require_internal_access (from app.core.permissions).
+# That dependency accepts JWT Bearer with internal role OR X-Internal-Api-Key header.
+# The SSE stream uses require_internal_access_sse which additionally accepts
+# ?token= and ?api_key= query params (EventSource cannot send custom headers).
+# The old _require_api_key / _check_key helpers are removed.
 
 
 # ---------------------------------------------------------------------------
@@ -75,6 +65,12 @@ class LeadOut(BaseModel):
     created_at: Optional[datetime]
     delivered_at: Optional[datetime]
     delivery_error: Optional[str]
+    crm_status: Optional[str] = None
+    crm_provider: Optional[str] = None
+    crm_external_id: Optional[str] = None
+    crm_last_attempt_at: Optional[datetime] = None
+    crm_error_message: Optional[str] = None
+    crm_retry_count: int = 0
 
     class Config:
         from_attributes = True
@@ -85,15 +81,44 @@ class LeadsListOut(BaseModel):
     total: int
     page: int
     page_size: int
+    status_counts: Dict[str, int] = {}
+
+
+# ---------------------------------------------------------------------------
+# Date parsing helper
+# ---------------------------------------------------------------------------
+
+def _parse_date_param(value: str, param_name: str, *, end_of_day: bool = False) -> Optional[datetime]:
+    """Parse YYYY-MM-DD or ISO 8601 string. Returns None for empty input. Raises 400 on invalid."""
+    if not value or not value.strip():
+        return None
+    value = value.strip()
+    try:
+        if "T" in value or " " in value:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        d = date.fromisoformat(value)
+        if end_of_day:
+            return datetime(d.year, d.month, d.day, 23, 59, 59)
+        return datetime(d.year, d.month, d.day, 0, 0, 0)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid {param_name}: {value!r} — expected YYYY-MM-DD or ISO 8601",
+        )
 
 
 # ---------------------------------------------------------------------------
 # Routes — list and SSE (declared before /{lead_id} to avoid shadowing)
 # ---------------------------------------------------------------------------
 
-@router.get("", response_model=LeadsListOut, dependencies=[Depends(_require_api_key)])
+@router.get("", response_model=LeadsListOut, dependencies=[Depends(require_internal_access)])
 def list_leads(
     status_filter: Optional[str] = Query(None, alias="status"),
+    latest_intent: Optional[str] = Query(None),
+    latest_action: Optional[str] = Query(None),
+    q: Optional[str] = Query(None, description="Search by phone or summary_hint"),
+    date_from: Optional[str] = Query(None, description="Inclusive lower bound on created_at (YYYY-MM-DD or ISO 8601)"),
+    date_to: Optional[str] = Query(None, description="Inclusive upper bound on created_at (YYYY-MM-DD or ISO 8601)"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -101,43 +126,93 @@ def list_leads(
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available (demo mode)")
 
-    q = db.query(Lead)
+    # Normalize: FastAPI Query() objects are left unevaluated when the route function is
+    # called directly (e.g., in tests).  Cast everything to its expected primitive type.
+    def _s(v) -> Optional[str]:
+        return v if isinstance(v, str) else None
+
+    def _i(v, default: int) -> int:
+        return v if isinstance(v, int) else default
+
+    status_filter = _s(status_filter)
+    latest_intent = _s(latest_intent)
+    latest_action = _s(latest_action)
+    q = _s(q)
+    date_from = _s(date_from)
+    date_to = _s(date_to)
+    page = _i(page, 1)
+    page_size = _i(page_size, 20)
+
+    # Parse dates upfront so validation errors surface before any DB queries
+    dt_from = _parse_date_param(date_from, "date_from") if date_from else None
+    dt_to = _parse_date_param(date_to, "date_to", end_of_day=True) if date_to else None
+
+    def _apply_common_filters(query):
+        """Filters shared by both the status-count query and the main query."""
+        if latest_intent:
+            query = query.filter(Lead.latest_intent == latest_intent)
+        if latest_action:
+            query = query.filter(Lead.latest_action == latest_action)
+        if q:
+            term = f"%{q}%"
+            query = query.filter(
+                or_(Lead.phone.ilike(term), Lead.summary_hint.ilike(term))
+            )
+        if dt_from is not None:
+            query = query.filter(Lead.created_at >= dt_from)
+        if dt_to is not None:
+            query = query.filter(Lead.created_at <= dt_to)
+        return query
+
+    # Status counts omit the status filter so all tabs remain meaningful
+    counts_rows = _apply_common_filters(
+        db.query(Lead.status, func.count(Lead.id)).group_by(Lead.status)
+    ).all()
+    status_counts: Dict[str, int] = {
+        (s.value if hasattr(s, "value") else str(s)): c
+        for s, c in counts_rows
+    }
+
+    # Main query (with optional status filter on top of common filters)
+    main_q = _apply_common_filters(db.query(Lead))
     if status_filter:
         try:
-            q = q.filter(Lead.status == LeadStatus(status_filter))
+            main_q = main_q.filter(Lead.status == LeadStatus(status_filter))
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Invalid status: {status_filter!r}")
 
-    total = q.count()
+    total = main_q.count()
     items = (
-        q.order_by(Lead.created_at.desc())
+        main_q.order_by(Lead.created_at.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
     )
-    return LeadsListOut(items=items, total=total, page=page, page_size=page_size)
+    return LeadsListOut(
+        items=items, total=total, page=page, page_size=page_size,
+        status_counts=status_counts,
+    )
 
 
 @router.get("/stream")
 async def leads_stream(
     request: Request,
-    api_key: str = Query(default="", description="API key (EventSource cannot set custom headers)"),
-    x_internal_api_key: str = Header(default=""),
+    _auth: Optional[User] = Depends(require_internal_access_sse),
 ) -> StreamingResponse:
     """
     Server-Sent Events stream for realtime lead lifecycle events.
 
-    EventSource (browser native API) cannot send custom headers, so the API key
-    may be passed as ?api_key=... query parameter as an alternative to the header.
+    Authentication (EventSource cannot send custom headers):
+      • Authorization: Bearer <token>  — JWT with internal role (preferred)
+      • ?token=<JWT>                   — JWT via query param for EventSource
+      • X-Internal-Api-Key header      — API key (legacy)
+      • ?api_key=<key>                 — API key via query param for EventSource
 
     Events emitted:
       lead.created, lead.updated, lead.delivery_failed, lead.closed
     Control events (client should ignore):
       connected, ping
     """
-    # Accept key from header (API calls) OR query param (EventSource)
-    key = x_internal_api_key or api_key
-    _check_key(key)
 
     from app.services.lead_events import lead_event_bus
 
@@ -180,7 +255,7 @@ async def leads_stream(
 # Routes — per-lead operations (must be declared after /stream)
 # ---------------------------------------------------------------------------
 
-@router.get("/{lead_id}", response_model=LeadOut, dependencies=[Depends(_require_api_key)])
+@router.get("/{lead_id}", response_model=LeadOut, dependencies=[Depends(require_internal_access)])
 def get_lead(lead_id: uuid.UUID, db: Session = Depends(get_db)) -> LeadOut:
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available (demo mode)")
@@ -190,7 +265,7 @@ def get_lead(lead_id: uuid.UUID, db: Session = Depends(get_db)) -> LeadOut:
     return lead
 
 
-@router.post("/{lead_id}/close", response_model=LeadOut, dependencies=[Depends(_require_api_key)])
+@router.post("/{lead_id}/close", response_model=LeadOut, dependencies=[Depends(require_internal_access)])
 def close_lead(lead_id: uuid.UUID, db: Session = Depends(get_db)) -> LeadOut:
     if db is None:
         raise HTTPException(status_code=503, detail="Database not available (demo mode)")
@@ -209,4 +284,26 @@ def close_lead(lead_id: uuid.UUID, db: Session = Depends(get_db)) -> LeadOut:
     except Exception as exc:
         logger.debug("lead_events | emit skipped: %s", exc)
 
+    return lead
+
+
+@router.post("/{lead_id}/crm/retry", response_model=LeadOut, dependencies=[Depends(require_internal_access)])
+def retry_lead_crm_sync(lead_id: uuid.UUID, db: Session = Depends(get_db)) -> LeadOut:
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database not available (demo mode)")
+    lead = db.get(Lead, lead_id)
+    if lead is None:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    from app.services.crm_sync_service import retry_crm_sync
+    result = retry_crm_sync(lead_id, db)
+    if not result.get("ok"):
+        reason = result.get("reason")
+        if reason == "lead_not_failed":
+            raise HTTPException(status_code=409, detail="CRM retry allowed only when crm_status=failed")
+        if reason == "max_retries_reached":
+            raise HTTPException(status_code=409, detail="CRM retry limit reached")
+        raise HTTPException(status_code=500, detail="CRM retry failed")
+
+    db.refresh(lead)
     return lead
