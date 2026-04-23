@@ -22,6 +22,52 @@ const WIDGET_CONVERSATION_ID_STORAGE_KEY = 'wareed_preview_widget_conversation_i
 const UUID_V4_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+const URL_AND_MD_LINK_REGEX = /(\[.*?\]\(https?:\/\/[^\s)]+\)|https?:\/\/[^\s]+)/g;
+const TRAILING_PUNCTUATION_REGEX = /[).,!?؛:،]+$/;
+
+function renderMessageText(text) {
+  if (!text) return null;
+  const lines = String(text).split('\n');
+  return lines.map((line, lineIdx) => {
+    const tokens = line.split(URL_AND_MD_LINK_REGEX);
+    const lineContent = tokens.map((token, tokenIdx) => {
+      if (!token) return null;
+      const key = `t-${lineIdx}-${tokenIdx}`;
+
+      const mdLinkMatch = token.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
+      if (mdLinkMatch) {
+        return (
+          <a key={key} href={mdLinkMatch[2]} target="_blank" rel="noopener noreferrer">
+            {mdLinkMatch[1]}
+          </a>
+        );
+      }
+
+      if (/^https?:\/\//i.test(token)) {
+        const trimmed = token.replace(TRAILING_PUNCTUATION_REGEX, '');
+        const trailing = token.slice(trimmed.length);
+        return (
+          <React.Fragment key={key}>
+            <a href={trimmed} target="_blank" rel="noopener noreferrer">
+              {trimmed}
+            </a>
+            {trailing}
+          </React.Fragment>
+        );
+      }
+
+      return <React.Fragment key={key}>{token}</React.Fragment>;
+    });
+
+    return (
+      <React.Fragment key={`l-${lineIdx}`}>
+        {lineContent}
+        {lineIdx < lines.length - 1 && <br />}
+      </React.Fragment>
+    );
+  });
+}
+
 function generateWidgetUserId() {
   if (typeof window !== 'undefined' && window.crypto?.randomUUID) {
     return window.crypto.randomUUID();
@@ -273,7 +319,7 @@ export default function WareedAiWidgetPreview() {
                   message.isTyping ? ' wareed-widget-preview__message--typing' : ''
                 }`}
               >
-                <p>{message.text}</p>
+                <p dir="auto" style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{renderMessageText(message.text)}</p>
               </div>
             ))}
           </div>
