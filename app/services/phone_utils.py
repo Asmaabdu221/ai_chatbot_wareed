@@ -74,6 +74,14 @@ def _is_valid(normalized: str) -> bool:
     return False
 
 
+def detect_phone(text: str) -> str | None:
+    text = text.strip()
+    match = re.search(r'(?:\+?966|0)?5\d{8}', text)
+    if match:
+        return match.group()
+    return None
+
+
 def extract_phone(text: str) -> Optional[str]:
     """
     Extract the first valid phone number from *text*.
@@ -83,19 +91,7 @@ def extract_phone(text: str) -> Optional[str]:
     """
     if not text:
         return None
-
-    western = _to_western(text.strip())
-
-    # Conservative: if the message looks like a sentence, don't mine it for numbers
-    if len(western.split()) > 8:
-        return None
-
-    for match in _PHONE_RE.findall(western):
-        candidate = normalize_phone(match)
-        if _is_valid(candidate):
-            return candidate
-
-    return None
+    return detect_phone(text)
 
 
 def is_phone_message(text: str) -> bool:
