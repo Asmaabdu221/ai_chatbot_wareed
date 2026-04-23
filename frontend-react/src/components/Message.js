@@ -27,46 +27,58 @@ const parseContent = (text) => {
   });
 };
 
-const URL_REGEX = /(https?:\/\/[^\s]+)/g;
 const TRAILING_PUNCTUATION_REGEX = /[).,!?؛:،]+$/;
 
-const renderTextWithLinks = (text, keyPrefix) => {
-  const value = String(text || '');
-  const parts = value.split(URL_REGEX);
-
-  return parts.filter(Boolean).map((part, idx) => {
-    const key = `${keyPrefix}-link-${idx}`;
-    if (!/^https?:\/\//i.test(part)) {
-      return <React.Fragment key={key}>{part}</React.Fragment>;
-    }
-
-    const trimmed = part.replace(TRAILING_PUNCTUATION_REGEX, '');
-    const trailing = part.slice(trimmed.length);
-    return (
-      <React.Fragment key={key}>
-        <a href={trimmed} target="_blank" rel="noopener noreferrer">
-          {trimmed}
-        </a>
-        {trailing}
-      </React.Fragment>
-    );
-  });
-};
-
-const renderInlineMarkdown = (text, keyPrefix) => {
-  const tokens = String(text || '').split(/(\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|_[^_]+_|`[^`]+`)/g);
-  return tokens.filter(Boolean).map((token, idx) => {
+const renderInlineElements = (text, keyPrefix) => {
+  // Regex matches Markdown links, raw URLs, bold, italic, and code blocks in order.
+  // Matching URLs first prevents inline formatting characters (like underscores in URLs) from breaking the link.
+  const tokens = String(text || '').split(/(\[.*?\]\(https?:\/\/[^\s)]+\)|https?:\/\/[^\s]+|\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|_[^_]+_|`[^`]+`)/g);
+  
+  return tokens.map((token, idx) => {
+    if (!token) return null;
     const key = `${keyPrefix}-inline-${idx}`;
+
+    // 1. Markdown Link: [text](url)
+    const mdLinkMatch = token.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
+    if (mdLinkMatch) {
+      return (
+        <a key={key} href={mdLinkMatch[2]} target="_blank" rel="noopener noreferrer">
+          {mdLinkMatch[1]}
+        </a>
+      );
+    }
+
+    // 2. Raw URL
+    if (/^https?:\/\//i.test(token)) {
+      const trimmed = token.replace(TRAILING_PUNCTUATION_REGEX, '');
+      const trailing = token.slice(trimmed.length);
+      return (
+        <React.Fragment key={key}>
+          <a href={trimmed} target="_blank" rel="noopener noreferrer">
+            {trimmed}
+          </a>
+          {trailing}
+        </React.Fragment>
+      );
+    }
+
+    // 3. Bold
     if ((token.startsWith('**') && token.endsWith('**')) || (token.startsWith('__') && token.endsWith('__'))) {
-      return <strong key={key}>{renderTextWithLinks(token.slice(2, -2), `${key}-strong`)}</strong>;
+      return <strong key={key}>{renderInlineElements(token.slice(2, -2), `${key}-strong`)}</strong>;
     }
+
+    // 4. Italic
     if ((token.startsWith('*') && token.endsWith('*')) || (token.startsWith('_') && token.endsWith('_'))) {
-      return <em key={key}>{renderTextWithLinks(token.slice(1, -1), `${key}-em`)}</em>;
+      return <em key={key}>{renderInlineElements(token.slice(1, -1), `${key}-em`)}</em>;
     }
+
+    // 5. Code
     if (token.startsWith('`') && token.endsWith('`')) {
       return <code key={key}>{token.slice(1, -1)}</code>;
     }
-    return <React.Fragment key={key}>{renderTextWithLinks(token, `${key}-plain`)}</React.Fragment>;
+
+    // 6. Plain text
+    return <React.Fragment key={key}>{token}</React.Fragment>;
   });
 };
 
@@ -82,15 +94,15 @@ const renderAssistantTextBlock = (text, keyPrefix) => {
       return <br key={key} />;
     }
     if (heading) {
-      return <div key={key} className="text-block"><strong>{renderInlineMarkdown(heading[1], key)}</strong></div>;
+      return <div key={key} className="text-block"><strong>{renderInlineElements(heading[1], key)}</strong></div>;
     }
     if (unordered) {
-      return <div key={key} className="text-block">• {renderInlineMarkdown(unordered[1], key)}</div>;
+      return <div key={key} className="text-block">• {renderInlineElements(unordered[1], key)}</div>;
     }
     if (ordered) {
-      return <div key={key} className="text-block">{ordered[1]}. {renderInlineMarkdown(ordered[2], key)}</div>;
+      return <div key={key} className="text-block">{ordered[1]}. {renderInlineElements(ordered[2], key)}</div>;
     }
-    return <div key={key} className="text-block">{renderInlineMarkdown(line, key)}</div>;
+    return <div key={key} className="text-block">{renderInlineElements(line, key)}</div>;
   });
 };
 
@@ -255,7 +267,7 @@ const Message = ({
                 ? <CodeBlock key={i} code={b.content} lang={b.lang} />
                 : (
                   isUser
-                    ? <span key={i} className="text-block">{renderTextWithLinks(b.content, `user-${i}`)}</span>
+                    ? <span key={i} className="text-block">{renderInlineElements(b.content, `user-${i}`)}</span>
                     : <React.Fragment key={i}>{renderAssistantTextBlock(b.content, `assistant-${i}`)}</React.Fragment>
                 )
             ))}

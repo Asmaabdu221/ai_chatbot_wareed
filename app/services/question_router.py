@@ -143,7 +143,7 @@ _KEYWORDS_BY_INTENT = {
     "greeting": ["السلام", "اهلا", "مرحباً", "مرحبا", "هلا", "hi", "hello"],
     "services_overview": ["خدماتكم", "ايش تقدمون", "وش تقدمون", "services", "service"],
     "test_availability": ["متوفر", "متاحة", "متاح", "عندكم", "هل يوجد", "availability", "available"],
-    "test_definition": ["ما هو", "وش هو", "وش معنى", "ما معنى", "يعني ايش", "شرح تحليل", "definition", "meaning"],
+    "test_definition": ["ما هو", "وش هو", "وش معنى", "ما معنى", "يعني ايش", "شرح تحليل", "definition", "meaning", "ماهو", "ماهي", "ما هي", "ايش هو", "ايش هي", "وش هي", "شنو هو", "شنو هي", "ابي اعرف", "ابغى اعرف", "معلومات عن"],
     "test_preparation": ["تحضير", "صيام", "قبل التحليل", "preparation", "fasting"],
     "sample_type": ["نوع العينة", "دم او بول", "sample", "specimen"],
     "pricing_inquiry": ["سعر", "تكلفة", "كم يكلف", "الأسعار", "price", "cost"],
@@ -165,7 +165,7 @@ LAB_CODE_STOPWORDS = {
     "and", "the", "for", "with", "from", "this", "that", "what", "mean", "meaning",
     "test", "analysis", "pdf", "doc", "docx", "txt", "jpg", "jpeg", "png", "upload",
 }
-DEFINITION_PHRASES = ["وش معنى", "ما معنى", "يعني ايش", "ما هو", "شرح تحليل", "شرح فحص", "اشرح تحليل", "اشرح فحص"]
+DEFINITION_PHRASES = ["وش معنى", "ما معنى", "يعني ايش", "ما هو", "شرح تحليل", "شرح فحص", "اشرح تحليل", "اشرح فحص", "ماهو", "ماهي", "ما هي", "ايش هو", "ايش هي", "وش هي", "شنو هو", "شنو هي", "ابي اعرف", "ابغى اعرف", "معلومات عن"]
 AVAILABILITY_PHRASES = ["عندكم", "متوفر", "متاحة", "متاح", "هل يوجد", "هل متوفر", "هل متاحة", "توفرون"]
 PREPARATION_PHRASES = ["تحضير", "صيام", "قبل التحليل", "قبل الفحص", "fasting", "preparation"]
 SAMPLE_PHRASES = ["نوع العينة", "دم او بول", "دم أو بول", "sample", "specimen"]

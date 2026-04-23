@@ -1590,9 +1590,10 @@ def _format_compact_test_fallback_reply(question: str, rag_results: list[dict]) 
 
     if desc:
         return f"{name}: {desc}"
+    fallback_msg = f"عذراً، الوصف الدقيق غير متوفر حالياً لـ {name}."
     if prep:
-        return f"{name}: {prep}"
-    return f"Ø­Ø§Ù„ÙŠØ§Ù‹ Ù…Ø§ Ø¹Ù†Ø¯Ù†Ø§ ØªÙØ§ØµÙŠÙ„ ÙƒØ§ÙÙŠØ© Ø¹Ù† {name}."
+        fallback_msg += f" ولكن للمعلومية تحضير هذا التحليل هو: {prep}"
+    return fallback_msg
 
 
 def _runtime_tests_rag_reply(question: str, expanded_query: str, history: list | None) -> str | None:

@@ -305,6 +305,7 @@ def _score_query_type(query_norm: str, hints: tuple[str, ...], strong_keywords: 
     if not query_tokens:
         return 0.0
 
+    max_overlap_score = 0.0
     for hint in hints:
         h = _norm(hint)
         if not h:
@@ -326,7 +327,11 @@ def _score_query_type(query_norm: str, hints: tuple[str, ...], strong_keywords: 
         if hint_tokens:
             overlap = query_tokens.intersection(hint_tokens)
             if overlap:
-                score += min(0.8, 0.25 * len(overlap))
+                overlap_val = min(0.8, 0.25 * len(overlap))
+                if overlap_val > max_overlap_score:
+                    max_overlap_score = overlap_val
+
+    score += max_overlap_score
 
     # Strong keyword boost per intent.
     for key in strong_keywords:

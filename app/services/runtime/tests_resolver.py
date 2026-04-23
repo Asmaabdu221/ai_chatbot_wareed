@@ -542,13 +542,6 @@ def _format_test_explanation(record: dict[str, Any]) -> str:
     summary = _safe_str(record.get("summary_ar"))
     if summary:
         return summary
-    content = _safe_str(record.get("content_clean"))
-    if content:
-        normalized = content.replace("\n", " ").strip()
-        sentence_parts = [p.strip() for p in normalized.split(".") if p.strip()]
-        if sentence_parts:
-            return ". ".join(sentence_parts[:2]).strip() + "."
-        return normalized[:280].rstrip()
     return _DEFINITION_NOT_FOUND_REPLY
 
 
