@@ -179,10 +179,9 @@ def _load_lead_context_messages(
     db: Optional[Session],
     conversation_id: UUID,
     cutoff_at: Optional[datetime],
-    limit: int = 8,
 ) -> List[Dict]:
     """
-    Load only user/assistant messages for one conversation_id up to cutoff time.
+    Load full user/assistant conversation journey for one conversation_id up to cutoff time.
     """
     if db is None:
         return []
@@ -198,8 +197,47 @@ def _load_lead_context_messages(
     if cutoff_at is not None:
         query = query.filter(Message.created_at <= cutoff_at)
     rows = query.all()
-    rows = rows[-max(5, min(limit, 8)) :]
     return [{"role": row.role.value, "content": row.content} for row in rows if row.content]
+
+
+def _select_summary_messages(messages: List[Dict], max_turns: int = 80) -> List[Dict]:
+    """
+    Keep the full journey when short.
+    For very long conversations, keep:
+      - early turns (start context),
+      - key topic transitions,
+      - final turns (contact + phone capture path),
+    while preserving chronological order.
+    """
+    if len(messages) <= max_turns:
+        return messages
+
+    head_n = 18
+    tail_n = 24
+    key_terms = (
+        "تحليل", "فيتامين", "باقة", "بكج", "سعر", "تكلفة",
+        "فرع", "فروع", "الرياض", "جدة", "الدمام", "الخبر",
+        "نتيجة", "نتائج", "تفسير",
+        "خدمة العملاء", "موظف", "تواصل", "اتصال",
+    )
+
+    keep_indexes = set(range(min(head_n, len(messages))))
+    keep_indexes.update(range(max(0, len(messages) - tail_n), len(messages)))
+
+    for idx, m in enumerate(messages):
+        text = str(m.get("content") or "").strip().lower()
+        if not text:
+            continue
+        if any(term in text for term in key_terms):
+            keep_indexes.add(idx)
+            # Include neighbor turns to keep local context around the transition.
+            if idx - 1 >= 0:
+                keep_indexes.add(idx - 1)
+            if idx + 1 < len(messages):
+                keep_indexes.add(idx + 1)
+
+    selected = [messages[i] for i in sorted(keep_indexes)]
+    return selected[-max_turns:] if len(selected) > max_turns else selected
 
 
 def _build_messages_text(messages: List[Dict]) -> str:
@@ -337,8 +375,33 @@ def _rule_based_lead_summary_ar(messages: List[Dict]) -> str:
     Deterministic Arabic fallback summary from isolated conversation messages only.
     """
     user_texts = [str(m.get("content") or "").strip() for m in messages if m.get("role") == "user"]
+    if not user_texts:
+        return "استفسار عام وترك رقمه للمتابعة."
+
     joined = " ".join(user_texts)
     normalized = joined.lower()
+
+    # Track first occurrence index per topic to preserve journey order.
+    topic_positions: List[tuple[int, str]] = []
+    for idx, text in enumerate(user_texts):
+        t = text.lower()
+        if ("تحليل" in text or "test" in t):
+            topic_positions.append((idx, "test"))
+        if ("باقة" in text or "بكج" in t):
+            topic_positions.append((idx, "package"))
+        if ("نتيجة" in text or "نتائج" in text or "تفسير" in text):
+            topic_positions.append((idx, "results"))
+        if ("فرع" in text or "فروع" in text or "branch" in t):
+            topic_positions.append((idx, "branch"))
+        if re.search(r"(خدمة العملاء|موظف|دعم|تواصل|اتصال|اكلم|اكلمه|اتصلوا|تتصلون)", text):
+            topic_positions.append((idx, "support"))
+        if re.search(r"(سعر|تكلفة|كم)", text):
+            topic_positions.append((idx, "price"))
+
+    ordered_topics: List[str] = []
+    for _, topic in sorted(topic_positions, key=lambda x: x[0]):
+        if topic not in ordered_topics:
+            ordered_topics.append(topic)
 
     city = next((c for c in _LEAD_CITIES_AR if c in joined), None)
 
@@ -354,34 +417,40 @@ def _rule_based_lead_summary_ar(messages: List[Dict]) -> str:
         if not re.search(r"(كم|سعر|تكلفة|النتيجة|نتائج|الفروع|فرع)", candidate, flags=re.IGNORECASE):
             test_name = candidate
 
-    contact_requested = bool(
-        re.search(r"(تواصل|اتصال|يتواصل|خدمة العملاء|موظف|اكلم|اكلمه|تتصلون|اتصلوا)", joined)
-    )
-    has_phone = bool(_LEAD_SUMMARY_PHONE_RE.search(joined))
+    branch_number = None
+    branch_num_match = re.search(r"(?:فرع\s*رقم|رقم\s*الفرع|اختار\s*رقم)\s*(\d+)", joined)
+    if branch_num_match:
+        branch_number = branch_num_match.group(1)
 
-    if package_name:
-        summary = f"العميل استفسر عن باقة {package_name}"
-    elif "باقة" in joined or "بكج" in normalized:
-        summary = "العميل استفسر عن باقة"
-    elif test_name:
-        summary = f"العميل استفسر عن تحليل {test_name}"
-    elif "تحليل" in joined or "test" in normalized:
-        summary = "العميل استفسر عن تحليل"
-    elif "نتيجة" in joined or "نتائج" in joined or "تفسير" in joined:
-        summary = "العميل استفسر عن تفسير النتائج"
-    elif city:
-        summary = f"العميل استفسر عن فروع {city}"
-    elif "فرع" in joined or "فروع" in joined or "branch" in normalized:
-        summary = "العميل استفسر عن الفروع"
-    elif re.search(r"(خدمة العملاء|موظف|دعم)", joined):
-        summary = "العميل استفسر عن خدمة العملاء"
-    else:
-        summary = "العميل لديه استفسار عام"
+    parts: List[str] = []
+    for i, topic in enumerate(ordered_topics):
+        prefix = "العميل استفسر عن " if i == 0 else "ثم "
+        if topic == "test":
+            parts.append(prefix + (f"تحليل {test_name}" if test_name else "تحليل"))
+        elif topic == "package":
+            parts.append(prefix + (f"باقة {package_name}" if package_name else "باقة"))
+        elif topic == "results":
+            parts.append(prefix + "تفسير النتائج")
+        elif topic == "branch":
+            if city:
+                parts.append(prefix + f"الفروع في {city}")
+            else:
+                parts.append(prefix + "الفروع")
+        elif topic == "support":
+            parts.append(prefix + "التواصل مع خدمة العملاء")
+        elif topic == "price":
+            parts.append(prefix + "السعر")
 
-    if contact_requested:
-        summary += " ثم طلب التواصل"
-    if has_phone:
-        summary += " وترك رقمه للمتابعة"
+    if not parts:
+        parts.append("العميل لديه استفسار عام")
+
+    summary = "، ".join(parts)
+    if branch_number:
+        summary += f"، وذكر اختيار الفرع رقم {branch_number}"
+    if re.search(r"(لم يتم الرد|ما رد|ما تجاوب|ما اشتغل|خطأ|غلط|ما نفع)", joined):
+        summary += "، وظهر تعثر في الرد على إحدى النقاط"
+    if _LEAD_SUMMARY_PHONE_RE.search(joined):
+        summary += "، وترك رقمه للمتابعة"
     return summary + "."
 
 
@@ -401,34 +470,37 @@ def _build_lead_summary_text_ar(
             db=db,
             conversation_id=conv_uuid,
             cutoff_at=cutoff_at,
-            limit=8,
-        )
-        logger.info(
-            "lead_summary | conversation_id=%s | loaded_count=%s | cutoff_at=%s",
-            lead_conversation_id,
-            len(isolated_messages),
-            cutoff_at.isoformat() if cutoff_at else None,
         )
     # Fallback for demo/no-db mode still uses current conversation context only.
     if not isolated_messages:
         isolated_messages = [
             m for m in (fallback_messages or [])
             if str(m.get("role") or "") in {"user", "assistant"} and str(m.get("content") or "").strip()
-        ][-8:]
+        ]
 
-    messages_text = _build_messages_text(isolated_messages)
+    loaded_count = len(isolated_messages)
+    summary_messages = _select_summary_messages(isolated_messages, max_turns=80)
+    logger.info(
+        "lead_summary | conversation_id=%s | loaded_count=%s | selected_count=%s | cutoff_at=%s",
+        lead_conversation_id,
+        loaded_count,
+        len(summary_messages),
+        cutoff_at.isoformat() if cutoff_at else None,
+    )
+
+    messages_text = _build_messages_text(summary_messages)
     if not messages_text:
         logger.info(
             "lead_summary | conversation_id=%s | message_count=%s | text_len=%s | preview=%s | path=fallback_no_messages",
             lead_conversation_id,
-            len(isolated_messages),
+            len(summary_messages),
             0,
             "",
         )
         return "استفسار عام وترك رقمه للمتابعة."
 
     llm_summary = _try_llm_lead_summary_ar(
-        isolated_messages,
+        summary_messages,
         conversation_id=lead_conversation_id,
     )
     if llm_summary:
@@ -436,11 +508,11 @@ def _build_lead_summary_text_ar(
     logger.info(
         "lead_summary | conversation_id=%s | message_count=%s | text_len=%s | preview=%s | path=fallback_rule_based",
         lead_conversation_id,
-        len(isolated_messages),
+        len(summary_messages),
         len(messages_text),
         messages_text[:300],
     )
-    return _rule_based_lead_summary_ar(isolated_messages)
+    return _rule_based_lead_summary_ar(summary_messages)
 
 
 def _get_client_id(http_request: Request, user_id: Optional[UUID] = None) -> str:
