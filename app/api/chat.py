@@ -302,6 +302,17 @@ async def chat_endpoint(
         except Exception as _phase2a_err:
             logger.warning("conversation_flow phase2a skipped (non-blocking): %s", _phase2a_err)
 
+        def _persist_lead_from_flow(_flow_result) -> None:
+            if not _flow_result or not _flow_result.phone_captured or not _flow_result.lead_draft:
+                return
+            try:
+                from app.services.lead_service import create_lead_from_draft, deliver_lead
+                _lead = create_lead_from_draft(_flow_result.lead_draft, db)
+                if _lead is not None:
+                    deliver_lead(_lead, db)
+            except Exception as _lead_err:
+                logger.warning("lead_service skipped (non-blocking): %s", _lead_err)
+
         # === QUESTION ROUTING (price → fixed response, no API) ===
         route_type, fixed_reply = route_question(request.message)
 
@@ -336,9 +347,11 @@ async def chat_endpoint(
             try:
                 if _conv_decision is not None:
                     from app.services.conversation_flow import apply_flow_to_reply
-                    _fixed_final = apply_flow_to_reply(
+                    _fixed_flow = apply_flow_to_reply(
                         fixed_reply, _conv_decision, request.message, str(conversation_id)
-                    ).final_reply
+                    )
+                    _persist_lead_from_flow(_fixed_flow)
+                    _fixed_final = _fixed_flow.final_reply
             except Exception as _p2b_err:
                 logger.warning("conversation_flow phase2b(router) skipped: %s", _p2b_err)
             if db is not None and conversation is not None:
@@ -436,9 +449,11 @@ async def chat_endpoint(
                 try:
                     if _conv_decision is not None:
                         from app.services.conversation_flow import apply_flow_to_reply
-                        _runtime_final = apply_flow_to_reply(
+                        _runtime_flow = apply_flow_to_reply(
                             _runtime_reply, _conv_decision, request.message, str(conversation_id)
-                        ).final_reply
+                        )
+                        _persist_lead_from_flow(_runtime_flow)
+                        _runtime_final = _runtime_flow.final_reply
                 except Exception as _p2b_err:
                     logger.warning("conversation_flow phase2b(runtime) skipped: %s", _p2b_err)
                 if db is not None and conversation is not None:
@@ -473,9 +488,11 @@ async def chat_endpoint(
             try:
                 if _conv_decision is not None:
                     from app.services.conversation_flow import apply_flow_to_reply
-                    _cached_final = apply_flow_to_reply(
+                    _cached_flow = apply_flow_to_reply(
                         cached_reply, _conv_decision, request.message, str(conversation_id)
-                    ).final_reply
+                    )
+                    _persist_lead_from_flow(_cached_flow)
+                    _cached_final = _cached_flow.final_reply
             except Exception as _p2b_err:
                 logger.warning("conversation_flow phase2b(cache) skipped: %s", _p2b_err)
             if db is not None and conversation is not None:
@@ -552,10 +569,12 @@ async def chat_endpoint(
                                     try:
                                         if _conv_decision is not None:
                                             from app.services.conversation_flow import apply_flow_to_reply
-                                            _rag_fb_final = apply_flow_to_reply(
+                                            _rag_fb_flow = apply_flow_to_reply(
                                                 _strict_reply, _conv_decision,
                                                 request.message, str(conversation_id),
-                                            ).final_reply
+                                            )
+                                            _persist_lead_from_flow(_rag_fb_flow)
+                                            _rag_fb_final = _rag_fb_flow.final_reply
                                     except Exception:
                                         pass
                                     get_usage_tracker().record(
@@ -639,9 +658,11 @@ async def chat_endpoint(
             try:
                 if _conv_decision is not None:
                     from app.services.conversation_flow import apply_flow_to_reply
-                    _ai_final = apply_flow_to_reply(
+                    _ai_flow = apply_flow_to_reply(
                         ai_response["response"], _conv_decision, request.message, str(conversation_id)
-                    ).final_reply
+                    )
+                    _persist_lead_from_flow(_ai_flow)
+                    _ai_final = _ai_flow.final_reply
             except Exception as _p2b_err:
                 logger.warning("conversation_flow phase2b(ai) skipped: %s", _p2b_err)
 

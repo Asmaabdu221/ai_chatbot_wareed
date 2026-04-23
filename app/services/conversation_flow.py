@@ -45,7 +45,7 @@ from app.services.cta_templates import (
     PHONE_ATTEMPT_SOFT,
     get_ask_phone_cta,
 )
-from app.services.phone_utils import extract_phone, is_phone_attempt, should_exit_awaiting_phone
+from app.services.phone_utils import detect_phone, extract_phone, is_phone_attempt, should_exit_awaiting_phone
 
 logger = logging.getLogger(__name__)
 
@@ -217,6 +217,34 @@ def apply_flow_to_reply(
     state = store.get(conversation_id)
     state_before = state.state
     action = decision.action
+
+    # ---- GLOBAL PHONE INTERCEPT (works even when state is IDLE) ------------
+    phone = detect_phone(user_text or "")
+    if phone:
+        logger.info("[LEAD] phone_detected=%s", phone)
+        lead_draft = LeadDraft(
+            phone=phone,
+            conversation_id=conversation_id,
+            latest_intent=action.value if action else "",
+            summary_hint=user_text[:100],
+            status="ready",
+        )
+        store.update(
+            conversation_id,
+            state=StateEnum.PHONE_RECEIVED,
+            phone=phone,
+            lead_draft=lead_draft,
+            pending_action="",
+            pending_intent_summary="",
+        )
+        return FlowResult(
+            final_reply="تم استلام رقمك، سيتواصل معك أحد المختصين قريبًا.",
+            state_before=state_before,
+            state_after=StateEnum.PHONE_RECEIVED,
+            phone_captured=True,
+            phone=phone,
+            lead_draft=lead_draft,
+        )
 
     # ---- ANSWER_ONLY --------------------------------------------------------
     if action == ConversationAction.ANSWER_ONLY:
