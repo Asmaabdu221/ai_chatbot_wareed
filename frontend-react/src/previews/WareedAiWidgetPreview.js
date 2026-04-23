@@ -18,6 +18,7 @@ const CONNECTIVITY_ERROR_MESSAGE = 'حصلت مشكلة مؤقتة في الات
 const TYPING_MESSAGE = 'جاري الكتابة...';
 
 const WIDGET_USER_ID_STORAGE_KEY = 'wareed_preview_widget_user_id';
+const WIDGET_CONVERSATION_ID_STORAGE_KEY = 'wareed_preview_widget_conversation_id';
 const UUID_V4_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -47,12 +48,34 @@ function getOrCreateWidgetUserId() {
   return generated;
 }
 
+function getStoredConversationId() {
+  if (typeof window === 'undefined') return null;
+
+  const existing = window.localStorage.getItem(WIDGET_CONVERSATION_ID_STORAGE_KEY);
+  if (existing && UUID_V4_REGEX.test(existing)) {
+    return existing;
+  }
+
+  return null;
+}
+
+function setStoredConversationId(conversationId) {
+  if (typeof window === 'undefined') return;
+
+  if (conversationId && UUID_V4_REGEX.test(conversationId)) {
+    window.localStorage.setItem(WIDGET_CONVERSATION_ID_STORAGE_KEY, conversationId);
+    return;
+  }
+
+  window.localStorage.removeItem(WIDGET_CONVERSATION_ID_STORAGE_KEY);
+}
+
 export default function WareedAiWidgetPreview() {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const [sessionUserId] = useState(() => getOrCreateWidgetUserId());
-  const [sessionConversationId, setSessionConversationId] = useState(null);
+  const [sessionUserId, setSessionUserId] = useState(() => getOrCreateWidgetUserId());
+  const [sessionConversationId, setSessionConversationId] = useState(() => getStoredConversationId());
   const [messages, setMessages] = useState(() => [
     { id: 'welcome', role: 'assistant', text: WELCOME_MESSAGE },
   ]);
@@ -82,19 +105,36 @@ export default function WareedAiWidgetPreview() {
     setIsSending(true);
 
     try {
+      // Always read continuity IDs from storage at send time (state is only a UI mirror).
+      const stableUserId = getOrCreateWidgetUserId();
+      const stableConversationId = getStoredConversationId();
+
+      if (stableUserId && stableUserId !== sessionUserId) {
+        setSessionUserId(stableUserId);
+      }
+      if (stableConversationId && stableConversationId !== sessionConversationId) {
+        setSessionConversationId(stableConversationId);
+      }
+
+      console.info('[Widget continuity] /api/chat payload IDs', {
+        user_id: stableUserId || null,
+        conversation_id: stableConversationId || null,
+      });
+
       const { data } = await api.post('/api/chat', {
         message: text,
         include_knowledge: true,
-        ...(sessionUserId ? { user_id: sessionUserId } : {}),
-        ...(sessionConversationId ? { conversation_id: sessionConversationId } : {}),
+        ...(stableUserId ? { user_id: stableUserId } : {}),
+        ...(stableConversationId ? { conversation_id: stableConversationId } : {}),
       });
 
       const assistantText =
         (data?.reply || data?.response || '').trim() || CONNECTIVITY_ERROR_MESSAGE;
       const assistantId = data?.message_id || `msg_${messageCounterRef.current++}`;
 
-      // Pin the conversation_id so the backend can maintain state across turns.
-      if (data?.conversation_id && !sessionConversationId) {
+      // Pin and persist conversation_id so continuity survives refresh/re-render.
+      if (data?.conversation_id && UUID_V4_REGEX.test(data.conversation_id)) {
+        setStoredConversationId(data.conversation_id);
         setSessionConversationId(data.conversation_id);
       }
 
