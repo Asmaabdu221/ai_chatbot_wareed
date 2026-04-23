@@ -148,13 +148,23 @@ export const uploadAvatar = async (file) => {
  */
 export const sendChatMessage = async (message, userId = null, conversationId = null, includeKnowledge = true) => {
   try {
+    // 🔥 تثبيت conversation_id
+    let convId = localStorage.getItem("conv_id");
+
+    if (!convId) {
+      convId = "conv_" + Date.now();
+      localStorage.setItem("conv_id", convId);
+    }
+
     const response = await api.post("/api/chat", {
       message,
       user_id: userId,
-      conversation_id: conversationId,
+      conversation_id: convId, // ✅ هنا الحل
       include_knowledge: includeKnowledge,
     });
+
     return response.data;
+
   } catch (error) {
     if (error.response) {
       const detail = error.response.data?.detail;

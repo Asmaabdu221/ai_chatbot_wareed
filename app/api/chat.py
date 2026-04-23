@@ -169,6 +169,22 @@ def _get_client_id(http_request: Request, user_id: Optional[UUID] = None) -> str
     return "unknown"
 
 
+def _normalize_selection_domain(value: str) -> str:
+    """Normalize selection/runtime domains so cross-domain clearing is consistent."""
+    domain = str(value or "").strip().lower()
+    aliases = {
+        "branch": "branch",
+        "branches": "branch",
+        "test": "test",
+        "tests": "test",
+        "tests_business": "test",
+        "package": "package",
+        "packages": "package",
+        "packages_business": "package",
+    }
+    return aliases.get(domain, domain)
+
+
 # Endpoints
 @router.post("/chat", response_model=ChatResponse, summary="Chat with AI Assistant")
 async def chat_endpoint(
@@ -387,8 +403,10 @@ async def chat_endpoint(
                         clear_selection_state,
                     )
                     _prev_sel = load_selection_state(conversation_id)
-                    _prev_domain = str(_prev_sel.get("last_selection_type") or "").strip()
-                    _curr_domain = _runtime_source  # e.g. "branches", "tests", "packages"
+                    _prev_domain = _normalize_selection_domain(
+                        str(_prev_sel.get("last_selection_type") or "").strip()
+                    )
+                    _curr_domain = _normalize_selection_domain(_runtime_source)
                     if _prev_domain and _curr_domain and _prev_domain != _curr_domain:
                         clear_selection_state(conversation_id)
                         logger.info(
