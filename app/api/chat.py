@@ -191,7 +191,7 @@ def _load_lead_context_messages(
         .filter(
             Message.conversation_id == conversation_id,
             Message.deleted_at.is_(None),
-            Message.role.in_([MessageRole.USER, MessageRole.ASSISTANT]),
+            Message.role.in_([MessageRole.USER.value, MessageRole.ASSISTANT.value]),
         )
         .order_by(Message.created_at.asc())
     )
@@ -202,7 +202,25 @@ def _load_lead_context_messages(
     return [{"role": row.role.value, "content": row.content} for row in rows if row.content]
 
 
-def _try_llm_lead_summary_ar(messages: List[Dict]) -> Optional[str]:
+def _build_messages_text(messages: List[Dict]) -> str:
+    lines: List[str] = []
+    for m in messages:
+        role = str(m.get("role") or "").strip().lower()
+        content = str(m.get("content") or "").strip()
+        if not content:
+            continue
+        if role == "user":
+            lines.append(f"User: {content}")
+        elif role == "assistant":
+            lines.append(f"Assistant: {content}")
+    return "\n".join(lines)
+
+
+def _try_llm_lead_summary_ar(
+    messages: List[Dict],
+    *,
+    conversation_id: str,
+) -> Optional[str]:
     """
     LLM one-line Arabic summary from isolated conversation messages only.
     """
@@ -214,15 +232,18 @@ def _try_llm_lead_summary_ar(messages: List[Dict]) -> Optional[str]:
         if getattr(openai_service, "client", None) is None:
             return None
 
-        convo_text = "\n".join(
-            f"{'العميل' if m.get('role') == 'user' else 'المساعد'}: {str(m.get('content') or '').strip()}"
-            for m in messages
-            if str(m.get("content") or "").strip()
-        )
-        if not convo_text:
+        messages_text = _build_messages_text(messages)
+        if not messages_text:
+            logger.info(
+                "lead_summary | conversation_id=%s | message_count=%s | text_len=%s | preview=%s | path=fallback_empty_text",
+                conversation_id,
+                len(messages),
+                0,
+                "",
+            )
             return None
 
-        prompt = (
+        prompt_template = (
             "أنت نظام تلخيص احترافي لمحادثات العملاء في مختبر طبي.\n\n"
             "مهمتك:\n"
             "قراءة المحادثة كاملة بين العميل والمساعد، ثم كتابة ملخص عربي واضح ومهني ومفيد لفريق المتابعة أو المبيعات.\n\n"
@@ -281,8 +302,16 @@ def _try_llm_lead_summary_ar(messages: List[Dict]) -> Optional[str]:
             "- العميل استفسر عن باقة... وسأل أيضًا عن...\n"
             "- العميل طلب التواصل مع خدمة العملاء وترك رقمه للمتابعة.\n\n"
             "الآن اقرأ المحادثة التالية واكتب الملخص النهائي فقط، بدون شرح إضافي:\n\n"
-            f"{convo_text}\n\n"
+            "{conversation_messages}\n\n"
             "الملخص:"
+        )
+        prompt = prompt_template.replace("{conversation_messages}", messages_text)
+        logger.info(
+            "lead_summary | conversation_id=%s | message_count=%s | text_len=%s | preview=%s | path=llm",
+            conversation_id,
+            len(messages),
+            len(messages_text),
+            messages_text[:300],
         )
         res = openai_service.client.chat.completions.create(
             model=openai_service.model,
@@ -374,6 +403,12 @@ def _build_lead_summary_text_ar(
             cutoff_at=cutoff_at,
             limit=8,
         )
+        logger.info(
+            "lead_summary | conversation_id=%s | loaded_count=%s | cutoff_at=%s",
+            lead_conversation_id,
+            len(isolated_messages),
+            cutoff_at.isoformat() if cutoff_at else None,
+        )
     # Fallback for demo/no-db mode still uses current conversation context only.
     if not isolated_messages:
         isolated_messages = [
@@ -381,9 +416,30 @@ def _build_lead_summary_text_ar(
             if str(m.get("role") or "") in {"user", "assistant"} and str(m.get("content") or "").strip()
         ][-8:]
 
-    llm_summary = _try_llm_lead_summary_ar(isolated_messages)
+    messages_text = _build_messages_text(isolated_messages)
+    if not messages_text:
+        logger.info(
+            "lead_summary | conversation_id=%s | message_count=%s | text_len=%s | preview=%s | path=fallback_no_messages",
+            lead_conversation_id,
+            len(isolated_messages),
+            0,
+            "",
+        )
+        return "استفسار عام وترك رقمه للمتابعة."
+
+    llm_summary = _try_llm_lead_summary_ar(
+        isolated_messages,
+        conversation_id=lead_conversation_id,
+    )
     if llm_summary:
         return llm_summary
+    logger.info(
+        "lead_summary | conversation_id=%s | message_count=%s | text_len=%s | preview=%s | path=fallback_rule_based",
+        lead_conversation_id,
+        len(isolated_messages),
+        len(messages_text),
+        messages_text[:300],
+    )
     return _rule_based_lead_summary_ar(isolated_messages)
 
 
