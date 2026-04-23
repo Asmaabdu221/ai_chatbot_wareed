@@ -162,35 +162,179 @@ def _load_conversation_history(db: Session, conversation: Conversation) -> List[
 
 
 _LEAD_SUMMARY_PHONE_RE = re.compile(r"(?:\+?966|0)?5\d{8}")
+_LEAD_CITIES_AR = (
+    "الرياض", "جدة", "الدمام", "الخبر", "مكة", "المدينة", "الطائف",
+    "أبها", "تبوك", "حائل", "القصيم", "الجبيل", "نجران", "خميس مشيط",
+)
 
 
-def _build_lead_summary_text(conversation_history: List[Dict], assistant_reply: Optional[str] = None) -> str:
+def _safe_uuid(value: object) -> Optional[UUID]:
+    try:
+        return UUID(str(value))
+    except Exception:
+        return None
+
+
+def _load_lead_context_messages(
+    db: Optional[Session],
+    conversation_id: UUID,
+    cutoff_at: Optional[datetime],
+    limit: int = 8,
+) -> List[Dict]:
     """
-    Build a short lead summary using the latest 3-5 user/assistant messages.
+    Load only user/assistant messages for one conversation_id up to cutoff time.
     """
-    recent = [
-        m for m in (conversation_history or [])
-        if str(m.get("role") or "") in {"user", "assistant"} and str(m.get("content") or "").strip()
-    ][-5:]
-    if assistant_reply and assistant_reply.strip():
-        recent.append({"role": "assistant", "content": assistant_reply.strip()})
-        recent = recent[-5:]
+    if db is None:
+        return []
+    query = (
+        db.query(Message)
+        .filter(
+            Message.conversation_id == conversation_id,
+            Message.deleted_at.is_(None),
+            Message.role.in_([MessageRole.USER, MessageRole.ASSISTANT]),
+        )
+        .order_by(Message.created_at.asc())
+    )
+    if cutoff_at is not None:
+        query = query.filter(Message.created_at <= cutoff_at)
+    rows = query.all()
+    rows = rows[-max(5, min(limit, 8)) :]
+    return [{"role": row.role.value, "content": row.content} for row in rows if row.content]
 
-    user_messages = [str(m.get("content") or "").strip() for m in recent if m.get("role") == "user"]
-    topic = ""
-    for text in reversed(user_messages):
-        if _LEAD_SUMMARY_PHONE_RE.search(text):
-            continue
-        topic = " ".join(text.split())
-        break
 
-    if topic:
-        if len(topic) > 120:
-            topic = f"{topic[:117]}..."
-        return f'User asked about "{topic}" and provided phone number for follow-up.'
-    if recent:
-        return "User continued the conversation and provided phone number for follow-up."
-    return "User provided phone number for follow-up."
+def _try_llm_lead_summary_ar(messages: List[Dict]) -> Optional[str]:
+    """
+    LLM one-line Arabic summary from isolated conversation messages only.
+    """
+    if not messages:
+        return None
+    try:
+        from app.services.openai_service import openai_service
+
+        if getattr(openai_service, "client", None) is None:
+            return None
+
+        convo_text = "\n".join(
+            f"{'العميل' if m.get('role') == 'user' else 'المساعد'}: {str(m.get('content') or '').strip()}"
+            for m in messages
+            if str(m.get("content") or "").strip()
+        )
+        if not convo_text:
+            return None
+
+        prompt = (
+            "أنت مساعد ذكي لمختبر طبي.\n"
+            "لخّص المحادثة التالية في سطر عربي واحد فقط.\n"
+            "اذكر باختصار:\n"
+            "- موضوع استفسار العميل\n"
+            "- إن كان طلب تواصل\n"
+            "- أي اسم تحليل أو باقة أو فرع مذكور\n\n"
+            "لا تكتب كلامًا عامًا.\n"
+            "لا تضف معلومات غير موجودة.\n"
+            "لا تخلط مع أي عميل آخر.\n\n"
+            f"المحادثة:\n{convo_text}\n\nالملخص:"
+        )
+        res = openai_service.client.chat.completions.create(
+            model=openai_service.model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "اكتب سطرًا عربيًا واحدًا فقط مبنيًا على النص المرسل دون أي افتراضات.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=90,
+            temperature=0.1,
+        )
+        text = (res.choices[0].message.content or "").strip().replace("\n", " ")
+        return text[:240] if text else None
+    except Exception as exc:
+        logger.debug("lead_summary | llm_fallback | reason=%s", exc)
+        return None
+
+
+def _rule_based_lead_summary_ar(messages: List[Dict]) -> str:
+    """
+    Deterministic Arabic fallback summary from isolated conversation messages only.
+    """
+    user_texts = [str(m.get("content") or "").strip() for m in messages if m.get("role") == "user"]
+    joined = " ".join(user_texts)
+    normalized = joined.lower()
+
+    city = next((c for c in _LEAD_CITIES_AR if c in joined), None)
+
+    package_name = None
+    package_match = re.search(r"(?:باقة|بكج)\s+([^\n،,.]{2,40})", joined, flags=re.IGNORECASE)
+    if package_match:
+        package_name = package_match.group(1).strip()
+
+    test_name = None
+    test_match = re.search(r"تحليل\s+([^\n،,.]{2,40})", joined, flags=re.IGNORECASE)
+    if test_match:
+        candidate = test_match.group(1).strip()
+        if not re.search(r"(كم|سعر|تكلفة|النتيجة|نتائج|الفروع|فرع)", candidate, flags=re.IGNORECASE):
+            test_name = candidate
+
+    contact_requested = bool(
+        re.search(r"(تواصل|اتصال|يتواصل|خدمة العملاء|موظف|اكلم|اكلمه|تتصلون|اتصلوا)", joined)
+    )
+    has_phone = bool(_LEAD_SUMMARY_PHONE_RE.search(joined))
+
+    if package_name:
+        summary = f"العميل استفسر عن باقة {package_name}"
+    elif "باقة" in joined or "بكج" in normalized:
+        summary = "العميل استفسر عن باقة"
+    elif test_name:
+        summary = f"العميل استفسر عن تحليل {test_name}"
+    elif "تحليل" in joined or "test" in normalized:
+        summary = "العميل استفسر عن تحليل"
+    elif "نتيجة" in joined or "نتائج" in joined or "تفسير" in joined:
+        summary = "العميل استفسر عن تفسير النتائج"
+    elif city:
+        summary = f"العميل استفسر عن فروع {city}"
+    elif "فرع" in joined or "فروع" in joined or "branch" in normalized:
+        summary = "العميل استفسر عن الفروع"
+    elif re.search(r"(خدمة العملاء|موظف|دعم)", joined):
+        summary = "العميل استفسر عن خدمة العملاء"
+    else:
+        summary = "العميل لديه استفسار عام"
+
+    if contact_requested:
+        summary += " ثم طلب التواصل"
+    if has_phone:
+        summary += " وترك رقمه للمتابعة"
+    return summary + "."
+
+
+def _build_lead_summary_text_ar(
+    db: Optional[Session],
+    lead_conversation_id: str,
+    fallback_messages: List[Dict],
+    cutoff_at: Optional[datetime],
+) -> str:
+    """
+    Build one-line Arabic summary from messages of the same conversation_id only.
+    """
+    conv_uuid = _safe_uuid(lead_conversation_id)
+    isolated_messages: List[Dict] = []
+    if conv_uuid is not None:
+        isolated_messages = _load_lead_context_messages(
+            db=db,
+            conversation_id=conv_uuid,
+            cutoff_at=cutoff_at,
+            limit=8,
+        )
+    # Fallback for demo/no-db mode still uses current conversation context only.
+    if not isolated_messages:
+        isolated_messages = [
+            m for m in (fallback_messages or [])
+            if str(m.get("role") or "") in {"user", "assistant"} and str(m.get("content") or "").strip()
+        ][-8:]
+
+    llm_summary = _try_llm_lead_summary_ar(isolated_messages)
+    if llm_summary:
+        return llm_summary
+    return _rule_based_lead_summary_ar(isolated_messages)
 
 
 def _get_client_id(http_request: Request, user_id: Optional[UUID] = None) -> str:
@@ -274,6 +418,7 @@ async def chat_endpoint(
         conversation_history: List[Dict] = []
         user = None
         conversation = None
+        lead_cutoff_at: Optional[datetime] = None
         
         if db is not None:
             user = _get_or_create_user(db, effective_user_id)
@@ -282,7 +427,7 @@ async def chat_endpoint(
             )
             user_id = user.id
             conversation_id = conversation.id
-            _save_message(db, conversation, MessageRole.USER, request.message)
+            lead_cutoff_at = _save_message(db, conversation, MessageRole.USER, request.message).created_at
             logger.info("💾 Saved user message")
             conversation_history = _load_conversation_history(db, conversation)
             logger.info(f"💬 Loaded {len(conversation_history)} previous messages")
@@ -315,9 +460,11 @@ async def chat_endpoint(
                     if _phone_result.phone_captured and _phone_result.lead_draft:
                         try:
                             from app.services.lead_service import create_lead_from_draft, deliver_lead
-                            _phone_result.lead_draft.summary_text = _build_lead_summary_text(
-                                conversation_history,
-                                _phone_result.final_reply,
+                            _phone_result.lead_draft.summary_text = _build_lead_summary_text_ar(
+                                db=db,
+                                lead_conversation_id=_phone_result.lead_draft.conversation_id,
+                                fallback_messages=conversation_history,
+                                cutoff_at=lead_cutoff_at,
                             )
                             _lead = create_lead_from_draft(_phone_result.lead_draft, db)
                             if _lead is not None:
@@ -344,9 +491,11 @@ async def chat_endpoint(
                 return
             try:
                 from app.services.lead_service import create_lead_from_draft, deliver_lead
-                _flow_result.lead_draft.summary_text = _build_lead_summary_text(
-                    conversation_history,
-                    _flow_result.final_reply,
+                _flow_result.lead_draft.summary_text = _build_lead_summary_text_ar(
+                    db=db,
+                    lead_conversation_id=_flow_result.lead_draft.conversation_id,
+                    fallback_messages=conversation_history,
+                    cutoff_at=lead_cutoff_at,
                 )
                 _lead = create_lead_from_draft(_flow_result.lead_draft, db)
                 if _lead is not None:
