@@ -91,20 +91,20 @@ class HealthResponse(BaseModel):
 
 
 # Helper Functions
-def _get_or_create_user(db: Session, user_id: Optional[UUID]) -> User:
+def _get_or_create_user(db: Session, user_id: Optional[UUID]) -> tuple[User, bool]:
     """Get existing user or create new one"""
     if user_id:
         user = db.get(User, user_id)
         if user:
             user.last_active_at = datetime.now(timezone.utc)
-            return user
+            return user, False
     
     # Create new user
     new_user = User()
     db.add(new_user)
     db.flush()  # Get the ID without committing
     logger.info(f"✨ Created new user: {new_user.id}")
-    return new_user
+    return new_user, True
 
 
 def _get_or_create_conversation(
@@ -112,14 +112,14 @@ def _get_or_create_conversation(
     user: User, 
     conversation_id: Optional[UUID],
     first_message: str
-) -> Conversation:
+) -> tuple[Conversation, bool]:
     """Get existing conversation or create new one"""
     if conversation_id:
         conversation = db.get(Conversation, conversation_id)
         if conversation and conversation.user_id == user.id:
             # Update timestamp (database will handle via onupdate)
             # No manual update needed - SQLAlchemy handles this
-            return conversation
+            return conversation, False
     
     # Create new conversation with auto-generated title
     title = first_message[:50] + "..." if len(first_message) > 50 else first_message
@@ -130,7 +130,21 @@ def _get_or_create_conversation(
     db.add(new_conversation)
     db.flush()
     logger.info(f"✨ Created new conversation: {new_conversation.id}")
-    return new_conversation
+    return new_conversation, True
+
+
+def _count_conversation_messages(db: Optional[Session], conversation_id: UUID) -> int:
+    if db is None:
+        return 0
+    return (
+        db.query(Message)
+        .filter(
+            Message.conversation_id == conversation_id,
+            Message.deleted_at.is_(None),
+            Message.role.in_([MessageRole.USER.value, MessageRole.ASSISTANT.value]),
+        )
+        .count()
+    )
 
 
 def _save_message(
@@ -570,6 +584,11 @@ async def chat_endpoint(
         
         # Resolve user: JWT Bearer overrides body user_id (same for Web/Mobile)
         effective_user_id = current_user.id if current_user else request.user_id
+        logger.info(
+            "chat_continuity | incoming_user_id=%s | incoming_conversation_id=%s",
+            request.user_id,
+            request.conversation_id,
+        )
         
         # Rate limiting (by authenticated user or IP)
         client_id = _get_client_id(http_request, effective_user_id)
@@ -599,12 +618,19 @@ async def chat_endpoint(
         lead_cutoff_at: Optional[datetime] = None
         
         if db is not None:
-            user = _get_or_create_user(db, effective_user_id)
-            conversation = _get_or_create_conversation(
+            user, created_new_user = _get_or_create_user(db, effective_user_id)
+            conversation, created_new_conversation = _get_or_create_conversation(
                 db, user, request.conversation_id, request.message
             )
             user_id = user.id
             conversation_id = conversation.id
+            logger.info(
+                "chat_continuity | resolved_user_id=%s | resolved_conversation_id=%s | created_new_user=%s | created_new_conversation=%s",
+                user_id,
+                conversation_id,
+                created_new_user,
+                created_new_conversation,
+            )
             lead_cutoff_at = _save_message(db, conversation, MessageRole.USER, request.message).created_at
             logger.info("💾 Saved user message")
             conversation_history = _load_conversation_history(db, conversation)
@@ -638,6 +664,12 @@ async def chat_endpoint(
                     if _phone_result.phone_captured and _phone_result.lead_draft:
                         try:
                             from app.services.lead_service import create_lead_from_draft, deliver_lead
+                            _msg_count = _count_conversation_messages(db, conversation_id)
+                            logger.info(
+                                "chat_continuity | lead_persist_path=awaiting_phone | resolved_conversation_id=%s | message_count=%s",
+                                conversation_id,
+                                _msg_count,
+                            )
                             _phone_result.lead_draft.summary_text = _build_lead_summary_text_ar(
                                 db=db,
                                 lead_conversation_id=_phone_result.lead_draft.conversation_id,
@@ -669,6 +701,12 @@ async def chat_endpoint(
                 return
             try:
                 from app.services.lead_service import create_lead_from_draft, deliver_lead
+                _msg_count = _count_conversation_messages(db, conversation_id)
+                logger.info(
+                    "chat_continuity | lead_persist_path=flow | resolved_conversation_id=%s | message_count=%s",
+                    conversation_id,
+                    _msg_count,
+                )
                 _flow_result.lead_draft.summary_text = _build_lead_summary_text_ar(
                     db=db,
                     lead_conversation_id=_flow_result.lead_draft.conversation_id,

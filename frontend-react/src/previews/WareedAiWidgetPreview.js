@@ -48,6 +48,13 @@ function getOrCreateWidgetUserId() {
   return generated;
 }
 
+function setStoredUserId(userId) {
+  if (typeof window === 'undefined') return;
+  if (userId && UUID_V4_REGEX.test(userId)) {
+    window.localStorage.setItem(WIDGET_USER_ID_STORAGE_KEY, userId);
+  }
+}
+
 function getStoredConversationId() {
   if (typeof window === 'undefined') return null;
 
@@ -132,11 +139,21 @@ export default function WareedAiWidgetPreview() {
         (data?.reply || data?.response || '').trim() || CONNECTIVITY_ERROR_MESSAGE;
       const assistantId = data?.message_id || `msg_${messageCounterRef.current++}`;
 
+      if (data?.user_id && UUID_V4_REGEX.test(data.user_id)) {
+        setStoredUserId(data.user_id);
+        setSessionUserId(data.user_id);
+      }
+
       // Pin and persist conversation_id so continuity survives refresh/re-render.
       if (data?.conversation_id && UUID_V4_REGEX.test(data.conversation_id)) {
         setStoredConversationId(data.conversation_id);
         setSessionConversationId(data.conversation_id);
       }
+
+      console.info('[Widget continuity] /api/chat response IDs', {
+        user_id: data?.user_id || null,
+        conversation_id: data?.conversation_id || null,
+      });
 
       setMessages((prev) =>
         prev.map((m) =>
