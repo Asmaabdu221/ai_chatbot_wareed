@@ -140,6 +140,7 @@ def build_lead_event(event_type: str, lead) -> dict:
         "latest_intent": lead.latest_intent,
         "latest_action": lead.latest_action,
         "summary_hint": lead.summary_hint,
+        "summary_text": getattr(lead, "summary_text", None),
         "source": lead.source,
         "created_at": _iso(lead.created_at),
         "delivered_at": _iso(getattr(lead, "delivered_at", None)),

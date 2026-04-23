@@ -42,6 +42,7 @@ class LeadDraft:
     conversation_id: str
     latest_intent: str
     summary_hint: str
+    summary_text: Optional[str] = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     status: str = "ready"
 
@@ -100,6 +101,7 @@ class ConversationStateStore:
             conversation_id=str(value.get("conversation_id") or ""),
             latest_intent=str(value.get("latest_intent") or ""),
             summary_hint=str(value.get("summary_hint") or ""),
+            summary_text=str(value.get("summary_text") or "") or None,
             created_at=created_at or ConversationStateStore._now(),
             status=str(value.get("status") or "ready"),
         )
@@ -118,6 +120,7 @@ class ConversationStateStore:
                     "conversation_id": state.lead_draft.conversation_id,
                     "latest_intent": state.lead_draft.latest_intent,
                     "summary_hint": state.lead_draft.summary_hint,
+                    "summary_text": state.lead_draft.summary_text,
                     "created_at": state.lead_draft.created_at.isoformat(),
                     "status": state.lead_draft.status,
                 }

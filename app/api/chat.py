@@ -11,6 +11,7 @@ from datetime import timezone
 from uuid import UUID
 from datetime import datetime
 import logging
+import re
 
 from sqlalchemy.orm import Session
 
@@ -160,6 +161,38 @@ def _load_conversation_history(db: Session, conversation: Conversation) -> List[
     ]
 
 
+_LEAD_SUMMARY_PHONE_RE = re.compile(r"(?:\+?966|0)?5\d{8}")
+
+
+def _build_lead_summary_text(conversation_history: List[Dict], assistant_reply: Optional[str] = None) -> str:
+    """
+    Build a short lead summary using the latest 3-5 user/assistant messages.
+    """
+    recent = [
+        m for m in (conversation_history or [])
+        if str(m.get("role") or "") in {"user", "assistant"} and str(m.get("content") or "").strip()
+    ][-5:]
+    if assistant_reply and assistant_reply.strip():
+        recent.append({"role": "assistant", "content": assistant_reply.strip()})
+        recent = recent[-5:]
+
+    user_messages = [str(m.get("content") or "").strip() for m in recent if m.get("role") == "user"]
+    topic = ""
+    for text in reversed(user_messages):
+        if _LEAD_SUMMARY_PHONE_RE.search(text):
+            continue
+        topic = " ".join(text.split())
+        break
+
+    if topic:
+        if len(topic) > 120:
+            topic = f"{topic[:117]}..."
+        return f'User asked about "{topic}" and provided phone number for follow-up.'
+    if recent:
+        return "User continued the conversation and provided phone number for follow-up."
+    return "User provided phone number for follow-up."
+
+
 def _get_client_id(http_request: Request, user_id: Optional[UUID] = None) -> str:
     """Rate limit key: prefer user_id if provided, else client IP."""
     if user_id:
@@ -282,6 +315,10 @@ async def chat_endpoint(
                     if _phone_result.phone_captured and _phone_result.lead_draft:
                         try:
                             from app.services.lead_service import create_lead_from_draft, deliver_lead
+                            _phone_result.lead_draft.summary_text = _build_lead_summary_text(
+                                conversation_history,
+                                _phone_result.final_reply,
+                            )
                             _lead = create_lead_from_draft(_phone_result.lead_draft, db)
                             if _lead is not None:
                                 deliver_lead(_lead, db)
@@ -307,6 +344,10 @@ async def chat_endpoint(
                 return
             try:
                 from app.services.lead_service import create_lead_from_draft, deliver_lead
+                _flow_result.lead_draft.summary_text = _build_lead_summary_text(
+                    conversation_history,
+                    _flow_result.final_reply,
+                )
                 _lead = create_lead_from_draft(_flow_result.lead_draft, db)
                 if _lead is not None:
                     deliver_lead(_lead, db)

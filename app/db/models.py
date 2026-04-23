@@ -319,6 +319,12 @@ class Lead(Base, TimestampMixin):
         comment="First ~100 chars of the message that triggered the CTA",
     )
 
+    summary_text: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Short conversational summary for staff review",
+    )
+
     source: Mapped[str] = mapped_column(
         String(50),
         nullable=False,

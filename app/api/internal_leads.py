@@ -60,6 +60,7 @@ class LeadOut(BaseModel):
     latest_intent: str
     latest_action: str
     summary_hint: str
+    summary_text: Optional[str]
     source: str
     status: str
     created_at: Optional[datetime]
@@ -116,7 +117,7 @@ def list_leads(
     status_filter: Optional[str] = Query(None, alias="status"),
     latest_intent: Optional[str] = Query(None),
     latest_action: Optional[str] = Query(None),
-    q: Optional[str] = Query(None, description="Search by phone or summary_hint"),
+    q: Optional[str] = Query(None, description="Search by phone, summary_hint, or summary_text"),
     date_from: Optional[str] = Query(None, description="Inclusive lower bound on created_at (YYYY-MM-DD or ISO 8601)"),
     date_to: Optional[str] = Query(None, description="Inclusive upper bound on created_at (YYYY-MM-DD or ISO 8601)"),
     page: int = Query(1, ge=1),
@@ -156,7 +157,11 @@ def list_leads(
         if q:
             term = f"%{q}%"
             query = query.filter(
-                or_(Lead.phone.ilike(term), Lead.summary_hint.ilike(term))
+                or_(
+                    Lead.phone.ilike(term),
+                    Lead.summary_hint.ilike(term),
+                    Lead.summary_text.ilike(term),
+                )
             )
         if dt_from is not None:
             query = query.filter(Lead.created_at >= dt_from)

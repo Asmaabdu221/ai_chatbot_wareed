@@ -83,6 +83,7 @@ def create_lead_from_draft(
         latest_intent=draft.latest_intent or "",
         latest_action=draft.latest_intent or "",
         summary_hint=(draft.summary_hint or "")[:500],
+        summary_text=(draft.summary_text or "")[:1000] or None,
         source="chatbot",
         status=LeadStatus.NEW,
     )
@@ -121,6 +122,7 @@ def build_lead_payload(lead: Lead) -> dict:
         "latest_intent": lead.latest_intent,
         "latest_action": lead.latest_action,
         "summary_hint": lead.summary_hint,
+        "summary_text": lead.summary_text,
         "source": lead.source,
         "status": lead.status.value if hasattr(lead.status, "value") else str(lead.status),
         "created_at": lead.created_at.isoformat() if lead.created_at else None,

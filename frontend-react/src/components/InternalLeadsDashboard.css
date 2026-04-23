@@ -347,6 +347,18 @@
   border-color: #bbf7d0;
 }
 
+.ild-btn--summary {
+  padding: 2px var(--space-sm);
+  font-size: var(--text-xs);
+  background: var(--brand-50);
+  color: var(--brand-700);
+  border-color: var(--brand-200);
+}
+
+.ild-btn--summary:hover:not(:disabled) {
+  background: var(--brand-100);
+}
+
 /* ── Empty / loading states ── */
 .ild-empty {
   display: flex;
@@ -955,4 +967,56 @@
 
 .ild-btn--link:hover {
   color: var(--brand-600);
+}
+
+.ild-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: var(--space-lg);
+}
+
+.ild-modal {
+  width: 100%;
+  max-width: 560px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-overlay);
+  overflow: hidden;
+}
+
+.ild-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-direction: row-reverse;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--border);
+}
+
+.ild-modal__title {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: 700;
+}
+
+.ild-modal__close {
+  border: none;
+  background: none;
+  font-size: var(--text-md);
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.ild-modal__body {
+  padding: var(--space-lg);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  line-height: 1.8;
+  white-space: pre-wrap;
 }

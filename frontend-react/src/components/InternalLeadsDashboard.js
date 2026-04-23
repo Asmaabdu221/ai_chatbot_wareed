@@ -87,6 +87,7 @@ function normalizeEventToLead(event) {
     latest_intent: event.latest_intent,
     latest_action: event.latest_action,
     summary_hint: event.summary_hint,
+    summary_text: event.summary_text,
     source: event.source,
     status: event.status,
     created_at: event.created_at,
@@ -99,6 +100,27 @@ function normalizeEventToLead(event) {
     crm_error_message: event.crm_error_message,
     crm_retry_count: event.crm_retry_count,
   };
+}
+
+function SummaryModal({ text, onClose }) {
+  if (!text) return null;
+  return (
+    <div
+      className="ild-modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-label="تفاصيل المحادثة"
+      onClick={onClose}
+    >
+      <div className="ild-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="ild-modal__header">
+          <h3 className="ild-modal__title">تفاصيل المحادثة</h3>
+          <button type="button" className="ild-modal__close" onClick={onClose} aria-label="إغلاق">✕</button>
+        </div>
+        <div className="ild-modal__body">{text || 'لا توجد تفاصيل متاحة.'}</div>
+      </div>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -367,6 +389,7 @@ export default function InternalLeadsDashboard() {
   const [lastRefreshed, setLastRefreshed] = useState(null);
   const [filters, setFilters] = useState({ q: '', intent: '', action: '', dateFrom: '', dateTo: '' });
   const [debouncedQ, setDebouncedQ] = useState('');
+  const [summaryModalText, setSummaryModalText] = useState(null);
 
   // --- Realtime ---
   const [connectionStatus, setConnectionStatus] = useState('connecting');
@@ -704,6 +727,8 @@ export default function InternalLeadsDashboard() {
 
   return (
     <div className="ild-layout" dir="rtl" lang="ar">
+      <SummaryModal text={summaryModalText} onClose={() => setSummaryModalText(null)} />
+
       {/* Toast notifications — fixed overlay */}
       <ToastNotifications toasts={toasts} onDismiss={removeToast} />
 
@@ -812,6 +837,7 @@ export default function InternalLeadsDashboard() {
                   <th>وقت الاستلام</th>
                   <th>الحالة</th>
                   <th>CRM</th>
+                  <th>تفاصيل</th>
                   <th />
                 </tr>
               </thead>
@@ -837,6 +863,18 @@ export default function InternalLeadsDashboard() {
                     <td className="ild-table__date">{formatDate(lead.created_at)}</td>
                     <td><StatusBadge status={lead.status} /></td>
                     <td><CrmStatusBadge status={lead.crm_status} /></td>
+                    <td>
+                      <button
+                        type="button"
+                        className="ild-btn ild-btn--summary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSummaryModalText(lead.summary_text || 'لا توجد تفاصيل متاحة.');
+                        }}
+                      >
+                        عرض
+                      </button>
+                    </td>
                     <td>
                       {lead.status !== 'closed' && permissions.canClose && (
                         <button
