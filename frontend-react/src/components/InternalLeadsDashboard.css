@@ -26,14 +26,14 @@
   border-bottom: 1px solid var(--border);
   box-shadow: var(--shadow-subtle);
   flex-shrink: 0;
-  flex-direction: row-reverse; /* RTL: right is the start */
+  flex-direction: row; /* with dir=rtl, brand stays right and controls go left */
 }
 
 .ild-header__left {
   display: flex;
   align-items: center;
   gap: var(--space-md);
-  flex-direction: row-reverse;
+  flex-direction: row;
 }
 
 .ild-header__logo {
@@ -52,7 +52,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  flex-direction: row-reverse;
+  flex-direction: row;
 }
 
 .ild-header__last-refresh {

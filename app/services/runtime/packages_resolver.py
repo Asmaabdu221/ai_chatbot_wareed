@@ -1269,7 +1269,7 @@ def _format_best_for_selected_preview(record: dict[str, Any]) -> str:
     lines = [name]
     if short_desc:
         lines.extend(["", short_desc])
-    lines.extend(["", "إذا حاب أعرفك أكثر على الباقة أو أوضح لك التحاليل اللي تشملها، أقدر أفصلها لك."])
+    lines.extend(["", "إذا حاب أشرح لك أكثر عن الباقة أو أوضح لك التحاليل التي تشملها، أقدر أفصلها لك."])
     return "\n".join(lines)
 
 
@@ -1279,7 +1279,7 @@ def _format_best_for_long_details(record: dict[str, Any]) -> str:
     body = full_desc if full_desc and _norm(full_desc) != _norm(short_desc) else short_desc
     if not body:
         body = "ما عندي تفاصيل إضافية واضحة في البيانات الحالية."
-    lines = ["تمام ", "", body, "", "إذا حاب بعده أعرفك على السعر أو أقارنها لك مع باقة ثانية، أقدر أوضح لك."]
+    lines = ["تمام.", "", body, "", "إذا حاب بعدها أعرفك على السعر أو أقارنها لك مع باقة ثانية، أقدر أوضح لك."]
     return "\n".join(lines)
 
 

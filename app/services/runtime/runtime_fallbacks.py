@@ -42,7 +42,7 @@ def get_branch_not_enabled_message() -> str:
     """Return a safe message for branch-specific questions before branches layer is enabled."""
     return (
         "تفاصيل الفروع والمواقع الدقيقة ما زالت غير مفعّلة بعد. "
-        "حالياً أقدر أساعدك فقط في السؤال العام عن وجود الفروع."
+        "حالياً أقدر أساعدك فقط بالاستفسار العام عن وجود الفروع."
     )
 
 

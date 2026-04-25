@@ -270,7 +270,7 @@ def run_message_runtime_orchestration(
     if deps.is_simple_greeting(question_for_ai):
         print("PATH=greeting")
         return deps.save_assistant_reply(
-            "مرحبا، معاكم مختبر وريد الطبية، كيف ممكن أخدمك اليوم؟"
+            "مرحبًا، معكم مختبر وريد الطبي، كيف أقدر أخدمك اليوم؟"
         )
 
     # B. FAQ

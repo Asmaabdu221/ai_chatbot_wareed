@@ -502,7 +502,7 @@ def _format_district_options(matches: list[dict[str, Any]]) -> str:
     return _normalize_reply_text(
         "لقيت أكثر من خيار في هذا الحي، مثل:\n"
         + "\n".join(options)
-        + "\n\nإذا تحدد المدينة أو موقعك التقريبي أقدر أحدد لك الأقرب."
+        + "\n\nإذا حددت المدينة أو موقعك التقريبي، أقدر أحدد لك الأقرب."
     )
 
 
