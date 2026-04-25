@@ -27,13 +27,13 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   flex-shrink: 0;
   gap: 1rem;
+  margin-bottom: 16px;
 }
 
 .ild-header__brand {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  margin-inline-start: auto; /* keep brand block on the right in RTL */
   min-width: 0;
 }
 
@@ -54,9 +54,9 @@
 .ild-header__actions {
   display: flex;
   align-items: center;
-  gap: 24px;
-  margin-inline-end: auto; /* keep actions block on the left in RTL */
+  gap: 20px;
   flex-wrap: nowrap;
+  direction: ltr;
   padding: 6px 8px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
@@ -369,8 +369,7 @@
   background: transparent;
   color: #6b7280;
   border-color: transparent;
-  margin-inline-start: 10px;
-  order: -1;
+  margin-inline-start: 0;
 }
 
 .ild-btn--logout:hover {
@@ -917,11 +916,11 @@
   align-items: center;
   gap: 16px;
   padding: 12px 2rem;
-  margin-top: 12px;
+  margin-top: 0;
   background: #fff;
   border-bottom: none;
   flex-shrink: 0;
-  flex-direction: row-reverse;
+  flex-direction: row;
   flex-wrap: nowrap;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
@@ -932,6 +931,7 @@
   gap: 10px;
   flex: 1;
   min-width: 0;
+  order: 2;
 }
 
 .ild-filter-bar__search-wrap {
@@ -1123,6 +1123,7 @@
   gap: 10px;
   flex-wrap: nowrap;
   white-space: nowrap;
+  order: 1;
 }
 
 .ild-mini-stat {
@@ -1136,16 +1137,16 @@
   background: #f8fafc;
   color: #6b7280;
   font-family: inherit;
-  font-size: 14px;
+  font-size: 13px;
   cursor: pointer;
 }
 
 .ild-mini-stat__label {
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .ild-mini-stat__count {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: #1f2937;
 }
@@ -1154,6 +1155,12 @@
   background: #eef2ff;
   color: #4338ca;
 }
+
+.ild-mini-stat--all { background: #eef2ff; }
+.ild-mini-stat--new { background: #fffbeb; }
+.ild-mini-stat--delivered { background: #ecfdf5; }
+.ild-mini-stat--failed { background: #fef2f2; }
+.ild-mini-stat--closed { background: #f3f4f6; }
 
 .ild-filter-bar__clear {
   padding: 6px var(--space-sm);
