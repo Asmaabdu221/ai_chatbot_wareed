@@ -135,7 +135,8 @@
   padding: 14px var(--space-md);
   text-align: right;
   font-weight: 600;
-  color: #374151;
+  color: #1F2937;
+  font-size: 14px;
   background: var(--surface);
   border-bottom: 2px solid var(--border);
   white-space: nowrap;
@@ -186,6 +187,10 @@
   text-align: right !important;
   white-space: nowrap;
   padding-right: 20px !important;
+}
+
+.ild-table__intent {
+  background: rgba(31, 41, 55, 0.03);
 }
 
 .ild-table__hint {
@@ -875,9 +880,9 @@
 
 .ild-filter-bar__search-wrap {
   position: relative;
-  flex: 0 1 36%;
+  flex: 0 1 45%;
   min-width: 220px;
-  max-width: 36%;
+  max-width: 45%;
 }
 
 .ild-filter-bar__search-icon {
@@ -1070,6 +1075,7 @@
   min-height: 42px;
   position: relative;
   padding-inline-start: 16px;
+  margin-right: auto;
 }
 
 .ild-filter-bar__stats::before {
