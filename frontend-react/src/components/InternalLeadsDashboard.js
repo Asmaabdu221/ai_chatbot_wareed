@@ -79,6 +79,22 @@ function formatIntent(intent) {
   return INTENT_LABELS[intent] || intent || '—';
 }
 
+function renderSource(source) {
+  if ((source || '').toLowerCase() === 'chatbot') {
+    return (
+      <span className="ild-source-icon" title="chatbot" aria-label="chatbot">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect x="4" y="5" width="16" height="12" rx="4" />
+          <path d="M9 17v3l3-2h4" />
+          <circle cx="9.5" cy="11" r="1" />
+          <circle cx="14.5" cy="11" r="1" />
+        </svg>
+      </span>
+    );
+  }
+  return source || '—';
+}
+
 function normalizeEventToLead(event) {
   return {
     id: event.lead_id,
@@ -141,19 +157,6 @@ function CrmStatusBadge({ status }) {
     <span className={`ild-badge ild-badge--${effective}`}>
       {CRM_STATUS_LABELS[effective] || effective}
     </span>
-  );
-}
-
-function StatCard({ label, count, active, onClick }) {
-  return (
-    <button
-      type="button"
-      className={`ild-stat-card${active ? ' ild-stat-card--active' : ''}`}
-      onClick={onClick}
-    >
-      <span className="ild-stat-card__count">{count}</span>
-      <span className="ild-stat-card__label">{label}</span>
-    </button>
   );
 }
 
@@ -308,49 +311,73 @@ function LeadDetailPanel({ lead, onClose, onCloseLead, onRetryCrm, closing, retr
   );
 }
 
-function FilterBar({ filters, onChange, onClear }) {
+function FilterBar({ filters, onChange, onClear, statsTabs, activeStatus, onStatusChange }) {
   const hasActive = !!(filters.q || filters.intent || filters.action || filters.dateFrom || filters.dateTo);
   return (
     <div className="ild-filter-bar">
-      <input
-        type="search"
-        className="ild-filter-bar__search"
-        placeholder="بحث بالهاتف أو الملخص..."
-        value={filters.q}
-        onChange={(e) => onChange({ ...filters, q: e.target.value })}
-      />
-      <select
-        className="ild-filter-bar__select"
-        value={filters.intent}
-        onChange={(e) => onChange({ ...filters, intent: e.target.value })}
-      >
-        <option value="">كل النوايا</option>
-        <option value="ask_phone">طلب حجز</option>
-        <option value="transfer_to_human">تحويل لموظف</option>
-        <option value="offer_human_help">مساعدة بشرية</option>
-      </select>
-      <div className="ild-filter-bar__dates">
-        <input
-          type="date"
-          className="ild-filter-bar__date"
-          value={filters.dateFrom}
-          onChange={(e) => onChange({ ...filters, dateFrom: e.target.value })}
-          title="من تاريخ"
-        />
-        <span className="ild-filter-bar__date-sep">—</span>
-        <input
-          type="date"
-          className="ild-filter-bar__date"
-          value={filters.dateTo}
-          onChange={(e) => onChange({ ...filters, dateTo: e.target.value })}
-          title="إلى تاريخ"
-        />
+      <div className="ild-filter-bar__controls">
+        <div className="ild-filter-bar__search-wrap">
+          <span className="ild-filter-bar__search-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="11" cy="11" r="7" />
+              <path d="M20 20L17 17" />
+            </svg>
+          </span>
+          <input
+            type="search"
+            className="ild-filter-bar__search"
+            placeholder="بحث بالهاتف أو الملخص..."
+            value={filters.q}
+            onChange={(e) => onChange({ ...filters, q: e.target.value })}
+          />
+        </div>
+        <select
+          className="ild-filter-bar__select"
+          value={filters.intent}
+          onChange={(e) => onChange({ ...filters, intent: e.target.value })}
+        >
+          <option value="">كل النوايا</option>
+          <option value="ask_phone">طلب حجز</option>
+          <option value="transfer_to_human">تحويل لموظف</option>
+          <option value="offer_human_help">مساعدة بشرية</option>
+        </select>
+        <div className="ild-filter-bar__dates">
+          <input
+            type="date"
+            className="ild-filter-bar__date"
+            value={filters.dateFrom}
+            onChange={(e) => onChange({ ...filters, dateFrom: e.target.value })}
+            title="من تاريخ"
+          />
+          <span className="ild-filter-bar__date-sep">—</span>
+          <input
+            type="date"
+            className="ild-filter-bar__date"
+            value={filters.dateTo}
+            onChange={(e) => onChange({ ...filters, dateTo: e.target.value })}
+            title="إلى تاريخ"
+          />
+        </div>
+        {hasActive && (
+          <button type="button" className="ild-filter-bar__clear" onClick={onClear}>
+            مسح الفلاتر ✕
+          </button>
+        )}
       </div>
-      {hasActive && (
-        <button type="button" className="ild-filter-bar__clear" onClick={onClear}>
-          مسح الفلاتر ✕
-        </button>
-      )}
+
+      <div className="ild-filter-bar__stats" aria-label="إحصاءات الحالة">
+        {statsTabs.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            className={`ild-mini-stat ild-mini-stat--${tab.key}${activeStatus === tab.key ? ' ild-mini-stat--active' : ''}`}
+            onClick={() => onStatusChange(tab.key)}
+          >
+            <span className="ild-mini-stat__label">{tab.label}</span>
+            <span className="ild-mini-stat__count">{tab.count}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -386,7 +413,6 @@ export default function InternalLeadsDashboard() {
   const [selectedLead, setSelectedLead] = useState(null);
   const [closingIds, setClosingIds] = useState(new Set());
   const [retryingCrmIds, setRetryingCrmIds] = useState(new Set());
-  const [lastRefreshed, setLastRefreshed] = useState(null);
   const [filters, setFilters] = useState({ q: '', intent: '', action: '', dateFrom: '', dateTo: '' });
   const [debouncedQ, setDebouncedQ] = useState('');
   const [summaryModalText, setSummaryModalText] = useState(null);
@@ -483,7 +509,6 @@ export default function InternalLeadsDashboard() {
         dateTo: af.dateTo || null,
       });
       setLeads(res.items || []);
-      setLastRefreshed(new Date());
       setKeyRejected(false);
       if (resetUnread) setUnreadCount(0);
 
@@ -719,10 +744,10 @@ export default function InternalLeadsDashboard() {
 
   const statTabs = [
     { key: 'all', label: 'الكل', count: stats.all },
-    { key: 'new', label: STATUS_LABELS.new, count: stats.new },
-    { key: 'delivered', label: STATUS_LABELS.delivered, count: stats.delivered },
-    { key: 'failed', label: STATUS_LABELS.failed, count: stats.failed },
-    { key: 'closed', label: STATUS_LABELS.closed, count: stats.closed },
+    { key: 'new', label: 'جديد', count: stats.new },
+    { key: 'delivered', label: 'مُسلَّم', count: stats.delivered },
+    { key: 'failed', label: 'فاشل', count: stats.failed },
+    { key: 'closed', label: 'مغلق', count: stats.closed },
   ];
 
   return (
@@ -734,7 +759,7 @@ export default function InternalLeadsDashboard() {
 
       {/* Header */}
       <header className="ild-header">
-        <div className="ild-header__left">
+        <div className="ild-header__brand">
           <img src="/images/wareed-logo.png" alt="وريد" className="ild-header__logo" />
           <span className="ild-header__title">لوحة الـ Leads</span>
           {unreadCount > 0 && (
@@ -743,61 +768,71 @@ export default function InternalLeadsDashboard() {
             </span>
           )}
         </div>
-        <div className="ild-header__right">
-          <ConnectionStatus status={connectionStatus} />
-          {lastRefreshed && (
-            <span className="ild-header__last-refresh">
-              {lastRefreshed.toLocaleTimeString('ar-SA')}
-            </span>
+        <div className="ild-header__actions">
+          {authMode !== 'bearer' && !ENV_API_KEY && (
+            <button type="button" className="ild-btn ild-btn--logout" onClick={handleClearApiKey}>
+              <span className="ild-btn__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <path d="M16 17l5-5-5-5" />
+                  <path d="M21 12H9" />
+                </svg>
+              </span>
+              خروج
+            </button>
           )}
+          <button
+            type="button"
+            className="ild-btn ild-btn--analytics"
+            onClick={() => navigate('/internal/analytics')}
+            title="لوحة التحليلات"
+          >
+            <span className="ild-btn__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 20V10" />
+                <path d="M10 20V4" />
+                <path d="M16 20V13" />
+                <path d="M22 20V7" />
+              </svg>
+            </span>
+            تحليلات
+          </button>
           <button
             type="button"
             className="ild-btn ild-btn--refresh"
             onClick={handleManualRefresh}
             disabled={loading}
             title="تحديث يدوي"
+            aria-label="تحديث"
           >
-            {loading ? '...' : '↺ تحديث'}
+            {loading ? (
+              '...'
+            ) : (
+              <svg
+                className="ild-btn__icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                aria-hidden="true"
+              >
+                <path d="M21 2v6h-6" />
+                <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+                <path d="M3 22v-6h6" />
+                <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+              </svg>
+            )}
           </button>
-          <button
-            type="button"
-            className="ild-btn ild-btn--signout"
-            onClick={() => navigate('/internal/analytics')}
-            title="لوحة التحليلات"
-          >
-            📊 تحليلات
-          </button>
-          {authMode === 'bearer' && currentUser && (
-            <span className="ild-header__user-role" title={currentUser.email || ''}>
-              {currentUser.role}
-            </span>
-          )}
-          {authMode !== 'bearer' && !ENV_API_KEY && (
-            <button type="button" className="ild-btn ild-btn--signout" onClick={handleClearApiKey}>
-              خروج
-            </button>
-          )}
+          <ConnectionStatus status={connectionStatus} />
         </div>
       </header>
 
-      {/* Stats / filter bar */}
-      <div className="ild-stats-bar">
-        {statTabs.map((tab) => (
-          <StatCard
-            key={tab.key}
-            label={tab.label}
-            count={tab.count}
-            active={statusFilter === tab.key}
-            onClick={() => handleFilterChange(tab.key)}
-          />
-        ))}
-      </div>
-
-      {/* Filter bar */}
       <FilterBar
         filters={filters}
         onChange={handleFiltersChange}
         onClear={handleClearFilters}
+        statsTabs={statTabs}
+        activeStatus={statusFilter}
+        onStatusChange={handleFilterChange}
       />
 
       {/* Error banner */}
@@ -859,7 +894,7 @@ export default function InternalLeadsDashboard() {
                     <td className="ild-table__phone">{lead.phone}</td>
                     <td>{formatIntent(lead.latest_intent)}</td>
                     <td className="ild-table__hint">{lead.summary_hint || '—'}</td>
-                    <td>{lead.source}</td>
+                    <td>{renderSource(lead.source)}</td>
                     <td className="ild-table__date">{formatDate(lead.created_at)}</td>
                     <td><StatusBadge status={lead.status} /></td>
                     <td><CrmStatusBadge status={lead.crm_status} /></td>
@@ -871,8 +906,13 @@ export default function InternalLeadsDashboard() {
                           e.stopPropagation();
                           setSummaryModalText(lead.summary_text || 'لا توجد تفاصيل متاحة.');
                         }}
+                        aria-label="عرض تفاصيل المحادثة"
+                        title="عرض التفاصيل"
                       >
-                        عرض
+                        <svg className="ild-btn__icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                          <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg>
                       </button>
                     </td>
                     <td>
@@ -883,8 +923,15 @@ export default function InternalLeadsDashboard() {
                           onClick={(e) => { e.stopPropagation(); handleCloseLead(lead.id); }}
                           disabled={closingIds.has(lead.id)}
                           aria-label={`إغلاق ${lead.phone}`}
+                          title="إغلاق"
                         >
-                          {closingIds.has(lead.id) ? '...' : 'إغلاق'}
+                          {closingIds.has(lead.id) ? '...' : (
+                            <svg className="ild-btn__icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                              <circle cx="12" cy="12" r="9" />
+                              <path d="M9 9l6 6" />
+                              <path d="M15 9l-6 6" />
+                            </svg>
+                          )}
                         </button>
                       )}
                     </td>
@@ -916,3 +963,4 @@ export default function InternalLeadsDashboard() {
     </div>
   );
 }
+
