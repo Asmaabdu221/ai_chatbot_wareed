@@ -80,13 +80,13 @@
 /* ── Stats bar ── */
 .ild-stats-bar {
   display: flex;
-  gap: var(--space-sm);
-  padding: 16px 2rem 14px;
+  gap: 12px;
+  padding: 24px 2rem 14px;
   background: transparent;
   border-bottom: none;
   flex-shrink: 0;
   flex-direction: row-reverse;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .ild-stat-card {
@@ -101,7 +101,11 @@
   cursor: pointer;
   transition: background var(--transition-base), border-color var(--transition-base), box-shadow var(--transition-base);
   font-family: inherit;
-  min-width: 72px;
+  min-width: 0;
+  flex: 1 1 0;
+  justify-content: center;
+  min-height: 96px;
+  text-align: center;
 }
 
 .ild-stat-card:hover {
@@ -119,7 +123,7 @@
   border-top-left-radius: 8px;
   border-top-right-radius: 8px;
   background: #cbd5e1;
-  margin: -8px -12px 8px;
+  margin: -8px -12px 10px;
 }
 
 .ild-stat-card--new::before { background: #f59e0b; }
@@ -266,7 +270,7 @@
 .ild-badge {
   display: inline-block;
   padding: 2px 10px;
-  border-radius: var(--radius-full);
+  border-radius: 8px;
   font-size: var(--text-xs);
   font-weight: 600;
   white-space: nowrap;
@@ -338,14 +342,14 @@
   height: 40px;
   justify-content: center;
   padding: 0;
-  background: transparent;
+  background: #f3f4f6;
   color: #4b5563;
-  border-color: transparent;
+  border-color: #e5e7eb;
   border-radius: 999px;
 }
 
 .ild-btn--refresh:hover:not(:disabled) {
-  background: #f3f4f6;
+  background: #e5e7eb;
   color: #111827;
 }
 
@@ -423,7 +427,8 @@
   color: #4f46e5;
   border-color: transparent;
   opacity: 0;
-  transition: opacity var(--transition-base), background var(--transition-base);
+  transition: opacity 200ms ease, background 200ms ease, transform 200ms ease;
+  transform: translateY(2px);
 }
 
 .ild-btn--summary:hover:not(:disabled) {
@@ -435,6 +440,7 @@
 .ild-table__row:focus-within .ild-btn--summary,
 .ild-table__row:focus-within .ild-btn--inline-close {
   opacity: 1;
+  transform: translateY(0);
 }
 
 /* ── Empty / loading states ── */
@@ -713,7 +719,7 @@
   font-size: var(--text-xs);
   font-weight: 500;
   padding: 3px 8px;
-  border-radius: var(--radius-full);
+  border-radius: 8px;
   border: 1px solid transparent;
 }
 
@@ -786,7 +792,7 @@
   min-width: 20px;
   height: 20px;
   padding: 0 5px;
-  border-radius: var(--radius-full);
+  border-radius: 8px;
   background: #ef4444;
   color: #fff;
   font-size: 11px;
@@ -920,9 +926,9 @@
 
 .ild-filter-bar__search-wrap {
   position: relative;
-  flex: 1;
-  min-width: 160px;
-  max-width: 280px;
+  flex: 0 1 40%;
+  min-width: 320px;
+  max-width: 40%;
 }
 
 .ild-filter-bar__search-icon {
@@ -983,6 +989,8 @@
   outline: none;
   cursor: pointer;
   transition: border-color var(--transition-base), box-shadow var(--transition-base);
+  flex: 0 1 24%;
+  min-width: 200px;
 }
 
 .ild-filter-bar__select:focus {
@@ -995,6 +1003,8 @@
   align-items: center;
   gap: 4px;
   direction: rtl;
+  flex: 1 1 36%;
+  min-width: 280px;
 }
 
 .ild-filter-bar__date-sep {
@@ -1064,12 +1074,37 @@
   color: #6b7280;
   border-color: transparent;
   opacity: 0;
+  transition: opacity 200ms ease, background 200ms ease, color 200ms ease, transform 200ms ease;
+  transform: translateY(2px);
 }
 
 .ild-btn--inline-close:hover:not(:disabled) {
   background: #fff1f2;
   color: #b91c1c;
   border-color: #fecdd3;
+}
+
+.ild-source-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: #6b7280;
+}
+
+.ild-source-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.ild-source-icon rect,
+.ild-source-icon path,
+.ild-source-icon circle {
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .ild-filter-bar__clear {
