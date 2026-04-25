@@ -54,6 +54,9 @@ const CRM_STATUS_LABELS = {
 };
 
 const INTENT_LABELS = {
+  TRANSFER_TO_HUMAN: 'تحويل لموظف',
+  CLARIFY: 'طلب استفسار',
+  BOOKING: 'طلب حجز',
   ask_phone: 'طلب حجز',
   transfer_to_human: 'تحويل لموظف',
   offer_human_help: 'مساعدة بشرية',
@@ -85,6 +88,18 @@ function formatIntent(intent) {
   if (key === 'BOOKING' || key.includes('BOOK') || key.includes('ASK_PHONE')) return 'طلب حجز';
 
   return INTENT_LABELS[raw] || 'غير محدد';
+}
+
+function normalizeIntentKey(intent) {
+  const raw = (intent || '').toString().trim();
+  if (!raw) return '';
+  const upper = raw.toUpperCase();
+  if (upper === 'TRANSFER_TO_HUMAN') return 'TRANSFER_TO_HUMAN';
+  if (upper === 'CLARIFY') return 'CLARIFY';
+  if (upper === 'BOOKING' || upper.includes('BOOK') || upper.includes('ASK_PHONE')) return 'BOOKING';
+  if (raw === 'transfer_to_human') return 'TRANSFER_TO_HUMAN';
+  if (raw === 'ask_phone') return 'BOOKING';
+  return '';
 }
 
 function renderSource(source) {
@@ -333,7 +348,7 @@ function LeadDetailPanel({ lead, onClose, onCloseLead, onRetryCrm, closing, retr
   );
 }
 
-function FilterBar({ filters, onChange, onClear, statsTabs, activeStatus, onStatusChange }) {
+function FilterBar({ filters, onChange, onClear, statsTabs, activeIntent, onIntentPillChange }) {
   const hasActive = !!(filters.q || filters.intent || filters.action || filters.dateFrom || filters.dateTo);
   return (
     <div className="ild-filter-bar">
@@ -359,9 +374,9 @@ function FilterBar({ filters, onChange, onClear, statsTabs, activeStatus, onStat
           onChange={(e) => onChange({ ...filters, intent: e.target.value })}
         >
           <option value="">كل النوايا</option>
-          <option value="ask_phone">طلب حجز</option>
-          <option value="transfer_to_human">تحويل لموظف</option>
-          <option value="offer_human_help">مساعدة بشرية</option>
+          <option value="BOOKING">طلب حجز</option>
+          <option value="TRANSFER_TO_HUMAN">تحويل لموظف</option>
+          <option value="CLARIFY">طلب استفسار</option>
         </select>
         <div className="ild-filter-bar__dates">
           <input
@@ -392,8 +407,8 @@ function FilterBar({ filters, onChange, onClear, statsTabs, activeStatus, onStat
           <button
             key={tab.key}
             type="button"
-            className={`ild-mini-stat ild-mini-stat--${tab.key}${activeStatus === tab.key ? ' ild-mini-stat--active' : ''}`}
-            onClick={() => onStatusChange(tab.key)}
+            className={`ild-mini-stat ild-mini-stat--${tab.key}${activeIntent === tab.key ? ' ild-mini-stat--active' : ''}`}
+            onClick={() => onIntentPillChange(tab.key)}
           >
             <span className="ild-mini-stat__label">{tab.label}</span>
             <span className="ild-mini-stat__count">{tab.count}</span>
@@ -528,8 +543,9 @@ export default function InternalLeadsDashboard() {
       const res = await getInternalLeads(key, {
         status: filter === 'all' ? null : filter,
         pageSize: 100,
-        intent: af.intent || null,
-        action: af.action || null,
+        // Intent/action filtering is handled client-side to keep pills and dropdown fully synced.
+        intent: null,
+        action: null,
         q: af.q || null,
         dateFrom: af.dateFrom || null,
         dateTo: af.dateTo || null,
@@ -693,9 +709,10 @@ export default function InternalLeadsDashboard() {
   }
 
   function handleFilterChange(key) {
-    setStatusFilter(key);
+    // Stats pills are an intent shortcut synced with the dropdown.
+    const nextIntent = key === 'all' ? '' : key;
+    setFilters((prev) => ({ ...prev, intent: nextIntent }));
     setSelectedLead(null);
-    if (key === 'new') setUnreadCount(0);
   }
 
   function handleFiltersChange(newFilters) {
@@ -768,12 +785,27 @@ export default function InternalLeadsDashboard() {
     effectiveFilters.dateFrom || effectiveFilters.dateTo
   );
 
+  const selectedIntent = filters.intent || 'all';
+  const filteredLeads = !filters.intent
+    ? leads
+    : leads.filter((lead) => normalizeIntentKey(lead.latest_intent) === filters.intent);
   const statTabs = [
-    { key: 'all', label: 'الكل', count: stats.all },
-    { key: 'new', label: 'جديد', count: stats.new },
-    { key: 'delivered', label: 'مُسلَّم', count: stats.delivered },
-    { key: 'failed', label: 'فاشل', count: stats.failed },
-    { key: 'closed', label: 'مغلق', count: stats.closed },
+    { key: 'all', label: 'الكل', count: leads.length },
+    {
+      key: 'TRANSFER_TO_HUMAN',
+      label: 'تحويل لموظف',
+      count: leads.filter((lead) => normalizeIntentKey(lead.latest_intent) === 'TRANSFER_TO_HUMAN').length,
+    },
+    {
+      key: 'CLARIFY',
+      label: 'طلب استفسار',
+      count: leads.filter((lead) => normalizeIntentKey(lead.latest_intent) === 'CLARIFY').length,
+    },
+    {
+      key: 'BOOKING',
+      label: 'طلب حجز',
+      count: leads.filter((lead) => normalizeIntentKey(lead.latest_intent) === 'BOOKING').length,
+    },
   ];
   const intentLabels = {
     TRANSFER_TO_HUMAN: 'تحويل لموظف',
@@ -858,8 +890,8 @@ export default function InternalLeadsDashboard() {
         onChange={handleFiltersChange}
         onClear={handleClearFilters}
         statsTabs={statTabs}
-        activeStatus={statusFilter}
-        onStatusChange={handleFilterChange}
+        activeIntent={selectedIntent}
+        onIntentPillChange={handleFilterChange}
       />
 
       {/* Error banner */}
@@ -873,12 +905,12 @@ export default function InternalLeadsDashboard() {
       {/* Main: table + detail panel */}
       <div className={`ild-main${selectedLead ? ' ild-main--split' : ''}`}>
         <div className="ild-table-wrap">
-          {loading && leads.length === 0 ? (
+          {loading && filteredLeads.length === 0 ? (
             <div className="ild-empty">
               <span className="ild-empty__spinner" aria-hidden="true" />
               <p>جارٍ التحميل...</p>
             </div>
-          ) : leads.length === 0 ? (
+          ) : filteredLeads.length === 0 ? (
             <div className="ild-empty">
               <p className="ild-empty__icon">{hasActiveFilters ? '🔍' : '📭'}</p>
               <p>{hasActiveFilters ? 'لا توجد نتائج تطابق الفلاتر المحددة' : 'لا توجد Leads بعد'}</p>
@@ -904,7 +936,7 @@ export default function InternalLeadsDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {leads.map((lead) => (
+                {filteredLeads.map((lead) => (
                   <tr
                     key={lead.id}
                     className={[
