@@ -103,6 +103,20 @@ function renderSource(source) {
   return source || '—';
 }
 
+function toOneLineSummary(text, maxWords = 10) {
+  const raw = (text || '').toString().replace(/\s+/g, ' ').trim();
+  if (!raw) return 'استفسار عام';
+  const words = raw.split(' ');
+  if (words.length <= maxWords) return raw;
+  return `${words.slice(0, maxWords).join(' ')}...`;
+}
+
+function getTableSummary(lead) {
+  // Table must stay scan-friendly: short headline only.
+  const source = lead?.summary_hint || lead?.summary_text || '';
+  return toOneLineSummary(source, 10);
+}
+
 function normalizeEventToLead(event) {
   return {
     id: event.lead_id,
@@ -906,7 +920,7 @@ export default function InternalLeadsDashboard() {
                   >
                     <td className="ild-table__phone">{lead.phone}</td>
                     <td className="ild-table__intent">{intentLabels[(lead.latest_intent || '').toUpperCase()] || 'غير محدد'}</td>
-                    <td className="ild-table__hint">{lead.summary_hint || '—'}</td>
+                    <td className="ild-table__hint">{getTableSummary(lead)}</td>
                     <td>{renderSource(lead.source)}</td>
                     <td className="ild-table__date">{formatDate(lead.created_at)}</td>
                     <td><StatusBadge status={lead.status} /></td>
