@@ -3,7 +3,9 @@ import { getAccessToken } from "./auth";
 
 const API_BASE_URL =
   process.env.REACT_APP_API_BASE_URL ||
-  "https://ai-chatbot-wareed.onrender.com";
+  (process.env.NODE_ENV === "production"
+    ? "https://ai-chatbot-wareed.onrender.com"
+    : "http://localhost:8000");
 
 const getApiUrlForDisplay = () => API_BASE_URL;
 
