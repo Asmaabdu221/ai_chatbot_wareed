@@ -269,7 +269,7 @@
   font-family: inherit;
   cursor: pointer;
   border: 1px solid var(--border);
-  transition: background var(--transition-base), color var(--transition-base), border-color var(--transition-base);
+  transition: all 0.2s ease-in-out;
 }
 
 .ild-btn:disabled {
@@ -1076,6 +1076,7 @@
   position: relative;
   padding-inline-start: 16px;
   margin-right: auto;
+  margin-left: 8px;
 }
 
 .ild-filter-bar__stats::before {

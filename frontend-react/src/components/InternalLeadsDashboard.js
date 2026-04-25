@@ -223,7 +223,7 @@ function ApiKeyForm({ onSubmit }) {
     <div className="ild-keyform-wrap" dir="rtl">
       <div className="ild-keyform">
         <img src="/images/wareed-logo.png" alt="وريد" className="ild-keyform__logo" />
-        <h1 className="ild-keyform__title">لوحة الـ Leads الداخلية</h1>
+        <h1 className="ild-keyform__title">لوحة إدارة الطلبات</h1>
         <p className="ild-keyform__sub">أدخل مفتاح الوصول للمتابعة</p>
         <form onSubmit={handleSubmit} noValidate>
           <input
@@ -249,7 +249,7 @@ function AccessDenied({ onSwitchToApiKey }) {
       <div className="ild-keyform">
         <img src="/images/wareed-logo.png" alt="وريد" className="ild-keyform__logo" />
         <h1 className="ild-keyform__title">غير مصرح بالوصول</h1>
-        <p className="ild-keyform__sub">حسابك الحالي لا يمتلك صلاحية الوصول للوحة الـ Leads الداخلية.</p>
+        <p className="ild-keyform__sub">حسابك الحالي لا يمتلك صلاحية الوصول للوحة إدارة الطلبات.</p>
         <p className="ild-keyform__sub" style={{ fontSize: '12px', marginTop: '-4px' }}>
           تواصل مع مدير النظام لإضافة الصلاحية، أو استخدم مفتاح وصول مباشر.
         </p>
@@ -396,6 +396,10 @@ function FilterBar({ filters, onChange, onClear, statsTabs, activeStatus, onStat
 
 export default function InternalLeadsDashboard() {
   const navigate = useNavigate();
+
+  useEffect(() => {
+    document.title = 'لوحة إدارة الطلبات';
+  }, []);
 
   // --- Auth mode ---
   // 'checking'  → resolving whether user has an internal role
@@ -774,7 +778,7 @@ export default function InternalLeadsDashboard() {
       <header className="ild-header">
         <div className="ild-header__brand">
           <img src="/images/wareed-logo.png" alt="وريد" className="ild-header__logo" />
-          <span className="ild-header__title">لوحة الـ Leads</span>
+          <span className="ild-header__title">لوحة إدارة الطلبات</span>
           {unreadCount > 0 && (
             <span className="ild-unread-badge" title={`${unreadCount} Lead جديد غير مقروء`}>
               {unreadCount > 99 ? '99+' : unreadCount}
@@ -901,7 +905,7 @@ export default function InternalLeadsDashboard() {
                     aria-label={`Lead ${lead.phone}`}
                   >
                     <td className="ild-table__phone">{lead.phone}</td>
-                    <td>{intentLabels[(lead.latest_intent || '').toUpperCase()] || 'غير محدد'}</td>
+                    <td className="ild-table__intent">{intentLabels[(lead.latest_intent || '').toUpperCase()] || 'غير محدد'}</td>
                     <td className="ild-table__hint">{lead.summary_hint || '—'}</td>
                     <td>{renderSource(lead.source)}</td>
                     <td className="ild-table__date">{formatDate(lead.created_at)}</td>
