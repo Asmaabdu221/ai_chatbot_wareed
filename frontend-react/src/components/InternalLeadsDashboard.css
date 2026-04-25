@@ -186,11 +186,12 @@
   direction: ltr;
   text-align: right !important;
   white-space: nowrap;
-  padding-right: 20px !important;
+  padding-right: 16px !important;
 }
 
 .ild-table__intent {
   background: rgba(31, 41, 55, 0.03);
+  vertical-align: middle !important;
 }
 
 .ild-table__hint {
@@ -1193,6 +1194,7 @@
   justify-content: center;
   z-index: 10000;
   padding: var(--space-lg);
+  animation: ild-modal-backdrop-fade 0.2s ease-in-out;
 }
 
 .ild-modal {
@@ -1203,13 +1205,14 @@
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-overlay);
   overflow: hidden;
+  animation: ild-modal-fade-in 0.22s ease-in-out;
 }
 
 .ild-modal__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-direction: row-reverse;
+  flex-direction: row;
   padding: var(--space-md) var(--space-lg);
   border-bottom: 1px solid var(--border);
 }
@@ -1218,6 +1221,7 @@
   margin: 0;
   font-size: var(--text-base);
   font-weight: 700;
+  text-align: right;
 }
 
 .ild-modal__close {
@@ -1234,5 +1238,22 @@
   font-size: var(--text-sm);
   line-height: 1.8;
   white-space: pre-wrap;
+  text-align: right;
+}
+
+@keyframes ild-modal-backdrop-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes ild-modal-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
