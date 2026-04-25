@@ -757,6 +757,11 @@ export default function InternalLeadsDashboard() {
     { key: 'failed', label: 'فاشل', count: stats.failed },
     { key: 'closed', label: 'مغلق', count: stats.closed },
   ];
+  const intentLabels = {
+    TRANSFER_TO_HUMAN: 'تحويل لموظف',
+    CLARIFY: 'طلب استفسار',
+    BOOKING: 'طلب حجز',
+  };
 
   return (
     <div className="ild-layout" dir="rtl" lang="ar">
@@ -896,11 +901,7 @@ export default function InternalLeadsDashboard() {
                     aria-label={`Lead ${lead.phone}`}
                   >
                     <td className="ild-table__phone">{lead.phone}</td>
-                    <td>{({
-                      TRANSFER_TO_HUMAN: 'تحويل لموظف',
-                      CLARIFY: 'طلب استفسار',
-                      BOOKING: 'طلب حجز',
-                    }[(lead.latest_intent || '').toUpperCase()] || 'غير محدد'}</td>
+                    <td>{intentLabels[(lead.latest_intent || '').toUpperCase()] || 'غير محدد'}</td>
                     <td className="ild-table__hint">{lead.summary_hint || '—'}</td>
                     <td>{renderSource(lead.source)}</td>
                     <td className="ild-table__date">{formatDate(lead.created_at)}</td>
