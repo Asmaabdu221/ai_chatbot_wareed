@@ -269,16 +269,9 @@ export default function WareedAiWidgetPreview() {
           aria-label="نافذة دردشة وريد AI"
         >
           <header className="wareed-widget-preview__chat-header">
-            <div className="wareed-widget-preview__brand-wrap">
-              <div className="wareed-widget-preview__avatar" aria-hidden="true">W</div>
-              <div className="wareed-widget-preview__brand-text">
-                <h3>Wareed AI</h3>
-                <p>المساعد الذكي</p>
-                <div className="wareed-widget-preview__status">
-                  <span className="wareed-widget-preview__status-dot" />
-                  <span>متصل الآن</span>
-                </div>
-              </div>
+            <div className="wareed-widget-preview__brand-text">
+              <h3>Wareed AI</h3>
+              <p>المساعد الذكي</p>
             </div>
             <button
               type="button"
@@ -300,9 +293,6 @@ export default function WareedAiWidgetPreview() {
                 disabled={isSending}
                 className="wareed-widget-preview__quick-card"
               >
-                <span className="wareed-widget-preview__quick-icon" aria-hidden="true">
-                  {action.icon}
-                </span>
                 <span className="wareed-widget-preview__quick-label">{action.label}</span>
               </button>
             ))}
