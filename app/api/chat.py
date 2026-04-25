@@ -73,6 +73,9 @@ class ChatResponse(BaseModel):
     model: Optional[str] = Field(None, description="AI model used")
     timestamp: datetime = Field(..., description="Response timestamp")
     error: Optional[str] = Field(None, description="Error message if failed")
+    lead_captured: bool = Field(default=False, description="Whether this response captured and persisted a lead")
+    lead_id: Optional[UUID] = Field(default=None, description="Lead ID when lead_captured=true")
+    conversation_closed: bool = Field(default=False, description="Whether widget should start a new conversation after this response")
 
     @model_validator(mode="before")
     @classmethod
@@ -616,6 +619,8 @@ async def chat_endpoint(
         user = None
         conversation = None
         lead_cutoff_at: Optional[datetime] = None
+        lead_captured_flag = False
+        lead_id: Optional[UUID] = None
         
         if db is not None:
             user, created_new_user = _get_or_create_user(db, effective_user_id)
@@ -679,6 +684,8 @@ async def chat_endpoint(
                             _lead = create_lead_from_draft(_phone_result.lead_draft, db)
                             if _lead is not None:
                                 deliver_lead(_lead, db)
+                                lead_captured_flag = True
+                                lead_id = _lead.id
                         except Exception as _lead_err:
                             logger.warning("lead_service skipped (non-blocking): %s", _lead_err)
                     return ChatResponse(
@@ -691,12 +698,16 @@ async def chat_endpoint(
                         model="flow",
                         timestamp=datetime.now(),
                         error=None,
+                        lead_captured=lead_captured_flag,
+                        lead_id=lead_id,
+                        conversation_closed=lead_captured_flag,
                     )
                 # None returned → new topic, state already reset to IDLE, fall through
         except Exception as _phase2a_err:
             logger.warning("conversation_flow phase2a skipped (non-blocking): %s", _phase2a_err)
 
         def _persist_lead_from_flow(_flow_result) -> None:
+            nonlocal lead_captured_flag, lead_id
             if not _flow_result or not _flow_result.phone_captured or not _flow_result.lead_draft:
                 return
             try:
@@ -716,6 +727,8 @@ async def chat_endpoint(
                 _lead = create_lead_from_draft(_flow_result.lead_draft, db)
                 if _lead is not None:
                     deliver_lead(_lead, db)
+                    lead_captured_flag = True
+                    lead_id = _lead.id
             except Exception as _lead_err:
                 logger.warning("lead_service skipped (non-blocking): %s", _lead_err)
 
@@ -772,7 +785,10 @@ async def chat_endpoint(
                 tokens_used=0,
                 model="router",
                 timestamp=datetime.now(),
-                error=None
+                error=None,
+                lead_captured=lead_captured_flag,
+                lead_id=lead_id,
+                conversation_closed=lead_captured_flag,
             )
         
         # === RUNTIME ROUTER (branches, FAQ, results, packages, tests) ===
@@ -875,6 +891,9 @@ async def chat_endpoint(
                     model="runtime",
                     timestamp=datetime.now(),
                     error=None,
+                    lead_captured=lead_captured_flag,
+                    lead_id=lead_id,
+                    conversation_closed=lead_captured_flag,
                 )
             logger.info(
                 "runtime_router | matched=no | route=%s | fallback=cache_rag",
@@ -913,7 +932,10 @@ async def chat_endpoint(
                     tokens_used=0,
                     model="cache",
                     timestamp=datetime.now(),
-                    error=None
+                    error=None,
+                    lead_captured=lead_captured_flag,
+                    lead_id=lead_id,
+                    conversation_closed=lead_captured_flag,
                 )
             return ChatResponse(
                 reply=_cached_final,
@@ -924,7 +946,10 @@ async def chat_endpoint(
                 tokens_used=0,
                 model="cache",
                 timestamp=datetime.now(),
-                error=None
+                error=None,
+                lead_captured=lead_captured_flag,
+                lead_id=lead_id,
+                conversation_closed=lead_captured_flag,
             )
         
         # === OPENAI API CALL ===
@@ -1002,6 +1027,9 @@ async def chat_endpoint(
                                         model=_strict_response.get("model") or "openai",
                                         timestamp=datetime.now(),
                                         error=None,
+                                        lead_captured=lead_captured_flag,
+                                        lead_id=lead_id,
+                                        conversation_closed=lead_captured_flag,
                                     )
                                 logger.info("📚 Strict LLM also gave up - returning NO_INFO")
                         except Exception as _llm_fb_err:
@@ -1020,7 +1048,10 @@ async def chat_endpoint(
                             tokens_used=0,
                             model="rag",
                             timestamp=datetime.now(),
-                            error=None
+                            error=None,
+                            lead_captured=lead_captured_flag,
+                            lead_id=lead_id,
+                            conversation_closed=lead_captured_flag,
                         )
                 else:
                     # RAG not built: single source only - return no-info without API call
@@ -1038,7 +1069,10 @@ async def chat_endpoint(
                         tokens_used=0,
                         model="rag",
                         timestamp=datetime.now(),
-                        error=None
+                        error=None,
+                        lead_captured=lead_captured_flag,
+                        lead_id=lead_id,
+                        conversation_closed=lead_captured_flag,
                     )
                 logger.info(f"📚 Context loaded ({len(knowledge_context or '')} chars)")
             except Exception as e:
@@ -1098,7 +1132,10 @@ async def chat_endpoint(
                 tokens_used=ai_response["tokens_used"],
                 model=ai_response["model"],
                 timestamp=datetime.now(),
-                error=None
+                error=None,
+                lead_captured=lead_captured_flag,
+                lead_id=lead_id,
+                conversation_closed=lead_captured_flag,
             )
         else:
             message_id = uuid4()
@@ -1123,7 +1160,10 @@ async def chat_endpoint(
                 tokens_used=0,
                 model=ai_response["model"],
                 timestamp=datetime.now(),
-                error=ai_response["error"]
+                error=ai_response["error"],
+                lead_captured=lead_captured_flag,
+                lead_id=lead_id,
+                conversation_closed=lead_captured_flag,
             )
     
     except HTTPException:

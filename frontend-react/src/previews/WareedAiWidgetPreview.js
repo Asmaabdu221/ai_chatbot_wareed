@@ -3,15 +3,15 @@ import api from '../services/api';
 import './WareedAiWidgetPreview.css';
 
 const WELCOME_MESSAGE = `حياك الله في مختبرات وريد الطبية
-أنا وريد AI، مساعدك الذكي.
+أنا Wareed AI، مساعدك الذكي.
 أقدر أساعدك في الاستفسار عن التحاليل، النتائج، الفروع، والخدمات.
 تفضل كيف أقدر أخدمك؟`;
 
-const QUICK_CHIPS = [
-  'أبغى أسأل عن تحليل',
-  'أبغى أعرف الفروع',
-  'عندي نتيجة وأبغى تفسير',
-  'أبغى أتواصل مع خدمة العملاء',
+const QUICK_ACTIONS = [
+  { icon: '🧪', label: 'اسأل عن تحليل', text: 'أبغى أسأل عن تحليل' },
+  { icon: '📍', label: 'اعرف الفروع', text: 'أبغى أعرف الفروع' },
+  { icon: '🧾', label: 'تفسير نتيجة', text: 'عندي نتيجة وأبغى تفسير' },
+  { icon: '🎧', label: 'تواصل معنا', text: 'أبغى أتواصل مع خدمة العملاء' },
 ];
 
 const CONNECTIVITY_ERROR_MESSAGE = 'حصلت مشكلة مؤقتة في الاتصال، حاول مرة أخرى بعد قليل.';
@@ -27,7 +27,6 @@ function generateWidgetUserId() {
     return window.crypto.randomUUID();
   }
 
-  // Fallback UUID v4 generator for older browsers.
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
     const random = Math.floor(Math.random() * 16);
     const value = char === 'x' ? random : (random & 0x3) | 0x8;
@@ -112,7 +111,6 @@ export default function WareedAiWidgetPreview() {
     setIsSending(true);
 
     try {
-      // Always read continuity IDs from storage at send time (state is only a UI mirror).
       const stableUserId = getOrCreateWidgetUserId();
       const stableConversationId = getStoredConversationId();
 
@@ -144,15 +142,25 @@ export default function WareedAiWidgetPreview() {
         setSessionUserId(data.user_id);
       }
 
-      // Pin and persist conversation_id so continuity survives refresh/re-render.
       if (data?.conversation_id && UUID_V4_REGEX.test(data.conversation_id)) {
         setStoredConversationId(data.conversation_id);
         setSessionConversationId(data.conversation_id);
       }
 
+      const leadCaptured = Boolean(data?.lead_captured || data?.conversation_closed);
+      if (leadCaptured) {
+        console.info('[Widget session] lead captured, clearing conversation_id', {
+          conversation_id: data?.conversation_id || null,
+          lead_id: data?.lead_id || null,
+        });
+        setStoredConversationId(null);
+        setSessionConversationId(null);
+      }
+
       console.info('[Widget continuity] /api/chat response IDs', {
         user_id: data?.user_id || null,
         conversation_id: data?.conversation_id || null,
+        lead_captured: Boolean(data?.lead_captured),
       });
 
       setMessages((prev) =>
@@ -165,7 +173,11 @@ export default function WareedAiWidgetPreview() {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === typingId
-            ? { id: `err_${messageCounterRef.current++}`, role: 'assistant', text: CONNECTIVITY_ERROR_MESSAGE }
+            ? {
+                id: `err_${messageCounterRef.current++}`,
+                role: 'assistant',
+                text: CONNECTIVITY_ERROR_MESSAGE,
+              }
             : m
         )
       );
@@ -181,48 +193,6 @@ export default function WareedAiWidgetPreview() {
 
   return (
     <div className="wareed-widget-preview" dir="rtl" lang="ar">
-      {/*
-        ================================================================
-        FILLER SECTIONS — kept as comments for reference / internal demos.
-        Do NOT restore these for the customer-facing widget page.
-        ================================================================
-
-        <main className="wareed-widget-preview__hero">
-          <div className="wareed-widget-preview__hero-content">
-            <p className="wareed-widget-preview__eyebrow">Wareed Labs Preview</p>
-            <h1>معاينة ويدجت وريد AI</h1>
-            <p>
-              نموذج واجهة محلي لتجربة زر المساعد الذكي والشات العائم،
-              بدون أي تعديل على التكامل الإنتاجي الحالي.
-            </p>
-          </div>
-        </main>
-
-        <section className="wareed-widget-preview__cards">
-          <article className="wareed-widget-preview__card">
-            <h2>معاينة داخلية</h2>
-            <p>هذه الصفحة مخصصة لاختبار شكل و سلوك ويدجت وريد AI قبل ربطه بالموقع الإنتاجي.</p>
-          </article>
-          <article className="wareed-widget-preview__card">
-            <h2>تجربة تفاعل عربية</h2>
-            <p>الواجهة هنا RTL بالكامل مع رسائل تجريبية فقط لتأكيد تجربة الاستخدام.</p>
-          </article>
-          <article className="wareed-widget-preview__card">
-            <h2>قابلية الدمج لاحقاً</h2>
-            <p>بعد اعتماد الشكل النهائي، نقدر ننقل نفس المكون لواجهة الموقع الفعلية بشكل آمن.</p>
-          </article>
-        </section>
-
-        — Ghost multi-channel icons (placeholder; restore when channel stack is ready) —
-        <div className="wareed-widget-preview__floating-stack" aria-hidden="true">
-          <button type="button" className="wareed-widget-preview__ghost-icon">تطبيق وريد</button>
-          <button type="button" className="wareed-widget-preview__ghost-icon">واتساب</button>
-          <button type="button" className="wareed-widget-preview__ghost-icon">اتصال</button>
-        </div>
-        ================================================================
-      */}
-
-      {/* Floating AI toggle button */}
       <button
         type="button"
         className="wareed-widget-preview__ai-button"
@@ -231,10 +201,9 @@ export default function WareedAiWidgetPreview() {
         aria-controls="wareed-ai-chat-panel"
       >
         <span className="wareed-widget-preview__ai-dot" />
-        Wareed AI
+        <span>Wareed AI</span>
       </button>
 
-      {/* Chat panel */}
       {isOpen && (
         <aside
           id="wareed-ai-chat-panel"
@@ -242,25 +211,36 @@ export default function WareedAiWidgetPreview() {
           aria-label="نافذة دردشة وريد AI"
         >
           <header className="wareed-widget-preview__chat-header">
-            <div>
-              <h3>Wareed AI</h3>
-              <p>المساعد الذكي</p>
+            <div className="wareed-widget-preview__brand-wrap">
+              <div className="wareed-widget-preview__avatar" aria-hidden="true">W</div>
+              <div className="wareed-widget-preview__brand-text">
+                <h3>Wareed AI</h3>
+                <p>المساعد الذكي</p>
+                <div className="wareed-widget-preview__status">
+                  <span className="wareed-widget-preview__status-dot" />
+                  <span>متصل الآن</span>
+                </div>
+              </div>
             </div>
             <button type="button" onClick={() => setIsOpen(false)} aria-label="إغلاق">
-              اغلاق
+              إغلاق
             </button>
           </header>
 
-          <div className="wareed-widget-preview__chips" role="list">
-            {QUICK_CHIPS.map((chip) => (
+          <div className="wareed-widget-preview__quick-actions" role="list" aria-label="إجراءات سريعة">
+            {QUICK_ACTIONS.map((action) => (
               <button
-                key={chip}
+                key={action.text}
                 type="button"
-                onClick={() => sendMessage(chip)}
+                onClick={() => sendMessage(action.text)}
                 role="listitem"
                 disabled={isSending}
+                className="wareed-widget-preview__quick-card"
               >
-                {chip}
+                <span className="wareed-widget-preview__quick-icon" aria-hidden="true">
+                  {action.icon}
+                </span>
+                <span className="wareed-widget-preview__quick-label">{action.label}</span>
               </button>
             ))}
           </div>
@@ -269,11 +249,15 @@ export default function WareedAiWidgetPreview() {
             {messages.map((message) => (
               <div
                 key={message.id}
-                className={`wareed-widget-preview__message wareed-widget-preview__message--${message.role}${
-                  message.isTyping ? ' wareed-widget-preview__message--typing' : ''
-                }`}
+                className={`wareed-widget-preview__message-row wareed-widget-preview__message-row--${message.role}`}
               >
-                <p>{message.text}</p>
+                <div
+                  className={`wareed-widget-preview__message wareed-widget-preview__message--${message.role}${
+                    message.isTyping ? ' wareed-widget-preview__message--typing' : ''
+                  }`}
+                >
+                  <p>{message.text}</p>
+                </div>
               </div>
             ))}
           </div>
@@ -283,12 +267,12 @@ export default function WareedAiWidgetPreview() {
               type="text"
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder="اكتب رسالتك هنا"
-              aria-label="اكتب رسالتك"
+              placeholder="اكتب سؤالك هنا..."
+              aria-label="اكتب سؤالك هنا"
               disabled={isSending}
             />
-            <button type="submit" disabled={isSending}>
-              {isSending ? 'جارٍ الإرسال...' : 'إرسال'}
+            <button type="submit" disabled={isSending} aria-label="إرسال">
+              {isSending ? '...' : '➤'}
             </button>
           </form>
         </aside>
