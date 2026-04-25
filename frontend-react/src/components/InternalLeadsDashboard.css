@@ -9,9 +9,9 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: var(--bg);
+  background: #F9FAFB;
   color: var(--text-primary);
-  font-family: 'Cairo', 'Noto Sans Arabic', 'Inter', sans-serif;
+  font-family: 'IBM Plex Sans Arabic', 'Inter', 'Noto Sans Arabic', sans-serif;
   overflow: hidden;
 }
 
@@ -20,11 +20,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-sm) var(--space-lg);
-  min-height: 68px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  box-shadow: var(--shadow-subtle);
+  padding: 1rem 2rem;
+  min-height: 72px;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   flex-shrink: 0;
   gap: var(--space-md);
 }
@@ -58,14 +58,15 @@
   margin-inline-end: auto; /* keep actions block on the left in RTL */
   flex-wrap: nowrap;
   padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--card-bg);
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
 }
 
 .ild-header .ild-btn {
-  height: 36px;
-  padding: 0 12px;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 8px;
   white-space: nowrap;
 }
 
@@ -80,9 +81,9 @@
 .ild-stats-bar {
   display: flex;
   gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-lg);
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  padding: 14px 2rem 12px;
+  background: transparent;
+  border-bottom: none;
   flex-shrink: 0;
   flex-direction: row-reverse;
   flex-wrap: wrap;
@@ -93,11 +94,12 @@
   flex-direction: column;
   align-items: center;
   padding: var(--space-sm) var(--space-md);
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  background: #fff;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   cursor: pointer;
-  transition: background var(--transition-base), border-color var(--transition-base);
+  transition: background var(--transition-base), border-color var(--transition-base), box-shadow var(--transition-base);
   font-family: inherit;
   min-width: 72px;
 }
@@ -109,7 +111,7 @@
 
 .ild-stat-card--active {
   background: var(--brand-50);
-  border-color: var(--brand-500);
+  border-color: var(--brand-300);
 }
 
 .ild-stat-card__count {
@@ -172,13 +174,17 @@
 .ild-table-wrap {
   flex: 1;
   overflow-y: auto;
-  padding: var(--space-md) var(--space-lg);
+  padding: var(--space-md) 2rem;
 }
 
 .ild-table {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--text-sm);
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .ild-table thead th {
@@ -295,15 +301,15 @@
 .ild-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   padding: var(--space-sm) var(--space-md);
-  border-radius: var(--radius-md);
+  border-radius: 8px;
   font-size: var(--text-sm);
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
   border: 1px solid var(--border);
-  transition: background var(--transition-base);
+  transition: background var(--transition-base), color var(--transition-base), border-color var(--transition-base);
 }
 
 .ild-btn:disabled {
@@ -312,35 +318,42 @@
 }
 
 .ild-btn--refresh {
-  background: var(--brand-50);
-  color: var(--brand-700);
-  border-color: var(--brand-200);
+  width: 40px;
+  min-width: 40px;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  color: #4b5563;
+  border-color: transparent;
 }
 
 .ild-btn--refresh:hover:not(:disabled) {
-  background: var(--brand-100);
+  background: #f3f4f6;
+  color: #111827;
 }
 
 .ild-btn--analytics {
-  background: var(--card-bg);
-  color: var(--text-secondary);
-  border-color: var(--border);
+  background: #f3f4f6;
+  color: #111827;
+  border-color: #e5e7eb;
+  padding: 0 16px;
 }
 
 .ild-btn--analytics:hover {
-  background: var(--card-hover-bg);
+  background: #e5e7eb;
 }
 
 .ild-btn--logout {
   background: transparent;
-  color: #b45309;
-  border-color: #f1d2b1;
+  color: #6b7280;
+  border-color: transparent;
+  margin-inline-start: 4px;
 }
 
 .ild-btn--logout:hover {
-  background: #fef2f2;
+  background: #fff1f2;
   color: #b91c1c;
-  border-color: #fecaca;
+  border-color: #fecdd3;
 }
 
 .ild-btn--logout:focus-visible {
@@ -428,10 +441,11 @@
   width: 340px;
   flex-shrink: 0;
   border-right: 1px solid var(--border); /* RTL: panel is on the left, border on right */
-  background: var(--surface);
+  background: #fff;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 @media (max-width: 768px) {
@@ -864,9 +878,10 @@
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-lg);
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  padding: 0 2rem 16px;
+  margin-top: 10px;
+  background: transparent;
+  border-bottom: none;
   flex-shrink: 0;
   flex-direction: row-reverse;
   flex-wrap: wrap;
@@ -876,39 +891,43 @@
   flex: 1;
   min-width: 160px;
   max-width: 280px;
-  padding: 6px var(--space-sm);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--input-bg);
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
   color: var(--text-primary);
   font-size: var(--text-sm);
   font-family: inherit;
   direction: rtl;
   text-align: right;
   outline: none;
-  transition: border-color var(--transition-base);
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
 }
 
 .ild-filter-bar__search:focus {
   border-color: var(--brand-500);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
 }
 
 .ild-filter-bar__select {
-  padding: 6px var(--space-sm);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--input-bg);
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
   color: var(--text-primary);
   font-size: var(--text-sm);
   font-family: inherit;
   direction: rtl;
   outline: none;
   cursor: pointer;
-  transition: border-color var(--transition-base);
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
 }
 
 .ild-filter-bar__select:focus {
   border-color: var(--brand-500);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
 }
 
 .ild-filter-bar__dates {
@@ -924,20 +943,43 @@
 }
 
 .ild-filter-bar__date {
-  padding: 6px var(--space-sm);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--input-bg);
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
   color: var(--text-primary);
   font-size: var(--text-sm);
   font-family: inherit;
   outline: none;
   cursor: pointer;
-  transition: border-color var(--transition-base);
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
 }
 
 .ild-filter-bar__date:focus {
   border-color: var(--brand-500);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.ild-btn__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.ild-btn--refresh .ild-btn__icon {
+  width: 17px;
+  height: 17px;
+}
+
+.ild-btn--refresh .ild-btn__icon path {
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .ild-filter-bar__clear {
