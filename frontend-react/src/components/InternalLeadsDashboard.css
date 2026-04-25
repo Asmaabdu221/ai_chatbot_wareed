@@ -20,44 +20,60 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 var(--space-lg);
-  min-height: 56px;
+  padding: var(--space-sm) var(--space-lg);
+  min-height: 68px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   box-shadow: var(--shadow-subtle);
   flex-shrink: 0;
-  flex-direction: row; /* with dir=rtl, brand stays right and controls go left */
-}
-
-.ild-header__left {
-  display: flex;
-  align-items: center;
   gap: var(--space-md);
-  flex-direction: row;
 }
 
-.ild-header__logo {
-  height: 36px;
-  width: auto;
-  object-fit: contain;
-}
-
-.ild-header__title {
-  font-size: var(--text-md);
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.ild-header__right {
+.ild-header__brand {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  flex-direction: row;
+  margin-inline-start: auto; /* keep brand block on the right in RTL */
+  min-width: 0;
+}
+
+.ild-header__logo {
+  height: 34px;
+  width: auto;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.ild-header__title {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.ild-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-inline-end: auto; /* keep actions block on the left in RTL */
+  flex-wrap: nowrap;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card-bg);
+}
+
+.ild-header .ild-btn {
+  height: 36px;
+  padding: 0 12px;
+  white-space: nowrap;
 }
 
 .ild-header__last-refresh {
   font-size: var(--text-xs);
   color: var(--text-muted);
+  white-space: nowrap;
+  padding-inline: 2px;
 }
 
 /* ── Stats bar ── */
@@ -305,13 +321,31 @@
   background: var(--brand-100);
 }
 
-.ild-btn--signout {
+.ild-btn--analytics {
   background: var(--card-bg);
   color: var(--text-secondary);
+  border-color: var(--border);
 }
 
-.ild-btn--signout:hover {
+.ild-btn--analytics:hover {
   background: var(--card-hover-bg);
+}
+
+.ild-btn--logout {
+  background: transparent;
+  color: #b45309;
+  border-color: #f1d2b1;
+}
+
+.ild-btn--logout:hover {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.ild-btn--logout:focus-visible {
+  outline: 2px solid rgba(185, 28, 28, 0.22);
+  outline-offset: 1px;
 }
 
 .ild-btn--close-lead {
