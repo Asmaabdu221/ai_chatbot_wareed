@@ -15,7 +15,7 @@ console.log("[API] Base URL:", API_BASE_URL);
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: 60000,
   withCredentials: true,
   headers: {
     "Content-Type": "application/json",
@@ -55,9 +55,9 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-let onUnauthorized = () => {};
+let onUnauthorized = () => { };
 export function setOnUnauthorized(callback) {
-  onUnauthorized = callback || (() => {});
+  onUnauthorized = callback || (() => { });
 }
 
 // 🔴 Very important: interceptor to log the real error
