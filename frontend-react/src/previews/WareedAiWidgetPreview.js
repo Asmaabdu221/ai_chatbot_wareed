@@ -280,7 +280,12 @@ export default function WareedAiWidgetPreview() {
                 </div>
               </div>
             </div>
-            <button type="button" onClick={() => setIsOpen(false)} aria-label="إغلاق">
+            <button
+              type="button"
+              className="wareed-widget-preview__header-close"
+              onClick={() => setIsOpen(false)}
+              aria-label="إغلاق"
+            >
               إغلاق
             </button>
           </header>
@@ -329,7 +334,12 @@ export default function WareedAiWidgetPreview() {
               aria-label="اكتب سؤالك هنا"
               disabled={isSending}
             />
-            <button type="submit" disabled={isSending} aria-label="إرسال">
+            <button
+              type="submit"
+              className="wareed-widget-preview__send-button"
+              disabled={isSending}
+              aria-label="إرسال"
+            >
               {isSending ? '...' : '➤'}
             </button>
           </form>
