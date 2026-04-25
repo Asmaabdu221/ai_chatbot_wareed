@@ -150,7 +150,7 @@
 }
 
 .ild-table tbody td {
-  padding: 14px var(--space-md);
+  padding: 16px var(--space-md);
   border-bottom: 1px solid var(--border);
   text-align: right;
   vertical-align: middle;
@@ -179,7 +179,7 @@
   color: #000000;
   font-family: 'Inter', monospace;
   direction: ltr;
-  text-align: left !important;
+  text-align: right !important;
   white-space: nowrap;
 }
 
@@ -342,9 +342,9 @@
 }
 
 .ild-btn--inline-close:hover:not(:disabled) {
-  background: #dcfce7;
-  color: #15803d;
-  border-color: #bbf7d0;
+  background: #FEF2F2;
+  color: #DC2626;
+  border-color: #fecaca;
 }
 
 .ild-btn--summary {
@@ -363,7 +363,8 @@
 }
 
 .ild-btn--summary:hover:not(:disabled) {
-  background: #eef2ff;
+  background: #EFF6FF;
+  color: #2563EB;
 }
 
 .ild-table__row:hover .ild-btn--summary,
@@ -1026,8 +1027,8 @@
 }
 
 .ild-btn--inline-close:hover:not(:disabled) {
-  background: #fff1f2;
-  color: #b91c1c;
+  background: #FEF2F2;
+  color: #DC2626;
   border-color: #fecdd3;
 }
 
@@ -1061,6 +1062,20 @@
   gap: 10px;
   flex-wrap: nowrap;
   white-space: nowrap;
+  min-height: 42px;
+  position: relative;
+  padding-inline-start: 16px;
+}
+
+.ild-filter-bar__stats::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1px;
+  height: 24px;
+  background: #E5E7EB;
 }
 
 .ild-mini-stat {
