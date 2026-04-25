@@ -76,7 +76,15 @@ function formatDate(iso) {
 }
 
 function formatIntent(intent) {
-  return INTENT_LABELS[intent] || intent || '—';
+  const raw = (intent || '').toString().trim();
+  if (!raw) return 'غير محدد';
+
+  const key = raw.toUpperCase();
+  if (key === 'TRANSFER_TO_HUMAN') return 'تحويل لموظف';
+  if (key === 'CLARIFY') return 'طلب استفسار';
+  if (key === 'BOOKING' || key.includes('BOOK') || key.includes('ASK_PHONE')) return 'طلب حجز';
+
+  return INTENT_LABELS[raw] || 'غير محدد';
 }
 
 function renderSource(source) {
@@ -805,22 +813,18 @@ export default function InternalLeadsDashboard() {
             title="تحديث يدوي"
             aria-label="تحديث"
           >
-            {loading ? (
-              '...'
-            ) : (
-              <svg
-                className="ild-btn__icon"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                aria-hidden="true"
-              >
-                <path d="M21 2v6h-6" />
-                <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
-                <path d="M3 22v-6h6" />
-                <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
-              </svg>
-            )}
+            <svg
+              className={`ild-btn__icon${loading ? ' ild-btn__icon--spin' : ''}`}
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <path d="M21 2v6h-6" />
+              <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+              <path d="M3 22v-6h6" />
+              <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+            </svg>
           </button>
           <ConnectionStatus status={connectionStatus} />
         </div>
@@ -892,7 +896,11 @@ export default function InternalLeadsDashboard() {
                     aria-label={`Lead ${lead.phone}`}
                   >
                     <td className="ild-table__phone">{lead.phone}</td>
-                    <td>{formatIntent(lead.latest_intent)}</td>
+                    <td>{({
+                      TRANSFER_TO_HUMAN: 'تحويل لموظف',
+                      CLARIFY: 'طلب استفسار',
+                      BOOKING: 'طلب حجز',
+                    }[(lead.latest_intent || '').toUpperCase()] || 'غير محدد'}</td>
                     <td className="ild-table__hint">{lead.summary_hint || '—'}</td>
                     <td>{renderSource(lead.source)}</td>
                     <td className="ild-table__date">{formatDate(lead.created_at)}</td>

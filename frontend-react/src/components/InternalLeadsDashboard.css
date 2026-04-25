@@ -157,6 +157,10 @@
   color: var(--text-primary);
 }
 
+.ild-table td {
+  padding: 16px 12px !important;
+}
+
 .ild-table__row {
   cursor: pointer;
   transition: background 200ms ease;
@@ -181,6 +185,7 @@
   direction: ltr;
   text-align: right !important;
   white-space: nowrap;
+  padding-right: 20px !important;
 }
 
 .ild-table__hint {
@@ -1069,13 +1074,14 @@
 
 .ild-filter-bar__stats::before {
   content: '';
+  display: block;
   position: absolute;
   inset-inline-start: 0;
   top: 50%;
   transform: translateY(-50%);
   width: 1px;
   height: 24px;
-  background: #E5E7EB;
+  background: #E5E7EB !important;
 }
 
 .ild-mini-stat {
