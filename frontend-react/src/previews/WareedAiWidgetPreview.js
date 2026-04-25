@@ -21,6 +21,7 @@ const WIDGET_USER_ID_STORAGE_KEY = 'wareed_preview_widget_user_id';
 const WIDGET_CONVERSATION_ID_STORAGE_KEY = 'wareed_preview_widget_conversation_id';
 const UUID_V4_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const URL_REGEX = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
 
 function generateWidgetUserId() {
   if (typeof window !== 'undefined' && window.crypto?.randomUUID) {
@@ -74,6 +75,47 @@ function setStoredConversationId(conversationId) {
   }
 
   window.localStorage.removeItem(WIDGET_CONVERSATION_ID_STORAGE_KEY);
+}
+
+function normalizeUrl(url) {
+  if (!url) return '';
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+}
+
+function renderMessageTextWithLinks(text) {
+  const raw = String(text || '');
+  const lines = raw.split('\n');
+
+  return lines.map((line, lineIndex) => {
+    const parts = line.split(URL_REGEX);
+    const content = parts.map((part, partIndex) => {
+      if (!part) return null;
+      if (URL_REGEX.test(part)) {
+        URL_REGEX.lastIndex = 0;
+        const href = normalizeUrl(part);
+        return (
+          <a
+            key={`link-${lineIndex}-${partIndex}`}
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="wareed-widget-preview__message-link"
+          >
+            {part}
+          </a>
+        );
+      }
+      URL_REGEX.lastIndex = 0;
+      return <React.Fragment key={`text-${lineIndex}-${partIndex}`}>{part}</React.Fragment>;
+    });
+
+    return (
+      <React.Fragment key={`line-${lineIndex}`}>
+        {content}
+        {lineIndex < lines.length - 1 ? <br /> : null}
+      </React.Fragment>
+    );
+  });
 }
 
 export default function WareedAiWidgetPreview() {
@@ -163,11 +205,27 @@ export default function WareedAiWidgetPreview() {
         lead_captured: Boolean(data?.lead_captured),
       });
 
-      setMessages((prev) =>
-        prev.map((m) =>
+      setMessages((prev) => {
+        const next = prev.map((m) =>
           m.id === typingId ? { id: assistantId, role: 'assistant', text: assistantText } : m
-        )
-      );
+        );
+
+        const last = next[next.length - 1];
+        const beforeLast = next[next.length - 2];
+
+        if (
+          last &&
+          beforeLast &&
+          last.role === 'assistant' &&
+          beforeLast.role === 'assistant' &&
+          String(last.text || '').trim() === String(beforeLast.text || '').trim()
+        ) {
+          console.log('[Widget] duplicate assistant message prevented');
+          return next.slice(0, -1);
+        }
+
+        return next;
+      });
     } catch (error) {
       console.error('Preview widget message send failed:', error);
       setMessages((prev) =>
@@ -256,7 +314,7 @@ export default function WareedAiWidgetPreview() {
                     message.isTyping ? ' wareed-widget-preview__message--typing' : ''
                   }`}
                 >
-                  <p>{message.text}</p>
+                  <p>{renderMessageTextWithLinks(message.text)}</p>
                 </div>
               </div>
             ))}
