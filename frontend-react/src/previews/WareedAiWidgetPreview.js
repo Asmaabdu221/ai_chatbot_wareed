@@ -1,8 +1,16 @@
-import React, { useEffect, useRef, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 import api from '../services/api';
 import './WareedAiWidgetPreview.css';
 
-const WELCOME_MESSAGE = 'مرحباً بك في مساعد وريد الذكي. كيف يمكنني مساعدتك اليوم؟';
+const WELCOME_MESSAGE = `حياك الله في مختبرات وريد الطبية 
+
+أنا Wareed AI، مساعدك الذكي.
+
+أقدر أساعدك في:
+
+• الاستفسار عن التحاليل ونتائج التقارير وفروعنا ومواعيدنا.
+
+تفضل، كيف أقدر أخدمك اليوم؟`;
 
 const QUICK_ACTIONS = [
   { label: 'ابغى اسئل عن تحليل', text: 'ابغى اسئل عن تحليل' },
@@ -288,7 +296,6 @@ export default function WareedAiWidgetPreview() {
         <header className="wareed-widget-preview__chat-header">
           <div className="wareed-widget-preview__brand-text">
             <h3>Wareed AI</h3>
-            <p>المساعد الذكي</p>
           </div>
           <button
             type="button"
@@ -326,7 +333,6 @@ export default function WareedAiWidgetPreview() {
                   message.isTyping ? ' wareed-widget-preview__message--typing' : ''
                 }`}
               >
-                <p>{renderMessageTextWithLinks(message.text)}</p>
               </div>
             </div>
           ))}
@@ -359,3 +365,4 @@ export default function WareedAiWidgetPreview() {
     </div>
   );
 }
+
