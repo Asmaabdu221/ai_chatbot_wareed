@@ -4,22 +4,9 @@
   min-height: 100vh;
   position: relative;
   overflow: hidden;
-  background: linear-gradient(to bottom, #F8FAF9, #FFFFFF);
+  background-color: #F8FAF9;
   color: #1E293B;
   font-family: 'IBM Plex Sans Arabic', 'Inter', 'Segoe UI', 'Tahoma', sans-serif;
-}
-
-.wareed-widget-preview::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image:
-    radial-gradient(circle at 14% 22%, rgba(45, 156, 139, 0.08) 0 6px, transparent 6px),
-    radial-gradient(circle at 82% 18%, rgba(107, 70, 113, 0.08) 0 7px, transparent 7px),
-    linear-gradient(115deg, rgba(45, 156, 139, 0.04) 0, rgba(45, 156, 139, 0.04) 1px, transparent 1px),
-    linear-gradient(65deg, rgba(107, 70, 113, 0.04) 0, rgba(107, 70, 113, 0.04) 1px, transparent 1px);
-  background-size: auto, auto, 54px 54px, 54px 54px;
-  pointer-events: none;
 }
 
 .wareed-widget-preview__surface {
