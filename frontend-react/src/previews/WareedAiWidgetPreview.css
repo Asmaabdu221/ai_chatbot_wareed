@@ -49,13 +49,14 @@
   position: fixed;
   left: 24px;
   bottom: 84px;
-  width: min(420px, calc(100vw - 28px));
-  height: min(680px, calc(100vh - 120px));
+  width: 380px;
+  max-height: 700px;
+  height: min(700px, calc(100vh - 120px));
   background: #fff;
   border: 1px solid #E2E8F0;
   border-radius: 16px;
   z-index: 41;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -81,14 +82,19 @@
 }
 
 .wareed-widget-preview__chat-header {
-  padding: 14px 16px;
+  padding: 18px 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.22);
   background: linear-gradient(135deg, #6B4671 0%, #8E59FF 100%);
   color: #fff;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: 12px;
+  position: relative;
+}
+
+.wareed-widget-preview__brand-text {
+  text-align: center;
 }
 
 .wareed-widget-preview__brand-text h3 {
@@ -122,12 +128,18 @@
   line-height: 1;
   flex-shrink: 0;
   cursor: pointer;
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .wareed-widget-preview__quick-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+  margin-top: 15px;
+  margin-bottom: 10px;
   padding: 10px;
   background: #F8FAF9;
   border-bottom: 1px solid #E2E8F0;
@@ -147,7 +159,7 @@
   justify-content: center;
   font-family: inherit;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1.2;
   min-height: 38px;
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
@@ -168,7 +180,7 @@
 
 .wareed-widget-preview__quick-label {
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 500;
   color: inherit;
   white-space: nowrap;
 }
@@ -210,7 +222,7 @@
 
 .wareed-widget-preview__message p {
   margin: 0;
-  line-height: 1.4;
+  line-height: 1.35;
   text-align: right;
   max-width: 100%;
   overflow-wrap: anywhere;
@@ -316,8 +328,8 @@
 }
 
 .wareed-widget-preview__send-button svg {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   stroke: currentColor;
   stroke-width: 2;
   stroke-linecap: round;
@@ -327,7 +339,11 @@
 .wareed-widget-preview__message br {
   content: '';
   display: block;
-  margin-top: 4px;
+  margin-top: 2px;
+}
+
+.wareed-widget-preview__messages .wareed-widget-preview__message-row:first-child {
+  margin-top: 10px;
 }
 
 .wareed-widget-preview__send-button:disabled,
