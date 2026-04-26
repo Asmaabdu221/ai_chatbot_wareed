@@ -414,7 +414,7 @@ function FilterBar({ filters, onChange, onClear, statsTabs, activeStatus, onStat
   const hasActive = !!(filters.q || filters.intent || filters.action || filters.dateFrom || filters.dateTo);
   return (
     <div className="ild-filter-bar">
-      <div className="ild-filter-bar__controls">
+      <div className="ild-filter-bar__right">
         <div className="ild-filter-bar__stats" aria-label="إحصاءات الحالة">
           {statsTabs.map((tab) => (
             <button
@@ -471,6 +471,8 @@ function FilterBar({ filters, onChange, onClear, statsTabs, activeStatus, onStat
           <option value="TRANSFER_TO_HUMAN">تحويل لموظف</option>
           <option value="CLARIFY">طلب استفسار</option>
         </select>
+      </div>
+      <div className="ild-filter-bar__left">
         {hasActive && (
           <button type="button" className="ild-filter-bar__clear" onClick={onClear}>
             مسح الفلاتر ✕
