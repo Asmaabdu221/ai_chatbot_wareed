@@ -4,8 +4,8 @@ import './WareedAiWidgetPreview.css';
 
 const WELCOME_MESSAGE = `حياك الله في مختبرات وريد الطبية
 أنا Wareed AI، مساعدك الذكي.
-أقدر أساعدك في الاستفسار عن التحاليل، النتائج، الفروع، والخدمات.
-تفضل كيف أقدر أخدمك؟`;
+• الاستفسار عن التحاليل ونتائج التقارير وفروعنا ومواعيدنا
+تفضل، كيف أقدر أخدمك اليوم؟`;
 
 const QUICK_ACTIONS = [
   { label: 'اسأل عن تحليل', text: 'أبغى أسأل عن تحليل' },
@@ -260,7 +260,11 @@ export default function WareedAiWidgetPreview() {
         aria-expanded={isOpen}
         aria-controls="wareed-ai-chat-panel"
       >
-        <span className="wareed-widget-preview__ai-dot" />
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="wareed-widget-preview__ai-icon">
+          <path d="M12 3l1.3 2.9L16 7.2l-2.7 1.3L12 11.5l-1.3-3L8 7.2l2.7-1.3L12 3Z" />
+          <path d="M18.5 11.2l.8 1.8 1.7.8-1.7.8-.8 1.8-.8-1.8-1.8-.8 1.8-.8.8-1.8Z" />
+          <path d="M6 12.5l1 2.1 2 .9-2 .9-1 2.1-.9-2.1-2-.9 2-.9.9-2.1Z" />
+        </svg>
         <span>Wareed AI</span>
       </button>
 
@@ -281,7 +285,7 @@ export default function WareedAiWidgetPreview() {
               onClick={() => setIsOpen(false)}
               aria-label="إغلاق"
             >
-              إغلاق
+              ×
             </button>
           </header>
 
@@ -332,7 +336,10 @@ export default function WareedAiWidgetPreview() {
               disabled={isSending}
               aria-label="إرسال"
             >
-              {isSending ? '...' : '➤'}
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M4 12h14" />
+                <path d="M13 5l7 7-7 7" />
+              </svg>
             </button>
           </form>
         </aside>

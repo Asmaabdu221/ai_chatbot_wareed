@@ -22,9 +22,9 @@
   left: 24px;
   bottom: 24px;
   z-index: 42;
-  border: 1px solid rgba(45, 156, 139, 0.28);
+  border: 1px solid rgba(45, 156, 139, 0.32);
   border-radius: 999px;
-  background: linear-gradient(135deg, #2D9C8B, #6B4671);
+  background: #2D9C8B;
   color: #fff;
   font-size: 14px;
   font-weight: 700;
@@ -36,12 +36,13 @@
   cursor: pointer;
 }
 
-.wareed-widget-preview__ai-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #98FFD8;
-  box-shadow: 0 0 0 4px rgba(152, 255, 216, 0.28);
+.wareed-widget-preview__ai-icon {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .wareed-widget-preview__chat-panel {
@@ -85,12 +86,17 @@
 
 .wareed-widget-preview__header-close {
   appearance: none;
-  border: 1px solid rgba(255, 255, 255, 0.45);
-  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.18);
   color: #fff;
-  border-radius: 10px;
-  padding: 6px 10px;
-  font-size: 12px;
+  border-radius: 999px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
   font-family: inherit;
   font-weight: 600;
   line-height: 1;
@@ -170,7 +176,7 @@
   max-width: 88%;
   border-radius: 14px;
   padding: 10px 12px;
-  line-height: 1.65;
+  line-height: 1.4;
   font-size: 14px;
   white-space: pre-line;
   overflow-wrap: anywhere;
@@ -201,13 +207,13 @@
 }
 
 .wareed-widget-preview__message--user {
-  background: linear-gradient(135deg, #6B4671, #8E59FF);
-  color: #fff;
+  background: #F3E8FF;
+  color: #475569;
   border-bottom-right-radius: 6px;
 }
 
 .wareed-widget-preview__message--assistant {
-  background: #fff;
+  background: #EBF5F3;
   color: #1E293B;
   border: 1px solid #E2E8F0;
   border-bottom-left-radius: 6px;
@@ -263,6 +269,21 @@
   place-items: center;
   flex-shrink: 0;
   cursor: pointer;
+}
+
+.wareed-widget-preview__send-button svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.wareed-widget-preview__message br {
+  content: '';
+  display: block;
+  margin-top: 4px;
 }
 
 .wareed-widget-preview__send-button:disabled,
