@@ -3,13 +3,9 @@ import api from '../services/api';
 import './WareedAiWidgetPreview.css';
 
 const WELCOME_MESSAGE = `حياك الله في مختبرات وريد الطبية 
-
 أنا Wareed AI، مساعدك الذكي.
-
 أقدر أساعدك في:
-
 • الاستفسار عن التحاليل ونتائج التقارير وفروعنا ومواعيدنا.
-
 تفضل، كيف أقدر أخدمك اليوم؟`;
 
 const QUICK_ACTIONS = [

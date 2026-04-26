@@ -95,6 +95,7 @@
   margin: 0;
   font-size: 15px;
   line-height: 1.2;
+  font-weight: 700;
 }
 
 .wareed-widget-preview__brand-text p {
@@ -136,9 +137,9 @@
   appearance: none;
   -webkit-appearance: none;
   width: 100%;
-  border: 1px solid #6B4671;
-  background: #fff;
-  color: #6B4671;
+  border: none;
+  background: #F1F5F9;
+  color: #1E293B;
   border-radius: 999px;
   padding: 8px 16px;
   display: inline-flex;
@@ -149,17 +150,15 @@
   font-weight: 700;
   line-height: 1.2;
   min-height: 38px;
-  box-shadow: 0 3px 10px rgba(107, 70, 113, 0.08);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
   cursor: pointer;
-  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
 }
 
 .wareed-widget-preview__quick-card:hover:not(:disabled) {
   transform: translateY(-1px);
-  border-color: #6B4671;
-  background: #6B4671;
-  color: #ffffff;
-  box-shadow: 0 6px 14px rgba(107, 70, 113, 0.18);
+  background: #E6F4F2;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
 }
 
 .wareed-widget-preview__quick-card:disabled {
@@ -202,7 +201,7 @@
   max-width: 88%;
   border-radius: 14px;
   padding: 10px 12px;
-  line-height: 1.5;
+  line-height: 1.4;
   font-size: 14px;
   white-space: pre-line;
   overflow-wrap: anywhere;
@@ -211,6 +210,7 @@
 
 .wareed-widget-preview__message p {
   margin: 0;
+  line-height: 1.4;
   text-align: right;
   max-width: 100%;
   overflow-wrap: anywhere;
@@ -300,10 +300,11 @@
 .wareed-widget-preview__send-button {
   appearance: none;
   border: none;
-  background: transparent;
-  color: #2D9C8B;
-  width: 28px;
-  height: 28px;
+  background: #2D9C8B;
+  color: #ffffff;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
   position: absolute;
   left: 10px;
   top: 50%;
@@ -315,8 +316,8 @@
 }
 
 .wareed-widget-preview__send-button svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   stroke: currentColor;
   stroke-width: 2;
   stroke-linecap: round;
