@@ -4,6 +4,8 @@
    Uses global CSS variables from index.css.
    ============================================================= */
 
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+
 /* UI Version 1.1 - Minimal Clean Fix */
 /* ── Layout shell ── */
 .ild-layout {
@@ -12,7 +14,7 @@
   height: 100vh;
   background: #F8FAF9;
   color: var(--text-primary);
-  font-family: 'IBM Plex Sans Arabic', 'Inter', 'Cairo', 'Noto Sans Arabic', sans-serif;
+  font-family: 'IBM Plex Sans Arabic', 'Inter', 'Segoe UI', 'Tahoma', sans-serif;
   overflow: hidden;
 }
 
@@ -169,9 +171,9 @@
   text-align: right;
   font-weight: 600;
   color: #1F2937;
-  font-size: 12px;
+  font-size: 13px;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.05em;
   background: #fff;
   border-bottom: 1px solid #f1f5f9;
   white-space: nowrap;
@@ -191,6 +193,7 @@
   text-align: right;
   vertical-align: middle;
   color: var(--text-primary);
+  line-height: 1.6;
 }
 
 .ild-table td {
@@ -217,7 +220,7 @@
 }
 
 .ild-table__phone {
-  font-weight: 700;
+  font-weight: 500;
   color: #000000;
   font-family: 'Inter', monospace;
   direction: ltr;
@@ -1332,7 +1335,7 @@
   display: inline-flex;
   align-items: center;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 500;
   color: inherit;
 }
 
@@ -1398,6 +1401,7 @@
   transition: background var(--transition-base);
   height: 42px;
   border-radius: 8px;
+  margin-inline-start: auto;
 }
 
 .ild-filter-bar__clear:hover {
