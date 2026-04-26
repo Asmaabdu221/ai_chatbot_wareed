@@ -19,8 +19,9 @@
 
 .wareed-widget-preview__ai-button {
   position: fixed;
-  left: 24px;
+  left: 50%;
   bottom: 24px;
+  transform: translateX(-50%);
   z-index: 42;
   border: 1px solid rgba(45, 156, 139, 0.32);
   border-radius: 999px;
@@ -47,7 +48,7 @@
 
 .wareed-widget-preview__chat-panel {
   position: fixed;
-  left: 24px;
+  left: 50%;
   bottom: 84px;
   width: min(420px, calc(100vw - 28px));
   height: min(680px, calc(100vh - 120px));
@@ -60,7 +61,7 @@
   flex-direction: column;
   overflow: hidden;
   opacity: 0;
-  transform: translateY(12px);
+  transform: translate(-50%, 12px);
   visibility: hidden;
   pointer-events: none;
   transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s ease;
@@ -68,14 +69,14 @@
 
 .wareed-widget-preview__chat-panel--open {
   opacity: 1;
-  transform: translateY(0);
+  transform: translate(-50%, 0);
   visibility: visible;
   pointer-events: auto;
 }
 
 .wareed-widget-preview__chat-panel--closed {
   opacity: 0;
-  transform: translateY(12px);
+  transform: translate(-50%, 12px);
   visibility: hidden;
   pointer-events: none;
 }
@@ -126,40 +127,41 @@
 .wareed-widget-preview__quick-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
   padding: 12px 14px;
   background: #F8FAF9;
   border-bottom: 1px solid #E2E8F0;
-  justify-content: flex-end;
+  justify-content: center;
 }
 
 .wareed-widget-preview__quick-card {
   appearance: none;
   -webkit-appearance: none;
   width: auto;
-  border: 1px solid #ddd4f7;
+  border: 1px solid #6B4671;
   background: #fff;
-  color: #57479a;
+  color: #6B4671;
   border-radius: 999px;
-  padding: 7px 12px;
+  padding: 8px 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-family: inherit;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 700;
   line-height: 1.2;
   min-height: 0;
-  box-shadow: 0 4px 12px rgba(87, 71, 154, 0.08);
+  box-shadow: 0 3px 10px rgba(107, 70, 113, 0.08);
   cursor: pointer;
   transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
 }
 
 .wareed-widget-preview__quick-card:hover:not(:disabled) {
   transform: translateY(-1px);
-  border-color: #c8bbf3;
-  background: #fff;
-  box-shadow: 0 4px 12px rgba(87, 71, 154, 0.12);
+  border-color: #6B4671;
+  background: #6B4671;
+  color: #ffffff;
+  box-shadow: 0 6px 14px rgba(107, 70, 113, 0.18);
 }
 
 .wareed-widget-preview__quick-card:disabled {
@@ -168,9 +170,9 @@
 }
 
 .wareed-widget-preview__quick-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #57479a;
+  font-size: 13px;
+  font-weight: 700;
+  color: inherit;
   white-space: nowrap;
 }
 
@@ -266,17 +268,20 @@
 .wareed-widget-preview__composer {
   border-top: 1px solid #E2E8F0;
   padding: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  display: block;
   background: #fff;
+}
+
+.wareed-widget-preview__composer-field {
+  position: relative;
 }
 
 .wareed-widget-preview__composer input {
   flex: 1;
   border: 1px solid #D1D5DB;
   border-radius: 999px;
-  padding: 12px 14px;
+  width: 100%;
+  padding: 12px 44px 12px 14px;
   font-size: 14px;
   color: #1E293B;
   outline: none;
@@ -297,18 +302,17 @@
 .wareed-widget-preview__send-button {
   appearance: none;
   border: none;
-  border-radius: 999px;
-  width: 44px;
-  height: 44px;
-  background: #2D9C8B;
-  color: #fff;
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1;
+  background: transparent;
+  color: #2D9C8B;
+  width: 28px;
+  height: 28px;
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
   cursor: pointer;
 }
 
@@ -339,7 +343,7 @@
   }
 
   .wareed-widget-preview__chat-panel {
-    left: 12px;
+    left: 50%;
     bottom: 76px;
     width: calc(100vw - 24px);
     height: min(620px, calc(100vh - 100px));
@@ -347,7 +351,7 @@
   }
 
   .wareed-widget-preview__ai-button {
-    left: 12px;
+    left: 50%;
     bottom: 16px;
   }
 }

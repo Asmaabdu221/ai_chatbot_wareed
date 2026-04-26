@@ -2,16 +2,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import api from '../services/api';
 import './WareedAiWidgetPreview.css';
 
-const WELCOME_MESSAGE = `حياك الله في مختبرات وريد الطبية
-أنا Wareed AI، مساعدك الذكي.
-• الاستفسار عن التحاليل ونتائج التقارير وفروعنا ومواعيدنا
-تفضل، كيف أقدر أخدمك اليوم؟`;
+const WELCOME_MESSAGE = 'مرحباً بك في مساعد وريد الذكي. كيف يمكنني مساعدتك اليوم؟';
 
 const QUICK_ACTIONS = [
-  { label: 'اسأل عن تحليل', text: 'أبغى أسأل عن تحليل' },
-  { label: 'اعرف الفروع', text: 'أبغى أعرف الفروع' },
-  { label: 'تفسير نتيجة', text: 'عندي نتيجة وأبغى تفسير' },
-  { label: 'تواصل معنا', text: 'أبغى أتواصل مع خدمة العملاء' },
+  { label: 'الاستفسار عن التحاليل', text: 'أرغب في الاستفسار عن التحاليل' },
+  { label: 'نتائج المختبر', text: 'أرغب في الاستفسار عن نتائج المختبر' },
+  { label: 'فروعنا', text: 'أرغب في معرفة فروعنا' },
+  { label: 'التحدث مع المختص', text: 'أرغب في التحدث مع المختص' },
 ];
 
 const CONNECTIVITY_ERROR_MESSAGE = 'حصلت مشكلة مؤقتة في الاتصال، حاول مرة أخرى بعد قليل.';
@@ -85,7 +82,7 @@ function normalizeUrl(url) {
 function renderMessageTextWithLinks(text) {
   const raw = String(text || '');
   const lines = raw.split('\n');
-  const branchRegex = /(\u0641\u0631\u0639\s+[^\n،,.]+)/g;
+  const branchRegex = /(فرع\s+[^\n،,.]+)/g;
 
   return lines.map((line, lineIndex) => {
     const parts = line.split(URL_REGEX);
@@ -111,7 +108,7 @@ function renderMessageTextWithLinks(text) {
       return (
         <React.Fragment key={`text-${lineIndex}-${partIndex}`}>
           {branchParts.map((chunk, chunkIndex) =>
-            chunk.match(/^\u0641\u0631\u0639\s+/) ? (
+            chunk.match(/^فرع\s+/) ? (
               <strong key={`branch-${lineIndex}-${partIndex}-${chunkIndex}`} className="wareed-widget-preview__branch-name">
                 {chunk}
               </strong>
@@ -288,54 +285,55 @@ export default function WareedAiWidgetPreview() {
         aria-label="نافذة دردشة وريد AI"
         aria-hidden={!isOpen}
       >
-          <header className="wareed-widget-preview__chat-header">
-            <div className="wareed-widget-preview__brand-text">
-              <h3>Wareed AI</h3>
-              <p>المساعد الذكي</p>
-            </div>
+        <header className="wareed-widget-preview__chat-header">
+          <div className="wareed-widget-preview__brand-text">
+            <h3>Wareed AI</h3>
+            <p>المساعد الذكي</p>
+          </div>
+          <button
+            type="button"
+            className="wareed-widget-preview__header-close"
+            onClick={() => setIsOpen(false)}
+            aria-label="إغلاق"
+          >
+            ×
+          </button>
+        </header>
+
+        <div className="wareed-widget-preview__quick-actions" role="list" aria-label="إجراءات سريعة">
+          {QUICK_ACTIONS.map((action) => (
             <button
+              key={action.text}
               type="button"
-              className="wareed-widget-preview__header-close"
-              onClick={() => setIsOpen(false)}
-              aria-label="إغلاق"
+              onClick={() => sendMessage(action.text)}
+              role="listitem"
+              disabled={isSending}
+              className="wareed-widget-preview__quick-card"
             >
-              ×
+              <span className="wareed-widget-preview__quick-label">{action.label}</span>
             </button>
-          </header>
+          ))}
+        </div>
 
-          <div className="wareed-widget-preview__quick-actions" role="list" aria-label="إجراءات سريعة">
-            {QUICK_ACTIONS.map((action) => (
-              <button
-                key={action.text}
-                type="button"
-                onClick={() => sendMessage(action.text)}
-                role="listitem"
-                disabled={isSending}
-                className="wareed-widget-preview__quick-card"
-              >
-                <span className="wareed-widget-preview__quick-label">{action.label}</span>
-              </button>
-            ))}
-          </div>
-
-          <div ref={messagesContainerRef} className="wareed-widget-preview__messages">
-            {messages.map((message) => (
+        <div ref={messagesContainerRef} className="wareed-widget-preview__messages">
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={`wareed-widget-preview__message-row wareed-widget-preview__message-row--${message.role}`}
+            >
               <div
-                key={message.id}
-                className={`wareed-widget-preview__message-row wareed-widget-preview__message-row--${message.role}`}
+                className={`wareed-widget-preview__message wareed-widget-preview__message--${message.role}${
+                  message.isTyping ? ' wareed-widget-preview__message--typing' : ''
+                }`}
               >
-                <div
-                  className={`wareed-widget-preview__message wareed-widget-preview__message--${message.role}${
-                    message.isTyping ? ' wareed-widget-preview__message--typing' : ''
-                  }`}
-                >
-                  <p>{renderMessageTextWithLinks(message.text)}</p>
-                </div>
+                <p>{renderMessageTextWithLinks(message.text)}</p>
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
+        </div>
 
-          <form className="wareed-widget-preview__composer" onSubmit={onSubmit}>
+        <form className="wareed-widget-preview__composer" onSubmit={onSubmit}>
+          <div className="wareed-widget-preview__composer-field">
             <input
               type="text"
               value={input}
@@ -355,7 +353,8 @@ export default function WareedAiWidgetPreview() {
                 <path d="M13 5l7 7-7 7" />
               </svg>
             </button>
-          </form>
+          </div>
+        </form>
       </aside>
     </div>
   );
