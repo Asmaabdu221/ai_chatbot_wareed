@@ -358,7 +358,7 @@ function LeadDetailPanel({
         <div className="ild-panel__footer">
           <div className="ild-panel__note">
             <label className="ild-panel__note-label" htmlFor={`lead-note-${lead.id}`}>
-              ملاحظات الإجراء الأخير
+              ملاحظات الإجراء
             </label>
             <textarea
               id={`lead-note-${lead.id}`}
