@@ -1,19 +1,95 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');
+
 .wareed-widget-preview {
   min-height: 100vh;
   position: relative;
-  background: #f7f8fc;
-  color: #1f2937;
-  font-family: 'Cairo', 'Noto Sans Arabic', sans-serif;
+  overflow: hidden;
+  background: linear-gradient(to bottom, #F8FAF9, #FFFFFF);
+  color: #1E293B;
+  font-family: 'IBM Plex Sans Arabic', 'Inter', 'Segoe UI', 'Tahoma', sans-serif;
+}
+
+.wareed-widget-preview::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 14% 22%, rgba(45, 156, 139, 0.08) 0 6px, transparent 6px),
+    radial-gradient(circle at 82% 18%, rgba(107, 70, 113, 0.08) 0 7px, transparent 7px),
+    linear-gradient(115deg, rgba(45, 156, 139, 0.04) 0, rgba(45, 156, 139, 0.04) 1px, transparent 1px),
+    linear-gradient(65deg, rgba(107, 70, 113, 0.04) 0, rgba(107, 70, 113, 0.04) 1px, transparent 1px);
+  background-size: auto, auto, 54px 54px, 54px 54px;
+  pointer-events: none;
+}
+
+.wareed-widget-preview__surface {
+  position: relative;
+  z-index: 1;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 24px 20px 140px;
+}
+
+.wareed-widget-preview__logos {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid #E2E8F0;
+  border-radius: 14px;
+  box-shadow: 0 8px 26px rgba(15, 23, 42, 0.05);
+}
+
+.wareed-widget-preview__logo {
+  display: block;
+  object-fit: contain;
+  filter: saturate(1.04);
+}
+
+.wareed-widget-preview__logo--wareed {
+  height: 54px;
+  width: auto;
+}
+
+.wareed-widget-preview__logo--cbahi {
+  height: 50px;
+  width: auto;
+}
+
+.wareed-widget-preview__hero {
+  margin: 88px auto 0;
+  max-width: 940px;
+  text-align: center;
+}
+
+.wareed-widget-preview__hero h1 {
+  margin: 0;
+  color: #6B4671;
+  font-size: clamp(31px, 4.2vw, 52px);
+  line-height: 1.16;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+.wareed-widget-preview__hero h2 {
+  margin: 18px auto 0;
+  max-width: 880px;
+  color: #2D9C8B;
+  font-size: clamp(20px, 2.4vw, 30px);
+  line-height: 1.45;
+  font-weight: 600;
 }
 
 .wareed-widget-preview__ai-button {
   position: fixed;
-  right: 24px;
+  left: 24px;
   bottom: 24px;
   z-index: 42;
-  border: none;
+  border: 1px solid rgba(45, 156, 139, 0.28);
   border-radius: 999px;
-  background: linear-gradient(135deg, #6c63ff, #4f7cff);
+  background: linear-gradient(135deg, #2D9C8B, #6B4671);
   color: #fff;
   font-size: 14px;
   font-weight: 700;
@@ -21,7 +97,7 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  box-shadow: 0 12px 24px rgba(76, 95, 194, 0.35);
+  box-shadow: 0 12px 24px rgba(45, 156, 139, 0.24);
   cursor: pointer;
 }
 
@@ -29,18 +105,18 @@
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #7fff9f;
-  box-shadow: 0 0 0 4px rgba(127, 255, 159, 0.24);
+  background: #98FFD8;
+  box-shadow: 0 0 0 4px rgba(152, 255, 216, 0.28);
 }
 
 .wareed-widget-preview__chat-panel {
   position: fixed;
-  right: 24px;
+  left: 24px;
   bottom: 84px;
   width: min(420px, calc(100vw - 28px));
   height: min(680px, calc(100vh - 120px));
   background: #fff;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #E2E8F0;
   border-radius: 16px;
   z-index: 41;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
@@ -51,14 +127,13 @@
 
 .wareed-widget-preview__chat-header {
   padding: 14px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-  background: linear-gradient(135deg, #6c63ff 0%, #5f78ff 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.22);
+  background: linear-gradient(135deg, #6B4671 0%, #8E59FF 100%);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
 }
 
 .wareed-widget-preview__brand-text h3 {
@@ -68,14 +143,13 @@
 }
 
 .wareed-widget-preview__brand-text p {
-  margin: 1px 0 4px;
+  margin: 2px 0 0;
   font-size: 12px;
   opacity: 0.95;
 }
 
 .wareed-widget-preview__header-close {
   appearance: none;
-  -webkit-appearance: none;
   border: 1px solid rgba(255, 255, 255, 0.45);
   background: rgba(255, 255, 255, 0.14);
   color: #fff;
@@ -92,39 +166,34 @@
 .wareed-widget-preview__quick-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
   padding: 12px 14px;
-  background: #faf8ff;
-  border-bottom: 1px solid #eceff8;
+  background: #F8FAF9;
+  border-bottom: 1px solid #E2E8F0;
 }
 
 .wareed-widget-preview__quick-card {
   appearance: none;
-  -webkit-appearance: none;
-  width: auto;
-  border: 1px solid #ddd4f7;
+  border: 1px solid #BBDDD7;
   background: #fff;
-  color: #57479a;
+  color: #2D9C8B;
   border-radius: 999px;
-  padding: 7px 12px;
-  display: flex;
+  padding: 8px 14px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  text-align: center;
   font-family: inherit;
   font-size: 12px;
   line-height: 1.2;
-  min-height: 0;
+  box-shadow: 0 4px 14px rgba(45, 156, 139, 0.08);
   cursor: pointer;
-  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .wareed-widget-preview__quick-card:hover:not(:disabled) {
   transform: translateY(-1px);
-  border-color: #c8bbf3;
-  background: #fff;
-  box-shadow: 0 4px 12px rgba(87, 71, 154, 0.12);
+  border-color: #94CEC4;
+  box-shadow: 0 8px 18px rgba(45, 156, 139, 0.14);
 }
 
 .wareed-widget-preview__quick-card:disabled {
@@ -135,7 +204,6 @@
 .wareed-widget-preview__quick-label {
   font-size: 12px;
   font-weight: 600;
-  color: #57479a;
   white-space: nowrap;
 }
 
@@ -143,7 +211,7 @@
   flex: 1;
   overflow-y: auto;
   padding: 14px 12px;
-  background: #f7f8fc;
+  background: #F7F8FC;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -167,7 +235,7 @@
   max-width: 88%;
   border-radius: 14px;
   padding: 10px 12px;
-  line-height: 1.85;
+  line-height: 1.65;
   font-size: 14px;
   white-space: pre-line;
   overflow-wrap: anywhere;
@@ -184,7 +252,7 @@
 
 .wareed-widget-preview__message a,
 .wareed-widget-preview__message-link {
-  color: #4f7cff;
+  color: #2D9C8B;
   text-decoration: underline;
   text-underline-offset: 2px;
   overflow-wrap: anywhere;
@@ -198,15 +266,15 @@
 }
 
 .wareed-widget-preview__message--user {
-  background: linear-gradient(135deg, #6c63ff, #5a74ff);
+  background: linear-gradient(135deg, #6B4671, #8E59FF);
   color: #fff;
   border-bottom-right-radius: 6px;
 }
 
 .wareed-widget-preview__message--assistant {
   background: #fff;
-  color: #1f2937;
-  border: 1px solid #e5e7eb;
+  color: #1E293B;
+  border: 1px solid #E2E8F0;
   border-bottom-left-radius: 6px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
 }
@@ -216,7 +284,7 @@
 }
 
 .wareed-widget-preview__composer {
-  border-top: 1px solid #eceff8;
+  border-top: 1px solid #E2E8F0;
   padding: 12px;
   display: flex;
   align-items: center;
@@ -226,32 +294,32 @@
 
 .wareed-widget-preview__composer input {
   flex: 1;
-  border: 1px solid #dbe1f1;
+  border: 1px solid #D1D5DB;
   border-radius: 999px;
   padding: 12px 14px;
   font-size: 14px;
-  color: #1f2937;
+  color: #1E293B;
   outline: none;
-  background: #fbfcff;
+  background: #FBFCFF;
+  font-family: inherit;
 }
 
 .wareed-widget-preview__composer input::placeholder {
-  color: #6b7280;
+  color: #6B7280;
 }
 
 .wareed-widget-preview__composer input:focus {
-  border-color: #8b93ff;
-  box-shadow: 0 0 0 4px rgba(108, 99, 255, 0.14);
+  border-color: #2D9C8B;
+  box-shadow: 0 0 0 4px rgba(45, 156, 139, 0.13);
 }
 
 .wareed-widget-preview__send-button {
   appearance: none;
-  -webkit-appearance: none;
   border: none;
   border-radius: 999px;
   width: 44px;
   height: 44px;
-  background: linear-gradient(135deg, #6c63ff, #4f7cff);
+  background: linear-gradient(135deg, #2D9C8B, #6B4671);
   color: #fff;
   font-size: 18px;
   font-weight: 700;
@@ -269,8 +337,28 @@
 }
 
 @media (max-width: 680px) {
+  .wareed-widget-preview__surface {
+    padding: 14px 12px 120px;
+  }
+
+  .wareed-widget-preview__logos {
+    padding: 8px 10px;
+  }
+
+  .wareed-widget-preview__logo--wareed {
+    height: 44px;
+  }
+
+  .wareed-widget-preview__logo--cbahi {
+    height: 40px;
+  }
+
+  .wareed-widget-preview__hero {
+    margin-top: 46px;
+  }
+
   .wareed-widget-preview__chat-panel {
-    right: 12px;
+    left: 12px;
     bottom: 76px;
     width: calc(100vw - 24px);
     height: min(620px, calc(100vh - 100px));
@@ -278,7 +366,7 @@
   }
 
   .wareed-widget-preview__ai-button {
-    right: 12px;
+    left: 12px;
     bottom: 16px;
   }
 }

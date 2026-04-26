@@ -8,10 +8,10 @@ const WELCOME_MESSAGE = `حياك الله في مختبرات وريد الطب
 تفضل كيف أقدر أخدمك؟`;
 
 const QUICK_ACTIONS = [
-  { icon: '🧪', label: 'اسأل عن تحليل', text: 'أبغى أسأل عن تحليل' },
-  { icon: '📍', label: 'اعرف الفروع', text: 'أبغى أعرف الفروع' },
-  { icon: '🧾', label: 'تفسير نتيجة', text: 'عندي نتيجة وأبغى تفسير' },
-  { icon: '🎧', label: 'تواصل معنا', text: 'أبغى أتواصل مع خدمة العملاء' },
+  { label: 'اسأل عن تحليل', text: 'أبغى أسأل عن تحليل' },
+  { label: 'اعرف الفروع', text: 'أبغى أعرف الفروع' },
+  { label: 'تفسير نتيجة', text: 'عندي نتيجة وأبغى تفسير' },
+  { label: 'تواصل معنا', text: 'أبغى أتواصل مع خدمة العملاء' },
 ];
 
 const CONNECTIVITY_ERROR_MESSAGE = 'حصلت مشكلة مؤقتة في الاتصال، حاول مرة أخرى بعد قليل.';
@@ -251,6 +251,18 @@ export default function WareedAiWidgetPreview() {
 
   return (
     <div className="wareed-widget-preview" dir="rtl" lang="ar">
+      <div className="wareed-widget-preview__surface">
+        <header className="wareed-widget-preview__logos" aria-label="شعارات الاعتماد">
+          <img src="/images/wareed-logo.png" alt="مختبرات وريد الطبية" className="wareed-widget-preview__logo wareed-widget-preview__logo--wareed" />
+          <img src="/images/sslogo.png" alt="CBAHI" className="wareed-widget-preview__logo wareed-widget-preview__logo--cbahi" />
+        </header>
+
+        <section className="wareed-widget-preview__hero" aria-label="المقدمة">
+          <h1>مستقبلك الصحي يبدأ هنا مع Wareed AI</h1>
+          <h2>المساعد الذكي الأول لمختبرات وريد الطبية، لخدمتكم على مدار الساعة</h2>
+        </section>
+      </div>
+
       <button
         type="button"
         className="wareed-widget-preview__ai-button"
