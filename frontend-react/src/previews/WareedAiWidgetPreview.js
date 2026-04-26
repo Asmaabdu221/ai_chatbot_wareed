@@ -1,21 +1,21 @@
-﻿import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import api from '../services/api';
 import './WareedAiWidgetPreview.css';
 
-const WELCOME_MESSAGE = `Ø­ÙŠØ§Ùƒ Ø§Ù„Ù„Ù‡ ÙÙŠ Ù…Ø®ØªØ¨Ø±Ø§Øª ÙˆØ±ÙŠØ¯ Ø§Ù„Ø·Ø¨ÙŠØ©
-Ø£Ù†Ø§ Wareed AIØŒ Ù…Ø³Ø§Ø¹Ø¯Ùƒ Ø§Ù„Ø°ÙƒÙŠ.
-Ø£Ù‚Ø¯Ø± Ø£Ø³Ø§Ø¹Ø¯Ùƒ ÙÙŠ Ø§Ù„Ø§Ø³ØªÙØ³Ø§Ø± Ø¹Ù† Ø§Ù„ØªØ­Ø§Ù„ÙŠÙ„ØŒ Ø§Ù„Ù†ØªØ§Ø¦Ø¬ØŒ Ø§Ù„ÙØ±ÙˆØ¹ØŒ ÙˆØ§Ù„Ø®Ø¯Ù…Ø§Øª.
-ØªÙØ¶Ù„ ÙƒÙŠÙ Ø£Ù‚Ø¯Ø± Ø£Ø®Ø¯Ù…ÙƒØŸ`;
+const WELCOME_MESSAGE = `حياك الله في مختبرات وريد الطبية
+أنا Wareed AI، مساعدك الذكي.
+أقدر أساعدك في الاستفسار عن التحاليل، النتائج، الفروع، والخدمات.
+تفضل كيف أقدر أخدمك؟`;
 
 const QUICK_ACTIONS = [
-  { label: 'Ø§Ø³Ø£Ù„ Ø¹Ù† ØªØ­Ù„ÙŠÙ„', text: 'Ø£Ø¨ØºÙ‰ Ø£Ø³Ø£Ù„ Ø¹Ù† ØªØ­Ù„ÙŠÙ„' },
-  { label: 'Ø§Ø¹Ø±Ù Ø§Ù„ÙØ±ÙˆØ¹', text: 'Ø£Ø¨ØºÙ‰ Ø£Ø¹Ø±Ù Ø§Ù„ÙØ±ÙˆØ¹' },
-  { label: 'ØªÙØ³ÙŠØ± Ù†ØªÙŠØ¬Ø©', text: 'Ø¹Ù†Ø¯ÙŠ Ù†ØªÙŠØ¬Ø© ÙˆØ£Ø¨ØºÙ‰ ØªÙØ³ÙŠØ±' },
-  { label: 'ØªÙˆØ§ØµÙ„ Ù…Ø¹Ù†Ø§', text: 'Ø£Ø¨ØºÙ‰ Ø£ØªÙˆØ§ØµÙ„ Ù…Ø¹ Ø®Ø¯Ù…Ø© Ø§Ù„Ø¹Ù…Ù„Ø§Ø¡' },
+  { label: 'اسأل عن تحليل', text: 'أبغى أسأل عن تحليل' },
+  { label: 'اعرف الفروع', text: 'أبغى أعرف الفروع' },
+  { label: 'تفسير نتيجة', text: 'عندي نتيجة وأبغى تفسير' },
+  { label: 'تواصل معنا', text: 'أبغى أتواصل مع خدمة العملاء' },
 ];
 
-const CONNECTIVITY_ERROR_MESSAGE = 'Ø­ØµÙ„Øª Ù…Ø´ÙƒÙ„Ø© Ù…Ø¤Ù‚ØªØ© ÙÙŠ Ø§Ù„Ø§ØªØµØ§Ù„ØŒ Ø­Ø§ÙˆÙ„ Ù…Ø±Ø© Ø£Ø®Ø±Ù‰ Ø¨Ø¹Ø¯ Ù‚Ù„ÙŠÙ„.';
-const TYPING_MESSAGE = 'Ø¬Ø§Ø±ÙŠ Ø§Ù„ÙƒØªØ§Ø¨Ø©...';
+const CONNECTIVITY_ERROR_MESSAGE = 'حصلت مشكلة مؤقتة في الاتصال، حاول مرة أخرى بعد قليل.';
+const TYPING_MESSAGE = 'جاري الكتابة...';
 
 const WIDGET_USER_ID_STORAGE_KEY = 'wareed_preview_widget_user_id';
 const WIDGET_CONVERSATION_ID_STORAGE_KEY = 'wareed_preview_widget_conversation_id';
@@ -268,24 +268,24 @@ export default function WareedAiWidgetPreview() {
         <aside
           id="wareed-ai-chat-panel"
           className="wareed-widget-preview__chat-panel"
-          aria-label="Ù†Ø§ÙØ°Ø© Ø¯Ø±Ø¯Ø´Ø© ÙˆØ±ÙŠØ¯ AI"
+          aria-label="نافذة دردشة وريد AI"
         >
           <header className="wareed-widget-preview__chat-header">
             <div className="wareed-widget-preview__brand-text">
               <h3>Wareed AI</h3>
-              <p>Ø§Ù„Ù…Ø³Ø§Ø¹Ø¯ Ø§Ù„Ø°ÙƒÙŠ</p>
+              <p>المساعد الذكي</p>
             </div>
             <button
               type="button"
               className="wareed-widget-preview__header-close"
               onClick={() => setIsOpen(false)}
-              aria-label="Ø¥ØºÙ„Ø§Ù‚"
+              aria-label="إغلاق"
             >
-              Ø¥ØºÙ„Ø§Ù‚
+              إغلاق
             </button>
           </header>
 
-          <div className="wareed-widget-preview__quick-actions" role="list" aria-label="Ø¥Ø¬Ø±Ø§Ø¡Ø§Øª Ø³Ø±ÙŠØ¹Ø©">
+          <div className="wareed-widget-preview__quick-actions" role="list" aria-label="إجراءات سريعة">
             {QUICK_ACTIONS.map((action) => (
               <button
                 key={action.text}
@@ -322,17 +322,17 @@ export default function WareedAiWidgetPreview() {
               type="text"
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder="Ø§ÙƒØªØ¨ Ø³Ø¤Ø§Ù„Ùƒ Ù‡Ù†Ø§..."
-              aria-label="Ø§ÙƒØªØ¨ Ø³Ø¤Ø§Ù„Ùƒ Ù‡Ù†Ø§"
+              placeholder="اكتب سؤالك هنا..."
+              aria-label="اكتب سؤالك هنا"
               disabled={isSending}
             />
             <button
               type="submit"
               className="wareed-widget-preview__send-button"
               disabled={isSending}
-              aria-label="Ø¥Ø±Ø³Ø§Ù„"
+              aria-label="إرسال"
             >
-              {isSending ? '...' : 'âž¤'}
+              {isSending ? '...' : '➤'}
             </button>
           </form>
         </aside>
