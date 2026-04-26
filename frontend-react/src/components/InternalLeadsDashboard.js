@@ -415,6 +415,37 @@ function FilterBar({ filters, onChange, onClear, statsTabs, activeStatus, onStat
   return (
     <div className="ild-filter-bar">
       <div className="ild-filter-bar__controls">
+        <div className="ild-filter-bar__stats" aria-label="إحصاءات الحالة">
+          {statsTabs.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              className={`ild-mini-stat ild-mini-stat--${tab.key}${activeStatus === tab.key ? ' ild-mini-stat--active' : ''}`}
+              onClick={() => onStatusChange(tab.key)}
+            >
+              <span className="ild-mini-stat__label">{tab.label}</span>
+              <span className="ild-mini-stat__count">{tab.count}</span>
+            </button>
+          ))}
+        </div>
+        <span className="ild-filter-bar__segment-divider" aria-hidden="true" />
+        <div className="ild-filter-bar__dates">
+          <input
+            type="date"
+            className="ild-filter-bar__date"
+            value={filters.dateFrom}
+            onChange={(e) => onChange({ ...filters, dateFrom: e.target.value })}
+            title="من تاريخ"
+          />
+          <span className="ild-filter-bar__date-sep">—</span>
+          <input
+            type="date"
+            className="ild-filter-bar__date"
+            value={filters.dateTo}
+            onChange={(e) => onChange({ ...filters, dateTo: e.target.value })}
+            title="إلى تاريخ"
+          />
+        </div>
         <div className="ild-filter-bar__search-wrap">
           <span className="ild-filter-bar__search-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -440,42 +471,11 @@ function FilterBar({ filters, onChange, onClear, statsTabs, activeStatus, onStat
           <option value="TRANSFER_TO_HUMAN">تحويل لموظف</option>
           <option value="CLARIFY">طلب استفسار</option>
         </select>
-        <div className="ild-filter-bar__dates">
-          <input
-            type="date"
-            className="ild-filter-bar__date"
-            value={filters.dateFrom}
-            onChange={(e) => onChange({ ...filters, dateFrom: e.target.value })}
-            title="من تاريخ"
-          />
-          <span className="ild-filter-bar__date-sep">—</span>
-          <input
-            type="date"
-            className="ild-filter-bar__date"
-            value={filters.dateTo}
-            onChange={(e) => onChange({ ...filters, dateTo: e.target.value })}
-            title="إلى تاريخ"
-          />
-        </div>
         {hasActive && (
           <button type="button" className="ild-filter-bar__clear" onClick={onClear}>
             مسح الفلاتر ✕
           </button>
         )}
-      </div>
-
-      <div className="ild-filter-bar__stats" aria-label="إحصاءات الحالة">
-        {statsTabs.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            className={`ild-mini-stat ild-mini-stat--${tab.key}${activeStatus === tab.key ? ' ild-mini-stat--active' : ''}`}
-            onClick={() => onStatusChange(tab.key)}
-          >
-            <span className="ild-mini-stat__label">{tab.label}</span>
-            <span className="ild-mini-stat__count">{tab.count}</span>
-          </button>
-        ))}
       </div>
     </div>
   );
