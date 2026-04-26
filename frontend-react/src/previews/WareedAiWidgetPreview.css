@@ -124,19 +124,18 @@
 }
 
 .wareed-widget-preview__quick-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
-  padding: 12px 14px;
+  padding: 10px;
   background: #F8FAF9;
   border-bottom: 1px solid #E2E8F0;
-  justify-content: center;
 }
 
 .wareed-widget-preview__quick-card {
   appearance: none;
   -webkit-appearance: none;
-  width: auto;
+  width: 100%;
   border: 1px solid #6B4671;
   background: #fff;
   color: #6B4671;
@@ -149,7 +148,7 @@
   font-size: 13px;
   font-weight: 700;
   line-height: 1.2;
-  min-height: 0;
+  min-height: 38px;
   box-shadow: 0 3px 10px rgba(107, 70, 113, 0.08);
   cursor: pointer;
   transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
