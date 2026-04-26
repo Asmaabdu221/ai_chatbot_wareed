@@ -348,7 +348,7 @@ function LeadDetailPanel({ lead, onClose, onCloseLead, onRetryCrm, closing, retr
   );
 }
 
-function FilterBar({ filters, onChange, onClear, statsTabs, activeIntent, onIntentPillChange }) {
+function FilterBar({ filters, onChange, onClear, statsTabs, activeStatus, onStatusChange }) {
   const hasActive = !!(filters.q || filters.intent || filters.action || filters.dateFrom || filters.dateTo);
   return (
     <div className="ild-filter-bar">
@@ -407,8 +407,8 @@ function FilterBar({ filters, onChange, onClear, statsTabs, activeIntent, onInte
           <button
             key={tab.key}
             type="button"
-            className={`ild-mini-stat ild-mini-stat--${tab.key}${activeIntent === tab.key ? ' ild-mini-stat--active' : ''}`}
-            onClick={() => onIntentPillChange(tab.key)}
+            className={`ild-mini-stat ild-mini-stat--${tab.key}${activeStatus === tab.key ? ' ild-mini-stat--active' : ''}`}
+            onClick={() => onStatusChange(tab.key)}
           >
             <span className="ild-mini-stat__label">{tab.label}</span>
             <span className="ild-mini-stat__count">{tab.count}</span>
@@ -541,9 +541,9 @@ export default function InternalLeadsDashboard() {
     setError(null);
     try {
       const res = await getInternalLeads(key, {
-        status: filter === 'all' ? null : filter,
+        status: null,
         pageSize: 100,
-        // Intent/action filtering is handled client-side to keep pills and dropdown fully synced.
+        // Intent/status filtering is handled client-side to keep pills and dropdown fully synced.
         intent: null,
         action: null,
         q: af.q || null,
@@ -709,10 +709,9 @@ export default function InternalLeadsDashboard() {
   }
 
   function handleFilterChange(key) {
-    // Stats pills are an intent shortcut synced with the dropdown.
-    const nextIntent = key === 'all' ? '' : key;
-    setFilters((prev) => ({ ...prev, intent: nextIntent }));
+    setStatusFilter(key);
     setSelectedLead(null);
+    if (key === 'new') setUnreadCount(0);
   }
 
   function handleFiltersChange(newFilters) {
@@ -785,27 +784,18 @@ export default function InternalLeadsDashboard() {
     effectiveFilters.dateFrom || effectiveFilters.dateTo
   );
 
-  const selectedIntent = filters.intent || 'all';
-  const filteredLeads = !filters.intent
-    ? leads
-    : leads.filter((lead) => normalizeIntentKey(lead.latest_intent) === filters.intent);
+  const selectedStatus = statusFilter;
+  const filteredLeads = leads.filter((lead) => {
+    const statusMatch = statusFilter === 'all' || lead.status === statusFilter;
+    const intentMatch = !filters.intent || normalizeIntentKey(lead.latest_intent) === filters.intent;
+    return statusMatch && intentMatch;
+  });
   const statTabs = [
-    { key: 'all', label: 'الكل', count: leads.length },
-    {
-      key: 'TRANSFER_TO_HUMAN',
-      label: 'تحويل لموظف',
-      count: leads.filter((lead) => normalizeIntentKey(lead.latest_intent) === 'TRANSFER_TO_HUMAN').length,
-    },
-    {
-      key: 'CLARIFY',
-      label: 'طلب استفسار',
-      count: leads.filter((lead) => normalizeIntentKey(lead.latest_intent) === 'CLARIFY').length,
-    },
-    {
-      key: 'BOOKING',
-      label: 'طلب حجز',
-      count: leads.filter((lead) => normalizeIntentKey(lead.latest_intent) === 'BOOKING').length,
-    },
+    { key: 'all', label: 'الكل', count: stats.all },
+    { key: 'new', label: 'جديد', count: stats.new },
+    { key: 'delivered', label: 'مسلّم', count: stats.delivered },
+    { key: 'failed', label: 'فاشل', count: stats.failed },
+    { key: 'closed', label: 'مغلق', count: stats.closed },
   ];
   const intentLabels = {
     TRANSFER_TO_HUMAN: 'تحويل لموظف',
@@ -890,8 +880,8 @@ export default function InternalLeadsDashboard() {
         onChange={handleFiltersChange}
         onClear={handleClearFilters}
         statsTabs={statTabs}
-        activeIntent={selectedIntent}
-        onIntentPillChange={handleFilterChange}
+        activeStatus={selectedStatus}
+        onStatusChange={handleFilterChange}
       />
 
       {/* Error banner */}
