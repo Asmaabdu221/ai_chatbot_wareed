@@ -335,7 +335,7 @@
 
 .ild-header .ild-btn--analytics {
   background: transparent;
-  color: #2D9C8B;
+  color: #6B4671;
   border-color: transparent;
   padding: 0 12px;
 }
@@ -346,7 +346,7 @@
 
 .ild-header .ild-btn--logout {
   background: transparent;
-  color: #64748B;
+  color: #6B4671;
   border-color: transparent;
 }
 
@@ -366,7 +366,7 @@
   min-height: 48px;
   order: 1;
   justify-content: center;
-  background: linear-gradient(135deg, #2D9C8B 0%, #247f72 100%);
+  background: #2D9C8B;
   color: #ffffff;
   border: none;
   font-weight: 600;
@@ -376,7 +376,7 @@
 }
 
 .ild-btn--close-lead:hover:not(:disabled) {
-  background: linear-gradient(135deg, #27897a 0%, #1f6f64 100%);
+  background: #247f72;
   box-shadow: 0 6px 14px rgba(45, 156, 139, 0.25);
 }
 
@@ -1305,6 +1305,21 @@
   margin-left: 0;
 }
 
+.ild-mini-stat--all {
+  background: #F1F5F9;
+  color: #475569;
+}
+
+.ild-mini-stat--new {
+  background: #F3E8FF;
+  color: #6B4671;
+}
+
+.ild-mini-stat--delivered {
+  background: #E6F4F2;
+  color: #2D9C8B;
+}
+
 .ild-mini-stat__label {
   display: inline-flex;
   align-items: center;
@@ -1475,7 +1490,7 @@
 
 /* Explicit minimal-clean overrides (force consistency on live bundle) */
 .ild-layout {
-  background: #F9FAFB !important;
+  background: #F8FAF9 !important;
 }
 
 .ild-filter-bar__search,
