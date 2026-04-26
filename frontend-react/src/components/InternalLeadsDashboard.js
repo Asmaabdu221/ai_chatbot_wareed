@@ -1,8 +1,8 @@
 /**
- * InternalLeadsDashboard � V1.5 (Realtime)
+ * InternalLeadsDashboard — V1.5 (Realtime)
  *
  * Staff dashboard for reviewing and actioning captured leads.
- * Accessible at /internal/leads � protected by X-Internal-Api-Key.
+ * Accessible at /internal/leads — protected by X-Internal-Api-Key.
  *
  * Realtime layer:
  *   - EventSource connects to GET /api/internal/leads/stream?api_key=...
@@ -15,7 +15,7 @@
  * API key resolution:
  *   1. REACT_APP_INTERNAL_API_KEY env var (set at deployment)
  *   2. sessionStorage 'wareed_internal_api_key' (cleared on tab close)
- *   3. On-screen entry form ? saved to sessionStorage
+ *   3. On-screen entry form → saved to sessionStorage
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -28,7 +28,7 @@ const ENV_API_KEY = process.env.REACT_APP_INTERNAL_API_KEY || '';
 const SESSION_KEY = 'wareed_internal_api_key';
 const REFRESH_INTERVAL_MS = 30000;
 const TOAST_DURATION_MS = 5000;
-const SSE_MAX_ERRORS = 6; // after this many consecutive errors ? declare offline
+const SSE_MAX_ERRORS = 6; // after this many consecutive errors → declare offline
 
 // Roles that may access the internal dashboard
 const INTERNAL_ROLES = new Set(['admin', 'supervisor', 'staff']);
@@ -40,26 +40,26 @@ function rolePermissions(role) {
 }
 
 const STATUS_LABELS = {
-  new: '????',
-  delivered: '???????',
-  failed: '????',
-  closed: '????',
+  new: 'جديد',
+  delivered: 'مُسلَّم',
+  failed: 'فاشل',
+  closed: 'مغلق',
 };
 
 const CRM_STATUS_LABELS = {
-  pending: '??? ????????',
-  synced: '??????',
-  failed: '??? ????????',
-  disabled: '?????',
+  pending: 'قيد المزامنة',
+  synced: 'متزامن',
+  failed: 'فشل المزامنة',
+  disabled: 'معطّل',
 };
 
 const INTENT_LABELS = {
-  TRANSFER_TO_HUMAN: '????? ?????',
-  CLARIFY: '??? ???????',
-  BOOKING: '??? ???',
-  ask_phone: '??? ???',
-  transfer_to_human: '????? ?????',
-  offer_human_help: '?????? ?????',
+  TRANSFER_TO_HUMAN: 'تحويل لموظف',
+  CLARIFY: 'طلب استفسار',
+  BOOKING: 'طلب حجز',
+  ask_phone: 'طلب حجز',
+  transfer_to_human: 'تحويل لموظف',
+  offer_human_help: 'مساعدة بشرية',
 };
 
 // ---------------------------------------------------------------------------
@@ -67,7 +67,7 @@ const INTENT_LABELS = {
 // ---------------------------------------------------------------------------
 
 function formatDate(iso) {
-  if (!iso) return '�';
+  if (!iso) return '—';
   try {
     return new Intl.DateTimeFormat('ar-SA', {
       day: '2-digit', month: '2-digit', year: 'numeric',
@@ -80,14 +80,14 @@ function formatDate(iso) {
 
 function formatIntent(intent) {
   const raw = (intent || '').toString().trim();
-  if (!raw) return '??? ????';
+  if (!raw) return 'غير محدد';
 
   const key = raw.toUpperCase();
-  if (key === 'TRANSFER_TO_HUMAN') return '????? ?????';
-  if (key === 'CLARIFY') return '??? ???????';
-  if (key === 'BOOKING' || key.includes('BOOK') || key.includes('ASK_PHONE')) return '??? ???';
+  if (key === 'TRANSFER_TO_HUMAN') return 'تحويل لموظف';
+  if (key === 'CLARIFY') return 'طلب استفسار';
+  if (key === 'BOOKING' || key.includes('BOOK') || key.includes('ASK_PHONE')) return 'طلب حجز';
 
-  return INTENT_LABELS[raw] || '??? ????';
+  return INTENT_LABELS[raw] || 'غير محدد';
 }
 
 function normalizeIntentKey(intent) {
@@ -115,12 +115,12 @@ function renderSource(source) {
       </span>
     );
   }
-  return source || '�';
+  return source || '—';
 }
 
 function toOneLineSummary(text, maxWords = 10) {
   const raw = (text || '').toString().replace(/\s+/g, ' ').trim();
-  if (!raw) return '??????? ???';
+  if (!raw) return 'استفسار عام';
   const words = raw.split(' ');
   if (words.length <= maxWords) return raw;
   return `${words.slice(0, maxWords).join(' ')}...`;
@@ -162,15 +162,15 @@ function SummaryModal({ text, onClose }) {
       className="ild-modal-backdrop"
       role="dialog"
       aria-modal="true"
-      aria-label="?????? ????????"
+      aria-label="تفاصيل المحادثة"
       onClick={onClose}
     >
       <div className="ild-modal" onClick={(e) => e.stopPropagation()}>
         <div className="ild-modal__header">
-          <h3 className="ild-modal__title">?????? ????????</h3>
-          <button type="button" className="ild-modal__close" onClick={onClose} aria-label="?????">?</button>
+          <h3 className="ild-modal__title">تفاصيل المحادثة</h3>
+          <button type="button" className="ild-modal__close" onClick={onClose} aria-label="إغلاق">✕</button>
         </div>
-        <div className="ild-modal__body">{text || '?? ???? ?????? ?????.'}</div>
+        <div className="ild-modal__body">{text || 'لا توجد تفاصيل متاحة.'}</div>
       </div>
     </div>
   );
@@ -199,10 +199,10 @@ function CrmStatusBadge({ status }) {
 
 function ConnectionStatus({ status }) {
   const labels = {
-    connecting: '???? ???????',
-    live: '?????',
-    reconnecting: '????? ?????',
-    offline: '???? ?? ?????',
+    connecting: 'جارٍ الاتصال',
+    live: 'مباشر',
+    reconnecting: 'إعادة اتصال',
+    offline: 'بدون بث مباشر',
   };
   return (
     <span className={`ild-conn-status ild-conn-status--${status}`} title={labels[status]}>
@@ -215,20 +215,20 @@ function ConnectionStatus({ status }) {
 function ToastNotifications({ toasts, onDismiss }) {
   if (toasts.length === 0) return null;
   return (
-    <div className="ild-toasts" aria-live="polite" aria-label="???????">
+    <div className="ild-toasts" aria-live="polite" aria-label="إشعارات">
       {toasts.map((toast) => (
         <div key={toast.id} className={`ild-toast ild-toast--${toast.type}`} role="alert">
           <span className="ild-toast__icon" aria-hidden="true">
-            {toast.type === 'new' ? '??' : toast.type === 'error' ? '??' : '??'}
+            {toast.type === 'new' ? '📞' : toast.type === 'error' ? '⚠️' : 'ℹ️'}
           </span>
           <span className="ild-toast__message">{toast.message}</span>
           <button
             type="button"
             className="ild-toast__close"
             onClick={() => onDismiss(toast.id)}
-            aria-label="????? ???????"
+            aria-label="إغلاق الإشعار"
           >
-            ?
+            ✕
           </button>
         </div>
       ))}
@@ -243,7 +243,7 @@ function ApiKeyForm({ onSubmit }) {
   function handleSubmit(e) {
     e.preventDefault();
     const trimmed = key.trim();
-    if (!trimmed) { setError('???? ????? ??????'); return; }
+    if (!trimmed) { setError('أدخل مفتاح الوصول'); return; }
     setError('');
     onSubmit(trimmed);
   }
@@ -251,9 +251,9 @@ function ApiKeyForm({ onSubmit }) {
   return (
     <div className="ild-keyform-wrap" dir="rtl">
       <div className="ild-keyform">
-        <img src="/images/wareed-logo.png" alt="????" className="ild-keyform__logo" />
-        <h1 className="ild-keyform__title">???? ????? ???????</h1>
-        <p className="ild-keyform__sub">???? ????? ?????? ????????</p>
+        <img src="/images/wareed-logo.png" alt="وريد" className="ild-keyform__logo" />
+        <h1 className="ild-keyform__title">لوحة إدارة الطلبات</h1>
+        <p className="ild-keyform__sub">أدخل مفتاح الوصول للمتابعة</p>
         <form onSubmit={handleSubmit} noValidate>
           <input
             type="password"
@@ -265,7 +265,7 @@ function ApiKeyForm({ onSubmit }) {
             autoComplete="current-password"
           />
           {error && <p className="ild-keyform__error">{error}</p>}
-          <button type="submit" className="ild-keyform__btn">????</button>
+          <button type="submit" className="ild-keyform__btn">دخول</button>
         </form>
       </div>
     </div>
@@ -276,14 +276,14 @@ function AccessDenied({ onSwitchToApiKey }) {
   return (
     <div className="ild-keyform-wrap" dir="rtl">
       <div className="ild-keyform">
-        <img src="/images/wareed-logo.png" alt="????" className="ild-keyform__logo" />
-        <h1 className="ild-keyform__title">??? ???? ???????</h1>
-        <p className="ild-keyform__sub">????? ?????? ?? ????? ?????? ?????? ????? ????? ???????.</p>
+        <img src="/images/wareed-logo.png" alt="وريد" className="ild-keyform__logo" />
+        <h1 className="ild-keyform__title">غير مصرح بالوصول</h1>
+        <p className="ild-keyform__sub">حسابك الحالي لا يمتلك صلاحية الوصول للوحة إدارة الطلبات.</p>
         <p className="ild-keyform__sub" style={{ fontSize: '12px', marginTop: '-4px' }}>
-          ????? ?? ???? ?????? ?????? ????????? ?? ?????? ????? ???? ?????.
+          تواصل مع مدير النظام لإضافة الصلاحية، أو استخدم مفتاح وصول مباشر.
         </p>
         <button type="button" className="ild-keyform__btn" onClick={onSwitchToApiKey}>
-          ??????? ????? ???? ?????
+          استخدام مفتاح وصول مباشر
         </button>
       </div>
     </div>
@@ -293,22 +293,22 @@ function AccessDenied({ onSwitchToApiKey }) {
 function LeadDetailPanel({ lead, onClose, onCloseLead, onRetryCrm, closing, retryingCrm, canClose }) {
   if (!lead) return null;
   return (
-    <div className="ild-panel" dir="rtl" role="complementary" aria-label="?????? ??? Lead">
+    <div className="ild-panel" dir="rtl" role="complementary" aria-label="تفاصيل الـ Lead">
       <div className="ild-panel__header">
-        <h2 className="ild-panel__title">?????? ??? Lead</h2>
-        <button type="button" className="ild-panel__close-btn" onClick={onClose} aria-label="?????">?</button>
+        <h2 className="ild-panel__title">تفاصيل الـ Lead</h2>
+        <button type="button" className="ild-panel__close-btn" onClick={onClose} aria-label="إغلاق">✕</button>
       </div>
       <div className="ild-panel__body">
         {[
-          ['??????', <StatusBadge status={lead.status} />],
-          ['??? ??????', <span className="ild-panel__value--phone">{lead.phone}</span>],
-          ['??? ???????', formatIntent(lead.latest_intent)],
-          ['???????', formatIntent(lead.latest_action)],
-          ['???? ?????', lead.summary_hint || '�'],
-          ['??????', lead.source],
-          ['??? ????????', formatDate(lead.created_at)],
-          lead.delivered_at && ['??? ???????', formatDate(lead.delivered_at)],
-          lead.delivery_error && ['??? ???????', <span className="ild-panel__value--error">{lead.delivery_error}</span>],
+          ['الحالة', <StatusBadge status={lead.status} />],
+          ['رقم الهاتف', <span className="ild-panel__value--phone">{lead.phone}</span>],
+          ['نية التواصل', formatIntent(lead.latest_intent)],
+          ['الإجراء', formatIntent(lead.latest_action)],
+          ['ملخص الطلب', lead.summary_hint || '—'],
+          ['المصدر', lead.source],
+          ['وقت الاستلام', formatDate(lead.created_at)],
+          lead.delivered_at && ['وقت التسليم', formatDate(lead.delivered_at)],
+          lead.delivery_error && ['خطأ التسليم', <span className="ild-panel__value--error">{lead.delivery_error}</span>],
         ].filter(Boolean).map(([label, value]) => (
           <div key={label} className="ild-panel__row">
             <span className="ild-panel__label">{label}</span>
@@ -328,7 +328,7 @@ function LeadDetailPanel({ lead, onClose, onCloseLead, onRetryCrm, closing, retr
             onClick={() => onCloseLead(lead.id)}
             disabled={closing}
           >
-            {closing ? '???? ???????...' : '????? ??? Lead ?'}
+            {closing ? 'جارٍ الإغلاق...' : 'إغلاق الـ Lead ✓'}
           </button>
         </div>
       )}
@@ -363,7 +363,7 @@ function FilterBar({ filters, onChange, onClear, statsTabs, activeStatus, onStat
           <input
             type="search"
             className="ild-filter-bar__search"
-            placeholder="??? ??????? ?? ??????..."
+            placeholder="بحث بالهاتف أو الملخص..."
             value={filters.q}
             onChange={(e) => onChange({ ...filters, q: e.target.value })}
           />
@@ -373,10 +373,10 @@ function FilterBar({ filters, onChange, onClear, statsTabs, activeStatus, onStat
           value={filters.intent}
           onChange={(e) => onChange({ ...filters, intent: e.target.value })}
         >
-          <option value="">?? ???????</option>
-          <option value="BOOKING">??? ???</option>
-          <option value="TRANSFER_TO_HUMAN">????? ?????</option>
-          <option value="CLARIFY">??? ???????</option>
+          <option value="">كل النوايا</option>
+          <option value="BOOKING">طلب حجز</option>
+          <option value="TRANSFER_TO_HUMAN">تحويل لموظف</option>
+          <option value="CLARIFY">طلب استفسار</option>
         </select>
         <div className="ild-filter-bar__dates">
           <input
@@ -384,25 +384,25 @@ function FilterBar({ filters, onChange, onClear, statsTabs, activeStatus, onStat
             className="ild-filter-bar__date"
             value={filters.dateFrom}
             onChange={(e) => onChange({ ...filters, dateFrom: e.target.value })}
-            title="?? ?????"
+            title="من تاريخ"
           />
-          <span className="ild-filter-bar__date-sep">�</span>
+          <span className="ild-filter-bar__date-sep">—</span>
           <input
             type="date"
             className="ild-filter-bar__date"
             value={filters.dateTo}
             onChange={(e) => onChange({ ...filters, dateTo: e.target.value })}
-            title="??? ?????"
+            title="إلى تاريخ"
           />
         </div>
         {hasActive && (
           <button type="button" className="ild-filter-bar__clear" onClick={onClear}>
-            ??? ??????? ?
+            مسح الفلاتر ✕
           </button>
         )}
       </div>
 
-      <div className="ild-filter-bar__stats" aria-label="??????? ??????">
+      <div className="ild-filter-bar__stats" aria-label="إحصاءات الحالة">
         {statsTabs.map((tab) => (
           <button
             key={tab.key}
@@ -427,14 +427,14 @@ export default function InternalLeadsDashboard() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    document.title = '???? ????? ???????';
+    document.title = 'لوحة إدارة الطلبات';
   }, []);
 
   // --- Auth mode ---
-  // 'checking'  ? resolving whether user has an internal role
-  // 'bearer'    ? authenticated via JWT Bearer (role-based)
-  // 'apikey'    ? authenticated via X-Internal-Api-Key
-  // 'denied'    ? logged in but no internal role (prompt to switch to API key)
+  // 'checking'  → resolving whether user has an internal role
+  // 'bearer'    → authenticated via JWT Bearer (role-based)
+  // 'apikey'    → authenticated via X-Internal-Api-Key
+  // 'denied'    → logged in but no internal role (prompt to switch to API key)
   const [authMode, setAuthMode] = useState('checking');
   const [currentUser, setCurrentUser] = useState(null);   // User from /auth/me (bearer path)
   const [forceApiKey, setForceApiKey] = useState(false);  // user chose API key despite having no role
@@ -472,7 +472,7 @@ export default function InternalLeadsDashboard() {
   useEffect(() => {
     const token = getAccessToken();
     if (!token) {
-      // Not logged in ? fall back to API key path
+      // Not logged in → fall back to API key path
       setAuthMode('apikey');
       return;
     }
@@ -566,9 +566,9 @@ export default function InternalLeadsDashboard() {
     } catch (err) {
       if (err.response?.status === 403) {
         setKeyRejected(true);
-        setError('????? ?????? ??? ????');
+        setError('مفتاح الوصول غير صحيح');
       } else {
-        setError('????? ????? ??? Leads. ???? ?? ??????? ???????.');
+        setError('تعذّر تحميل الـ Leads. تحقق من الاتصال بالخادم.');
       }
     } finally {
       setLoading(false);
@@ -597,11 +597,11 @@ export default function InternalLeadsDashboard() {
     // Notifications and unread count
     if (event_type === 'lead.created') {
       setUnreadCount((c) => c + 1);
-      addToast({ type: 'new', message: `Lead ???? � ${leadData.phone}` });
+      addToast({ type: 'new', message: `Lead جديد — ${leadData.phone}` });
     } else if (event_type === 'lead.delivery_failed') {
-      addToast({ type: 'error', message: `??? ????? Lead � ${leadData.phone}` });
+      addToast({ type: 'error', message: `فشل تسليم Lead — ${leadData.phone}` });
     } else if (event_type === 'lead.closed') {
-      addToast({ type: 'info', message: `?? ????? Lead � ${leadData.phone}` });
+      addToast({ type: 'info', message: `تم إغلاق Lead — ${leadData.phone}` });
     }
   }, [addToast, fetchLeads]);
 
@@ -639,7 +639,7 @@ export default function InternalLeadsDashboard() {
   }, [leads]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------------------------------------------------------
-  // EventSource � realtime layer
+  // EventSource — realtime layer
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
@@ -667,7 +667,7 @@ export default function InternalLeadsDashboard() {
           const event = JSON.parse(e.data);
           if (handleLeadEventRef.current) handleLeadEventRef.current(event);
         } catch {
-          // malformed event � ignore
+          // malformed event — ignore
         }
       };
 
@@ -675,7 +675,7 @@ export default function InternalLeadsDashboard() {
         errorCount += 1;
         if (errorCount >= SSE_MAX_ERRORS) {
           setConnectionStatus('offline');
-          es.close(); // stop retrying � 30s poll covers it
+          es.close(); // stop retrying — 30s poll covers it
         } else {
           setConnectionStatus('reconnecting');
           // EventSource auto-reconnects; we just track state
@@ -736,7 +736,7 @@ export default function InternalLeadsDashboard() {
       setLeads((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
       if (selectedLead?.id === updated.id) setSelectedLead(updated);
     } catch {
-      setError('????? ????? ??? Lead. ???? ??????.');
+      setError('تعذّر إغلاق الـ Lead. حاول مجدداً.');
     } finally {
       setClosingIds((prev) => {
         const next = new Set(prev);
@@ -753,7 +753,7 @@ export default function InternalLeadsDashboard() {
       setLeads((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
       if (selectedLead?.id === updated.id) setSelectedLead(updated);
     } catch {
-      setError('?????? ????? ?????? ?????? CRM.');
+      setError('تعذّرت إعادة محاولة مزامنة CRM.');
     } finally {
       setRetryingCrmIds((prev) => {
         const next = new Set(prev);
@@ -769,7 +769,7 @@ export default function InternalLeadsDashboard() {
 
   // Auth-state gates
   if (authMode === 'checking') {
-    return <div className="ild-keyform-wrap" dir="rtl"><div className="ild-keyform"><p>???? ?????? ?? ?????????...</p></div></div>;
+    return <div className="ild-keyform-wrap" dir="rtl"><div className="ild-keyform"><p>جاري التحقق من الصلاحيات...</p></div></div>;
   }
   if (authMode === 'denied' && !forceApiKey) {
     return <AccessDenied onSwitchToApiKey={() => setForceApiKey(true)} />;
@@ -791,32 +791,32 @@ export default function InternalLeadsDashboard() {
     return statusMatch && intentMatch;
   });
   const statTabs = [
-    { key: 'all', label: '????', count: stats.all },
-    { key: 'new', label: '????', count: stats.new },
-    { key: 'delivered', label: '?????', count: stats.delivered },
-    { key: 'failed', label: '????', count: stats.failed },
-    { key: 'closed', label: '????', count: stats.closed },
+    { key: 'all', label: 'الكل', count: stats.all },
+    { key: 'new', label: 'جديد', count: stats.new },
+    { key: 'delivered', label: 'مسلّم', count: stats.delivered },
+    { key: 'failed', label: 'فاشل', count: stats.failed },
+    { key: 'closed', label: 'مغلق', count: stats.closed },
   ];
   const intentLabels = {
-    TRANSFER_TO_HUMAN: '????? ?????',
-    CLARIFY: '??? ???????',
-    BOOKING: '??? ???',
+    TRANSFER_TO_HUMAN: 'تحويل لموظف',
+    CLARIFY: 'طلب استفسار',
+    BOOKING: 'طلب حجز',
   };
 
   return (
     <div className="ild-layout" dir="rtl" lang="ar">
       <SummaryModal text={summaryModalText} onClose={() => setSummaryModalText(null)} />
 
-      {/* Toast notifications � fixed overlay */}
+      {/* Toast notifications — fixed overlay */}
       <ToastNotifications toasts={toasts} onDismiss={removeToast} />
 
       {/* Header */}
       <header className="ild-header">
         <div className="ild-header__brand">
-          <img src="/images/wareed-logo.png" alt="????" className="ild-header__logo" />
-          <span className="ild-header__title">???? ????? ???????</span>
+          <img src="/images/wareed-logo.png" alt="وريد" className="ild-header__logo" />
+          <span className="ild-header__title">لوحة إدارة الطلبات</span>
           {unreadCount > 0 && (
-            <span className="ild-unread-badge" title={`${unreadCount} Lead ???? ??? ?????`}>
+            <span className="ild-unread-badge" title={`${unreadCount} Lead جديد غير مقروء`}>
               {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}
@@ -831,14 +831,14 @@ export default function InternalLeadsDashboard() {
                   <path d="M21 12H9" />
                 </svg>
               </span>
-              ????
+              خروج
             </button>
           )}
           <button
             type="button"
             className="ild-btn ild-btn--analytics"
             onClick={() => navigate('/internal/analytics')}
-            title="???? ?????????"
+            title="لوحة التحليلات"
           >
             <span className="ild-btn__icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -848,15 +848,15 @@ export default function InternalLeadsDashboard() {
                 <path d="M22 20V7" />
               </svg>
             </span>
-            ???????
+            تحليلات
           </button>
           <button
             type="button"
             className="ild-btn ild-btn--refresh"
             onClick={handleManualRefresh}
             disabled={loading}
-            title="????? ????"
-            aria-label="?????"
+            title="تحديث يدوي"
+            aria-label="تحديث"
           >
             <svg
               className={`ild-btn__icon${loading ? ' ild-btn__icon--spin' : ''}`}
@@ -888,7 +888,7 @@ export default function InternalLeadsDashboard() {
       {error && (
         <div className="ild-error-banner" role="alert">
           {error}
-          <button type="button" onClick={() => setError(null)} className="ild-error-banner__dismiss">?</button>
+          <button type="button" onClick={() => setError(null)} className="ild-error-banner__dismiss">✕</button>
         </div>
       )}
 
@@ -898,15 +898,15 @@ export default function InternalLeadsDashboard() {
           {loading && filteredLeads.length === 0 ? (
             <div className="ild-empty">
               <span className="ild-empty__spinner" aria-hidden="true" />
-              <p>???? ???????...</p>
+              <p>جارٍ التحميل...</p>
             </div>
           ) : filteredLeads.length === 0 ? (
             <div className="ild-empty">
-              <p className="ild-empty__icon">{hasActiveFilters ? '??' : '??'}</p>
-              <p>{hasActiveFilters ? '?? ???? ????? ????? ??????? ???????' : '?? ???? Leads ???'}</p>
+              <p className="ild-empty__icon">{hasActiveFilters ? '🔍' : '📭'}</p>
+              <p>{hasActiveFilters ? 'لا توجد نتائج تطابق الفلاتر المحددة' : 'لا توجد Leads بعد'}</p>
               {hasActiveFilters && (
                 <button type="button" className="ild-btn ild-btn--link" onClick={handleClearFilters}>
-                  ??? ???????
+                  مسح الفلاتر
                 </button>
               )}
             </div>
@@ -914,14 +914,14 @@ export default function InternalLeadsDashboard() {
             <table className="ild-table" data-testid="leads-table">
               <thead>
                 <tr>
-                  <th>??? ??????</th>
-                  <th>??? ???????</th>
-                  <th>???? ?????</th>
-                  <th>??????</th>
-                  <th>??? ????????</th>
-                  <th>??????</th>
+                  <th>رقم الهاتف</th>
+                  <th>نية التواصل</th>
+                  <th>ملخص الطلب</th>
+                  <th>المصدر</th>
+                  <th>وقت الاستلام</th>
+                  <th>الحالة</th>
                   <th>CRM</th>
-                  <th>??????</th>
+                  <th>تفاصيل</th>
                   <th />
                 </tr>
               </thead>
@@ -941,7 +941,7 @@ export default function InternalLeadsDashboard() {
                     aria-label={`Lead ${lead.phone}`}
                   >
                     <td className="ild-table__phone">{lead.phone}</td>
-                    <td className="ild-table__intent">{intentLabels[(lead.latest_intent || '').toUpperCase()] || '??? ????'}</td>
+                    <td className="ild-table__intent">{intentLabels[(lead.latest_intent || '').toUpperCase()] || 'غير محدد'}</td>
                     <td className="ild-table__hint">{getTableSummary(lead)}</td>
                     <td>{renderSource(lead.source)}</td>
                     <td className="ild-table__date">{formatDate(lead.created_at)}</td>
@@ -953,10 +953,10 @@ export default function InternalLeadsDashboard() {
                         className="ild-btn ild-btn--summary"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSummaryModalText(lead.summary_text || '?? ???? ?????? ?????.');
+                          setSummaryModalText(lead.summary_text || 'لا توجد تفاصيل متاحة.');
                         }}
-                        aria-label="??? ?????? ????????"
-                        title="??? ????????"
+                        aria-label="عرض تفاصيل المحادثة"
+                        title="عرض التفاصيل"
                       >
                         <svg className="ild-btn__icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                           <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z" />
@@ -971,8 +971,8 @@ export default function InternalLeadsDashboard() {
                           className="ild-btn ild-btn--inline-close"
                           onClick={(e) => { e.stopPropagation(); handleCloseLead(lead.id); }}
                           disabled={closingIds.has(lead.id)}
-                          aria-label={`????? ${lead.phone}`}
-                          title="?????"
+                          aria-label={`إغلاق ${lead.phone}`}
+                          title="إغلاق"
                         >
                           {closingIds.has(lead.id) ? '...' : (
                             <svg className="ild-btn__icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -1006,8 +1006,8 @@ export default function InternalLeadsDashboard() {
 
       <div className="ild-footer">
         {connectionStatus === 'live'
-          ? '?? ????? ??? � ????? ????? ??? ?? Lead ????'
-          : '????? ???????? ?? 30 ?????'}
+          ? 'بث مباشر نشط — يتحدث فوراً عند كل Lead جديد'
+          : 'يتجدد تلقائياً كل 30 ثانية'}
       </div>
     </div>
   );
