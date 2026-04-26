@@ -85,6 +85,7 @@ function normalizeUrl(url) {
 function renderMessageTextWithLinks(text) {
   const raw = String(text || '');
   const lines = raw.split('\n');
+  const branchRegex = /(\u0641\u0631\u0639\s+[^\n،,.]+)/g;
 
   return lines.map((line, lineIndex) => {
     const parts = line.split(URL_REGEX);
@@ -101,12 +102,25 @@ function renderMessageTextWithLinks(text) {
             rel="noopener noreferrer"
             className="wareed-widget-preview__message-link"
           >
-            {part}
+            فتح الموقع
           </a>
         );
       }
       URL_REGEX.lastIndex = 0;
-      return <React.Fragment key={`text-${lineIndex}-${partIndex}`}>{part}</React.Fragment>;
+      const branchParts = part.split(branchRegex);
+      return (
+        <React.Fragment key={`text-${lineIndex}-${partIndex}`}>
+          {branchParts.map((chunk, chunkIndex) =>
+            chunk.match(/^\u0641\u0631\u0639\s+/) ? (
+              <strong key={`branch-${lineIndex}-${partIndex}-${chunkIndex}`} className="wareed-widget-preview__branch-name">
+                {chunk}
+              </strong>
+            ) : (
+              <React.Fragment key={`chunk-${lineIndex}-${partIndex}-${chunkIndex}`}>{chunk}</React.Fragment>
+            )
+          )}
+        </React.Fragment>
+      );
     });
 
     return (
@@ -268,12 +282,12 @@ export default function WareedAiWidgetPreview() {
         <span>Wareed AI</span>
       </button>
 
-      {isOpen && (
-        <aside
-          id="wareed-ai-chat-panel"
-          className="wareed-widget-preview__chat-panel"
-          aria-label="نافذة دردشة وريد AI"
-        >
+      <aside
+        id="wareed-ai-chat-panel"
+        className={`wareed-widget-preview__chat-panel ${isOpen ? 'wareed-widget-preview__chat-panel--open' : 'wareed-widget-preview__chat-panel--closed'}`}
+        aria-label="نافذة دردشة وريد AI"
+        aria-hidden={!isOpen}
+      >
           <header className="wareed-widget-preview__chat-header">
             <div className="wareed-widget-preview__brand-text">
               <h3>Wareed AI</h3>
@@ -342,8 +356,7 @@ export default function WareedAiWidgetPreview() {
               </svg>
             </button>
           </form>
-        </aside>
-      )}
+      </aside>
     </div>
   );
 }
