@@ -839,9 +839,9 @@
 }
 
 .ild-conn-status--live {
-  color: #15803d;
-  background: #dcfce7;
-  border-color: #bbf7d0;
+  color: #2D9C8B;
+  background: #E6F4F2;
+  border-color: #BEE7E1;
 }
 
 .ild-conn-status--reconnecting {
@@ -1051,15 +1051,16 @@
   align-items: center;
   justify-content: flex-start;
   gap: 16px;
-  flex: 1 1 auto;
-  min-width: 0;
+  flex: 0 1 auto;
 }
 
 .ild-filter-bar__left {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  min-width: 84px;
+  gap: 16px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .ild-filter-bar__search-wrap {

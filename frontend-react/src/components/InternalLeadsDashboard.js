@@ -446,6 +446,8 @@ function FilterBar({ filters, onChange, onClear, statsTabs, activeStatus, onStat
             title="إلى تاريخ"
           />
         </div>
+      </div>
+      <div className="ild-filter-bar__left">
         <div className="ild-filter-bar__search-wrap">
           <span className="ild-filter-bar__search-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -471,8 +473,6 @@ function FilterBar({ filters, onChange, onClear, statsTabs, activeStatus, onStat
           <option value="TRANSFER_TO_HUMAN">تحويل لموظف</option>
           <option value="CLARIFY">طلب استفسار</option>
         </select>
-      </div>
-      <div className="ild-filter-bar__left">
         {hasActive && (
           <button type="button" className="ild-filter-bar__clear" onClick={onClear}>
             مسح الفلاتر ✕
