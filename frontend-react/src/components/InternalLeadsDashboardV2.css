@@ -333,7 +333,9 @@
 }
 
 .ild-btn--close-lead {
-  flex: 1;
+  width: 100%;
+  min-height: 48px;
+  order: 1;
   justify-content: center;
   background: #DCFCE7;
   color: #15803D;
@@ -346,6 +348,7 @@
 
 .ild-btn--close-lead:hover:not(:disabled) {
   background: #bbf7d0;
+  box-shadow: 0 4px 12px rgba(21, 128, 61, 0.18);
 }
 
 [data-theme="dark"] .ild-btn--close-lead {
@@ -542,7 +545,7 @@
 .ild-panel__value--phone-wrap {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   direction: ltr;
 }
 
@@ -562,15 +565,16 @@
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  color: #16a34a;
+  color: #25D366;
   background: transparent;
   border: none;
   text-decoration: none;
   transition: all 0.2s ease;
+  order: -1;
 }
 
 .ild-panel__whatsapp-link:hover {
-  color: #15803d;
+  color: #1fb457;
   background: #ecfdf3;
 }
 
@@ -623,9 +627,9 @@
 .ild-panel__note-input {
   width: 100%;
   min-height: 52px;
-  resize: vertical;
+  resize: none;
   border: none;
-  border-bottom: 2px solid #E2E8F0;
+  border-bottom: 1px solid #E2E8F0;
   background: transparent;
   color: #1F2937;
   font-family: inherit;
@@ -645,24 +649,26 @@
 
 .ild-panel__actions {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 12px;
 }
 
 .ild-panel__cancel-link {
-  background: #f8fafc;
+  order: 2;
+  background: transparent;
   border: none;
   color: #64748B;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  padding: 8px 14px;
-  border-radius: 50px;
+  padding: 0;
+  text-align: center;
 }
 
 .ild-panel__cancel-link:hover {
-  color: #334155;
-  background: #f1f5f9;
+  color: #475569;
+  text-decoration: underline;
 }
 
 .ild-panel__id-bottom {
@@ -1212,7 +1218,7 @@
 .ild-filter-bar__stats {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   flex-wrap: nowrap;
   white-space: nowrap;
   min-height: 42px;
@@ -1230,7 +1236,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
+  padding: 6px 16px;
   height: 32px;
   border: 1px solid #d1d5db;
   border-radius: 999px;
@@ -1242,7 +1248,7 @@
   line-height: 1;
   cursor: pointer;
   transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
-  margin-left: 12px;
+  margin-left: 0;
 }
 
 .ild-mini-stat__label {
@@ -1271,9 +1277,9 @@
 }
 
 .ild-mini-stat--all { background: #f3f4f6; color: #374151; border-color: #d1d5db; }
-.ild-mini-stat--new { background: #E0F2FE; color: #0c4a6e; border-color: #bae6fd; }
-.ild-mini-stat--delivered { background: #DCFCE7; color: #166534; border-color: #bbf7d0; }
-.ild-mini-stat--failed { background: #FEE2E2; color: #991b1b; border-color: #fecaca; }
+.ild-mini-stat--new { background: #EFF6FF; color: #1E40AF; border-color: #DBEAFE; }
+.ild-mini-stat--delivered { background: #F0FDF4; color: #166534; border-color: #BBF7D0; }
+.ild-mini-stat--failed { background: #FEF2F2; color: #991b1b; border-color: #FECACA; }
 .ild-mini-stat--closed { background: #eceff3; color: #4b5563; border-color: #d1d5db; }
 
 .ild-filter-bar__clear {
