@@ -1,21 +1,21 @@
-import React, { useEffect, useRef, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 import api from '../services/api';
 import './WareedAiWidgetPreview.css';
 
-const WELCOME_MESSAGE = `حياك الله في مختبرات وريد الطبية
-أنا Wareed AI، مساعدك الذكي.
-أقدر أساعدك في الاستفسار عن التحاليل، النتائج، الفروع، والخدمات.
-تفضل كيف أقدر أخدمك؟`;
+const WELCOME_MESSAGE = `Ø­ÙŠØ§Ùƒ Ø§Ù„Ù„Ù‡ ÙÙŠ Ù…Ø®ØªØ¨Ø±Ø§Øª ÙˆØ±ÙŠØ¯ Ø§Ù„Ø·Ø¨ÙŠØ©
+Ø£Ù†Ø§ Wareed AIØŒ Ù…Ø³Ø§Ø¹Ø¯Ùƒ Ø§Ù„Ø°ÙƒÙŠ.
+Ø£Ù‚Ø¯Ø± Ø£Ø³Ø§Ø¹Ø¯Ùƒ ÙÙŠ Ø§Ù„Ø§Ø³ØªÙØ³Ø§Ø± Ø¹Ù† Ø§Ù„ØªØ­Ø§Ù„ÙŠÙ„ØŒ Ø§Ù„Ù†ØªØ§Ø¦Ø¬ØŒ Ø§Ù„ÙØ±ÙˆØ¹ØŒ ÙˆØ§Ù„Ø®Ø¯Ù…Ø§Øª.
+ØªÙØ¶Ù„ ÙƒÙŠÙ Ø£Ù‚Ø¯Ø± Ø£Ø®Ø¯Ù…ÙƒØŸ`;
 
 const QUICK_ACTIONS = [
-  { label: 'اسأل عن تحليل', text: 'أبغى أسأل عن تحليل' },
-  { label: 'اعرف الفروع', text: 'أبغى أعرف الفروع' },
-  { label: 'تفسير نتيجة', text: 'عندي نتيجة وأبغى تفسير' },
-  { label: 'تواصل معنا', text: 'أبغى أتواصل مع خدمة العملاء' },
+  { label: 'Ø§Ø³Ø£Ù„ Ø¹Ù† ØªØ­Ù„ÙŠÙ„', text: 'Ø£Ø¨ØºÙ‰ Ø£Ø³Ø£Ù„ Ø¹Ù† ØªØ­Ù„ÙŠÙ„' },
+  { label: 'Ø§Ø¹Ø±Ù Ø§Ù„ÙØ±ÙˆØ¹', text: 'Ø£Ø¨ØºÙ‰ Ø£Ø¹Ø±Ù Ø§Ù„ÙØ±ÙˆØ¹' },
+  { label: 'ØªÙØ³ÙŠØ± Ù†ØªÙŠØ¬Ø©', text: 'Ø¹Ù†Ø¯ÙŠ Ù†ØªÙŠØ¬Ø© ÙˆØ£Ø¨ØºÙ‰ ØªÙØ³ÙŠØ±' },
+  { label: 'ØªÙˆØ§ØµÙ„ Ù…Ø¹Ù†Ø§', text: 'Ø£Ø¨ØºÙ‰ Ø£ØªÙˆØ§ØµÙ„ Ù…Ø¹ Ø®Ø¯Ù…Ø© Ø§Ù„Ø¹Ù…Ù„Ø§Ø¡' },
 ];
 
-const CONNECTIVITY_ERROR_MESSAGE = 'حصلت مشكلة مؤقتة في الاتصال، حاول مرة أخرى بعد قليل.';
-const TYPING_MESSAGE = 'جاري الكتابة...';
+const CONNECTIVITY_ERROR_MESSAGE = 'Ø­ØµÙ„Øª Ù…Ø´ÙƒÙ„Ø© Ù…Ø¤Ù‚ØªØ© ÙÙŠ Ø§Ù„Ø§ØªØµØ§Ù„ØŒ Ø­Ø§ÙˆÙ„ Ù…Ø±Ø© Ø£Ø®Ø±Ù‰ Ø¨Ø¹Ø¯ Ù‚Ù„ÙŠÙ„.';
+const TYPING_MESSAGE = 'Ø¬Ø§Ø±ÙŠ Ø§Ù„ÙƒØªØ§Ø¨Ø©...';
 
 const WIDGET_USER_ID_STORAGE_KEY = 'wareed_preview_widget_user_id';
 const WIDGET_CONVERSATION_ID_STORAGE_KEY = 'wareed_preview_widget_conversation_id';
@@ -251,17 +251,7 @@ export default function WareedAiWidgetPreview() {
 
   return (
     <div className="wareed-widget-preview" dir="rtl" lang="ar">
-      <div className="wareed-widget-preview__surface">
-        <header className="wareed-widget-preview__logos" aria-label="شعارات الاعتماد">
-          <img src="/images/wareed-logo.png" alt="مختبرات وريد الطبية" className="wareed-widget-preview__logo wareed-widget-preview__logo--wareed" />
-          <img src="/images/sslogo.png" alt="CBAHI" className="wareed-widget-preview__logo wareed-widget-preview__logo--cbahi" />
-        </header>
-
-        <section className="wareed-widget-preview__hero" aria-label="المقدمة">
-          <h1>مستقبلك الصحي يبدأ هنا مع Wareed AI</h1>
-          <h2>المساعد الذكي الأول لمختبرات وريد الطبية، لخدمتكم على مدار الساعة</h2>
-        </section>
-      </div>
+      <div className="wareed-widget-preview__surface" />
 
       <button
         type="button"
@@ -278,24 +268,24 @@ export default function WareedAiWidgetPreview() {
         <aside
           id="wareed-ai-chat-panel"
           className="wareed-widget-preview__chat-panel"
-          aria-label="نافذة دردشة وريد AI"
+          aria-label="Ù†Ø§ÙØ°Ø© Ø¯Ø±Ø¯Ø´Ø© ÙˆØ±ÙŠØ¯ AI"
         >
           <header className="wareed-widget-preview__chat-header">
             <div className="wareed-widget-preview__brand-text">
               <h3>Wareed AI</h3>
-              <p>المساعد الذكي</p>
+              <p>Ø§Ù„Ù…Ø³Ø§Ø¹Ø¯ Ø§Ù„Ø°ÙƒÙŠ</p>
             </div>
             <button
               type="button"
               className="wareed-widget-preview__header-close"
               onClick={() => setIsOpen(false)}
-              aria-label="إغلاق"
+              aria-label="Ø¥ØºÙ„Ø§Ù‚"
             >
-              إغلاق
+              Ø¥ØºÙ„Ø§Ù‚
             </button>
           </header>
 
-          <div className="wareed-widget-preview__quick-actions" role="list" aria-label="إجراءات سريعة">
+          <div className="wareed-widget-preview__quick-actions" role="list" aria-label="Ø¥Ø¬Ø±Ø§Ø¡Ø§Øª Ø³Ø±ÙŠØ¹Ø©">
             {QUICK_ACTIONS.map((action) => (
               <button
                 key={action.text}
@@ -332,17 +322,17 @@ export default function WareedAiWidgetPreview() {
               type="text"
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              placeholder="اكتب سؤالك هنا..."
-              aria-label="اكتب سؤالك هنا"
+              placeholder="Ø§ÙƒØªØ¨ Ø³Ø¤Ø§Ù„Ùƒ Ù‡Ù†Ø§..."
+              aria-label="Ø§ÙƒØªØ¨ Ø³Ø¤Ø§Ù„Ùƒ Ù‡Ù†Ø§"
               disabled={isSending}
             />
             <button
               type="submit"
               className="wareed-widget-preview__send-button"
               disabled={isSending}
-              aria-label="إرسال"
+              aria-label="Ø¥Ø±Ø³Ø§Ù„"
             >
-              {isSending ? '...' : '➤'}
+              {isSending ? '...' : 'âž¤'}
             </button>
           </form>
         </aside>
