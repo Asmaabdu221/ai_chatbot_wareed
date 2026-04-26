@@ -22,7 +22,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { getInternalLeads, closeInternalLead, retryInternalLeadCrm, getMe, API_BASE_URL } from '../services/api';
 import { getAccessToken } from '../services/auth';
-import DashboardChatWidget from './DashboardChatWidget';
+import DashboardChatWidget from './DashboardChatWidgetV2';
 import './InternalLeadsDashboardV2.css';
 
 const ENV_API_KEY = process.env.REACT_APP_INTERNAL_API_KEY || '';
