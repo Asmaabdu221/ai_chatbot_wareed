@@ -132,6 +132,21 @@ export default function DashboardChatWidgetV3() {
         setSessionConversationId(data.conversation_id);
       }
 
+      const leadCaptured = Boolean(data?.lead_captured || data?.conversation_closed);
+      if (leadCaptured) {
+        console.info('[Dashboard widget session] lead captured, clearing conversation_id', {
+          conversation_id: data?.conversation_id || null,
+          lead_id: data?.lead_id || null,
+        });
+        // Clears localStorage via existing helper
+        setConversationId(null);
+        // Explicit fallback clear for safety
+        if (typeof window !== 'undefined') {
+          window.localStorage.removeItem(CONVERSATION_ID_KEY);
+        }
+        setSessionConversationId(null);
+      }
+
       const reply = String(data?.reply || data?.response || '').trim() || ERROR_TEXT;
       const assistantId = data?.message_id || `a_${counterRef.current++}`;
 
