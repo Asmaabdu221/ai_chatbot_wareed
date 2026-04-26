@@ -501,7 +501,7 @@
   align-items: flex-start;
   justify-content: center;
   gap: var(--space-sm);
-  padding: 10px 0;
+  padding: 14px 0;
   border-bottom: 1px solid #F1F5F9;
 }
 
@@ -537,6 +537,50 @@
   font-family: 'Inter', monospace;
 }
 
+.ild-panel__value--phone-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  direction: ltr;
+}
+
+.ild-panel__phone-link {
+  color: #111827;
+  text-decoration: none;
+}
+
+.ild-panel__phone-link:hover {
+  text-decoration: underline;
+}
+
+.ild-panel__whatsapp-link {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: #16a34a;
+  background: #ecfdf3;
+  border: 1px solid #bbf7d0;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.ild-panel__whatsapp-link:hover {
+  color: #15803d;
+  background: #dcfce7;
+}
+
+.ild-panel__whatsapp-link svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .ild-panel__value--error {
   color: #b91c1c;
   font-size: var(--text-xs);
@@ -549,7 +593,7 @@
 .ild-panel__value--mono {
   font-family: 'Inter', monospace;
   font-size: 10px;
-  color: var(--text-muted);
+  color: #CBD5E1;
   direction: ltr;
   text-align: right;
   word-break: break-all;
@@ -559,6 +603,41 @@
   padding: var(--space-md) var(--space-lg);
   border-top: 1px solid #F1F5F9;
   flex-shrink: 0;
+}
+
+.ild-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ild-btn--status-edit {
+  flex: 1;
+  justify-content: center;
+  background: #f8fafc;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+  font-weight: 600;
+}
+
+.ild-btn--status-edit:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.ild-panel__id-bottom {
+  padding: 10px var(--space-lg) 14px;
+  border-top: 1px solid #F1F5F9;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.ild-panel__id-label {
+  font-size: 10px;
+  color: #CBD5E1;
+  font-weight: 500;
 }
 
 /* ── Footer ── */

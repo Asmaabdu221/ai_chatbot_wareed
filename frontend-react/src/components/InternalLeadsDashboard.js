@@ -292,6 +292,16 @@ function AccessDenied({ onSwitchToApiKey }) {
 
 function LeadDetailPanel({ lead, onClose, onCloseLead, onRetryCrm, closing, retryingCrm, canClose }) {
   if (!lead) return null;
+  const normalizedPhone = (lead.phone || '').toString().replace(/[^\d]/g, '');
+  const whatsappHref = normalizedPhone ? `https://wa.me/${normalizedPhone}` : null;
+  const intentLabel = formatIntent(lead.latest_intent);
+  const actionLabel = formatIntent(lead.latest_action);
+  const requestType = !intentLabel || intentLabel === 'غير محدد'
+    ? actionLabel
+    : (!actionLabel || actionLabel === 'غير محدد' || actionLabel === intentLabel)
+      ? intentLabel
+      : `${intentLabel} / ${actionLabel}`;
+
   return (
     <div className="ild-panel" dir="rtl" role="complementary" aria-label="تفاصيل الـ Lead">
       <div className="ild-panel__header">
@@ -301,13 +311,31 @@ function LeadDetailPanel({ lead, onClose, onCloseLead, onRetryCrm, closing, retr
       <div className="ild-panel__body">
         {[
           ['الحالة', <StatusBadge status={lead.status} />],
-          ['رقم الهاتف', <span className="ild-panel__value--phone">{lead.phone}</span>],
-          ['نية التواصل', formatIntent(lead.latest_intent)],
-          ['الإجراء', formatIntent(lead.latest_action)],
+          ['رقم الهاتف', (
+            <span className="ild-panel__value--phone-wrap">
+              <a href={`tel:${lead.phone}`} className="ild-panel__phone-link">
+                <span className="ild-panel__value--phone">{lead.phone}</span>
+              </a>
+              {whatsappHref && (
+                <a
+                  href={whatsappHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ild-panel__whatsapp-link"
+                  aria-label="فتح واتساب"
+                  title="فتح واتساب"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <path d="M12 4a8 8 0 0 0-6.8 12.2L4 20l4-1.1A8 8 0 1 0 12 4Z" />
+                    <path d="M9.5 9.2c.2-.5.4-.5.7-.5h.6c.2 0 .4 0 .5.4l.7 1.7c.1.2.1.4 0 .5l-.3.5c-.1.1-.2.3-.1.5.2.3.7 1.1 1.6 1.8 1 .8 1.8 1 2.2 1.1.2.1.4 0 .5-.1l.5-.6c.2-.2.4-.2.6-.1l1.6.8c.2.1.3.2.3.4v.5c-.2.6-.9 1.1-1.5 1.2-.4.1-1 .1-2.2-.4-1.6-.7-3.5-2.3-4.5-3.8-1-1.6-1.1-2.9-.6-3.9Z" />
+                  </svg>
+                </a>
+              )}
+            </span>
+          )],
+          ['نوع الطلب', requestType || 'غير محدد'],
           ['ملخص الطلب', lead.summary_hint || '—'],
-          ['المصدر', lead.source],
           ['وقت الاستلام', formatDate(lead.created_at)],
-          lead.delivered_at && ['وقت التسليم', formatDate(lead.delivered_at)],
           lead.delivery_error && ['خطأ التسليم', <span className="ild-panel__value--error">{lead.delivery_error}</span>],
         ].filter(Boolean).map(([label, value]) => (
           <div key={label} className="ild-panel__row">
@@ -315,21 +343,24 @@ function LeadDetailPanel({ lead, onClose, onCloseLead, onRetryCrm, closing, retr
             <span className="ild-panel__value">{value}</span>
           </div>
         ))}
-        <div className="ild-panel__row ild-panel__row--id">
-          <span className="ild-panel__label">Lead ID</span>
-          <span className="ild-panel__value ild-panel__value--mono">{lead.id}</span>
-        </div>
       </div>
-      {lead.status !== 'closed' && canClose && (
+      {canClose && (
         <div className="ild-panel__footer">
-          <button
-            type="button"
-            className="ild-btn ild-btn--close-lead"
-            onClick={() => onCloseLead(lead.id)}
-            disabled={closing}
-          >
-            {closing ? 'جارٍ الإغلاق...' : 'إغلاق الـ Lead ✓'}
-          </button>
+          <div className="ild-panel__actions">
+            <button type="button" className="ild-btn ild-btn--status-edit">
+              تعديل الحالة
+            </button>
+            {lead.status !== 'closed' && (
+              <button
+                type="button"
+                className="ild-btn ild-btn--close-lead"
+                onClick={() => onCloseLead(lead.id)}
+                disabled={closing}
+              >
+                {closing ? 'جارٍ الإغلاق...' : 'إغلاق الـ Lead ✓'}
+              </button>
+            )}
+          </div>
         </div>
       )}
       {lead.crm_status === 'failed' && canClose && (
@@ -344,6 +375,10 @@ function LeadDetailPanel({ lead, onClose, onCloseLead, onRetryCrm, closing, retr
           </button>
         </div>
       )}
+      <div className="ild-panel__id-bottom">
+        <span className="ild-panel__id-label">Lead ID</span>
+        <span className="ild-panel__value ild-panel__value--mono">{lead.id}</span>
+      </div>
     </div>
   );
 }
