@@ -19,9 +19,8 @@
 
 .wareed-widget-preview__ai-button {
   position: fixed;
-  left: 50%;
+  left: 24px;
   bottom: 24px;
-  transform: translateX(-50%);
   z-index: 42;
   border: 1px solid rgba(45, 156, 139, 0.32);
   border-radius: 999px;
@@ -48,7 +47,7 @@
 
 .wareed-widget-preview__chat-panel {
   position: fixed;
-  left: 50%;
+  left: 24px;
   bottom: 84px;
   width: min(420px, calc(100vw - 28px));
   height: min(680px, calc(100vh - 120px));
@@ -61,7 +60,7 @@
   flex-direction: column;
   overflow: hidden;
   opacity: 0;
-  transform: translate(-50%, 12px);
+  transform: translateY(12px);
   visibility: hidden;
   pointer-events: none;
   transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s ease;
@@ -69,14 +68,14 @@
 
 .wareed-widget-preview__chat-panel--open {
   opacity: 1;
-  transform: translate(-50%, 0);
+  transform: translateY(0);
   visibility: visible;
   pointer-events: auto;
 }
 
 .wareed-widget-preview__chat-panel--closed {
   opacity: 0;
-  transform: translate(-50%, 12px);
+  transform: translateY(12px);
   visibility: hidden;
   pointer-events: none;
 }
@@ -127,7 +126,7 @@
 .wareed-widget-preview__quick-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   padding: 12px 14px;
   background: #F8FAF9;
   border-bottom: 1px solid #E2E8F0;
@@ -281,7 +280,7 @@
   border: 1px solid #D1D5DB;
   border-radius: 999px;
   width: 100%;
-  padding: 12px 44px 12px 14px;
+  padding: 13px 46px 13px 14px;
   font-size: 14px;
   color: #1E293B;
   outline: none;
@@ -343,7 +342,7 @@
   }
 
   .wareed-widget-preview__chat-panel {
-    left: 50%;
+    left: 12px;
     bottom: 76px;
     width: calc(100vw - 24px);
     height: min(620px, calc(100vh - 100px));
@@ -351,7 +350,7 @@
   }
 
   .wareed-widget-preview__ai-button {
-    left: 50%;
+    left: 12px;
     bottom: 16px;
   }
 }
