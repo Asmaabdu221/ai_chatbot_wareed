@@ -134,7 +134,7 @@
 }
 
 .ild-table thead th {
-  padding: 12px var(--space-md);
+  padding: 12px 20px;
   text-align: right;
   font-weight: 600;
   color: #1F2937;
@@ -163,7 +163,7 @@
 }
 
 .ild-table td {
-  padding: 16px 12px !important;
+  padding: 16px 20px !important;
 }
 
 .ild-table__row {
@@ -391,6 +391,12 @@
 .ild-table__row:focus-within .ild-btn--inline-close {
   opacity: 1;
   transform: translateY(0);
+}
+
+.ild-table__row:hover .ild-btn--summary,
+.ild-table__row:focus-within .ild-btn--summary {
+  color: #3B82F6;
+  background: #EFF6FF;
 }
 
 /* ── Empty / loading states ── */
