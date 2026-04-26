@@ -61,6 +61,7 @@
   justify-content: flex-start;
   flex-wrap: nowrap;
   direction: rtl;
+  margin-inline-start: auto;
 }
 
 .ild-header__action-bar {
@@ -1031,7 +1032,7 @@
   align-items: center;
   justify-content: space-between;
   direction: rtl;
-  gap: 16px;
+  gap: 12px;
   padding: 12px 2rem;
   margin-top: 0;
   min-height: 56px;
@@ -1051,7 +1052,7 @@
   align-items: center;
   justify-content: flex-start;
   flex-direction: row-reverse;
-  gap: 16px;
+  gap: 12px;
   flex: 0 1 auto;
 }
 
@@ -1059,16 +1060,16 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 16px;
+  gap: 12px;
   flex: 1 1 auto;
   min-width: 0;
 }
 
 .ild-filter-bar__search-wrap {
   position: relative;
-  flex: 0 1 45%;
-  min-width: 220px;
-  max-width: 45%;
+  flex: 1 1 420px;
+  min-width: 350px;
+  max-width: 560px;
 }
 
 .ild-filter-bar__search-icon {
@@ -1135,8 +1136,8 @@
   outline: none;
   cursor: pointer;
   transition: border-color 0.2s ease;
-  flex: 0 1 24%;
-  min-width: 160px;
+  flex: 0 0 200px;
+  min-width: 200px;
 }
 
 .ild-filter-bar__select:focus {
@@ -1147,10 +1148,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   direction: rtl;
-  flex: 1 1 32%;
-  min-width: 176px;
+  flex: 0 1 auto;
+  min-width: 240px;
 }
 
 .ild-filter-bar__segment-divider {
@@ -1166,8 +1167,8 @@
 }
 
 .ild-filter-bar__date {
-  height: 36px;
-  padding: 0 8px;
+  height: 40px;
+  padding: 0 12px;
   border: none;
   border-bottom: 1px solid #e5e7eb;
   border-radius: 0;
@@ -1178,7 +1179,7 @@
   outline: none;
   cursor: pointer;
   transition: border-color 0.2s ease;
-  min-width: 98px;
+  min-width: 112px;
 }
 
 .ild-filter-bar__date:focus {
@@ -1347,8 +1348,14 @@
 }
 
 .ild-mini-stat--active.ild-mini-stat--all { color: #2D9C8B; }
-.ild-mini-stat--active.ild-mini-stat--new { color: #2D9C8B; }
-.ild-mini-stat--active.ild-mini-stat--delivered { color: #2D9C8B; }
+.ild-mini-stat--active.ild-mini-stat--new {
+  color: #6B4671;
+  border-color: #6B4671;
+}
+.ild-mini-stat--active.ild-mini-stat--delivered {
+  color: #2D9C8B;
+  border-color: #2D9C8B;
+}
 .ild-mini-stat--active.ild-mini-stat--failed { color: #2D9C8B; }
 .ild-mini-stat--active.ild-mini-stat--closed { color: #2D9C8B; }
 
@@ -1365,9 +1372,16 @@
     justify-content: flex-start;
   }
   .ild-filter-bar__search-wrap {
-    flex: 1 1 auto;
+    flex: 1 1 300px;
     max-width: none;
-    min-width: 180px;
+    min-width: 260px;
+  }
+  .ild-filter-bar__select {
+    min-width: 170px;
+    flex-basis: 170px;
+  }
+  .ild-filter-bar__dates {
+    min-width: 200px;
   }
 }
 
