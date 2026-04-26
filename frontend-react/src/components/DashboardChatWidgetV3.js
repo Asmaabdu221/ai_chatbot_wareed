@@ -3,11 +3,8 @@ import api from '../services/api';
 import './DashboardChatWidgetV3.css';
 
 const WELCOME_TEXT = `حياك الله في مختبرات وريد الطبية
-
 أنا Wareed AI، مساعدك الذكي. أقدر أساعدك في :
-
 • الاستفسار عن التحاليل و نتائج التقارير و  فروعنا ومواعيدنا
-
 تفضل، كيف أقدر أخدمك اليوم؟`;
 const TYPING_TEXT = 'جاري الكتابة...';
 const ERROR_TEXT = 'تعذر الاتصال حاليًا، حاول مرة أخرى بعد قليل.';
