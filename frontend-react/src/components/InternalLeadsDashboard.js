@@ -290,7 +290,17 @@ function AccessDenied({ onSwitchToApiKey }) {
   );
 }
 
-function LeadDetailPanel({ lead, onClose, onCloseLead, onRetryCrm, closing, retryingCrm, canClose }) {
+function LeadDetailPanel({
+  lead,
+  onClose,
+  onSaveAndClose,
+  onRetryCrm,
+  closing,
+  retryingCrm,
+  canClose,
+  actionNote,
+  onActionNoteChange,
+}) {
   if (!lead) return null;
   const normalizedPhone = (lead.phone || '').toString().replace(/[^\d]/g, '');
   const whatsappHref = normalizedPhone ? `https://wa.me/${normalizedPhone}` : null;
@@ -346,18 +356,35 @@ function LeadDetailPanel({ lead, onClose, onCloseLead, onRetryCrm, closing, retr
       </div>
       {canClose && (
         <div className="ild-panel__footer">
+          <div className="ild-panel__note">
+            <label className="ild-panel__note-label" htmlFor={`lead-note-${lead.id}`}>
+              ملاحظات الإجراء الأخير
+            </label>
+            <textarea
+              id={`lead-note-${lead.id}`}
+              className="ild-panel__note-input"
+              value={actionNote}
+              onChange={(e) => onActionNoteChange(e.target.value)}
+              placeholder="اكتب الملاحظة هنا..."
+              rows={2}
+            />
+          </div>
           <div className="ild-panel__actions">
-            <button type="button" className="ild-btn ild-btn--status-edit">
-              تعديل الحالة
+            <button
+              type="button"
+              className="ild-panel__cancel-link"
+              onClick={onClose}
+            >
+              إلغاء
             </button>
             {lead.status !== 'closed' && (
               <button
                 type="button"
                 className="ild-btn ild-btn--close-lead"
-                onClick={() => onCloseLead(lead.id)}
+                onClick={() => onSaveAndClose(lead.id, actionNote)}
                 disabled={closing}
               >
-                {closing ? 'جارٍ الإغلاق...' : 'إغلاق الـ Lead ✓'}
+                {closing ? 'جارٍ الحفظ والإغلاق...' : 'حفظ وإغلاق الطلب'}
               </button>
             )}
           </div>
@@ -492,6 +519,7 @@ export default function InternalLeadsDashboard() {
   const [filters, setFilters] = useState({ q: '', intent: '', action: '', dateFrom: '', dateTo: '' });
   const [debouncedQ, setDebouncedQ] = useState('');
   const [summaryModalText, setSummaryModalText] = useState(null);
+  const [leadActionNotes, setLeadActionNotes] = useState({});
 
   // --- Realtime ---
   const [connectionStatus, setConnectionStatus] = useState('connecting');
@@ -781,6 +809,14 @@ export default function InternalLeadsDashboard() {
     }
   }
 
+  async function handleSaveAndCloseLead(leadId, note) {
+    const safeNote = (note || '').trim();
+    if (safeNote) {
+      setLeadActionNotes((prev) => ({ ...prev, [leadId]: safeNote }));
+    }
+    await handleCloseLead(leadId);
+  }
+
   async function handleRetryCrm(leadId) {
     setRetryingCrmIds((prev) => new Set([...prev, leadId]));
     try {
@@ -1030,11 +1066,15 @@ export default function InternalLeadsDashboard() {
           <LeadDetailPanel
             lead={selectedLead}
             onClose={() => setSelectedLead(null)}
-            onCloseLead={handleCloseLead}
+            onSaveAndClose={handleSaveAndCloseLead}
             onRetryCrm={handleRetryCrm}
             closing={closingIds.has(selectedLead.id)}
             retryingCrm={retryingCrmIds.has(selectedLead.id)}
             canClose={permissions.canClose}
+            actionNote={leadActionNotes[selectedLead.id] || ''}
+            onActionNoteChange={(value) =>
+              setLeadActionNotes((prev) => ({ ...prev, [selectedLead.id]: value }))
+            }
           />
         )}
       </div>

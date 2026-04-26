@@ -333,11 +333,11 @@
 }
 
 .ild-btn--close-lead {
-  width: 100%;
+  flex: 1;
   justify-content: center;
-  background: #dcfce7;
-  color: #15803d;
-  border-color: #bbf7d0;
+  background: #DCFCE7;
+  color: #15803D;
+  border: none;
   font-weight: 600;
   padding: var(--space-sm) var(--space-lg);
 }
@@ -605,24 +605,61 @@
   flex-shrink: 0;
 }
 
+.ild-panel__note {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ild-panel__note-label {
+  font-size: 12px;
+  color: #64748B;
+  font-weight: 500;
+}
+
+.ild-panel__note-input {
+  width: 100%;
+  min-height: 52px;
+  resize: vertical;
+  border: none;
+  border-bottom: 1px solid #e5e7eb;
+  background: transparent;
+  color: #1F2937;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 4px 0 8px;
+  outline: none;
+}
+
+.ild-panel__note-input::placeholder {
+  color: #94A3B8;
+}
+
+.ild-panel__note-input:focus {
+  border-bottom-color: #64748B;
+}
+
 .ild-panel__actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
-.ild-btn--status-edit {
-  flex: 1;
-  justify-content: center;
-  background: #f8fafc;
+.ild-panel__cancel-link {
+  background: transparent;
+  border: none;
+  color: #64748B;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+}
+
+.ild-panel__cancel-link:hover {
   color: #334155;
-  border: 1px solid #e2e8f0;
-  font-weight: 600;
-}
-
-.ild-btn--status-edit:hover:not(:disabled) {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
+  text-decoration: underline;
 }
 
 .ild-panel__id-bottom {
