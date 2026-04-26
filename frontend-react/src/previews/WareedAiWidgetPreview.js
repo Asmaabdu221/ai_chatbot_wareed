@@ -333,6 +333,7 @@ export default function WareedAiWidgetPreview() {
                   message.isTyping ? ' wareed-widget-preview__message--typing' : ''
                 }`}
               >
+                <p>{renderMessageTextWithLinks(message.text)}</p>
               </div>
             </div>
           ))}
