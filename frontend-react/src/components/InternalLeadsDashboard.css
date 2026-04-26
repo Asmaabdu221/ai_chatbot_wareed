@@ -171,7 +171,7 @@
 }
 
 .ild-table__row:hover {
-  background: #ffffff;
+  background: #F8FAFC;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
 }
@@ -195,7 +195,7 @@
 }
 
 .ild-table__intent {
-  background: rgba(31, 41, 55, 0.03);
+  background: transparent;
   vertical-align: middle !important;
 }
 
@@ -374,7 +374,7 @@
   background: transparent;
   color: #4f46e5;
   border-color: transparent;
-  opacity: 0;
+  opacity: 0.3;
   transition: opacity 200ms ease, background 200ms ease, transform 200ms ease;
   transform: translateY(2px);
 }
@@ -935,6 +935,10 @@
   transition: border-color 0.2s ease;
 }
 
+.ild-filter-bar__search::placeholder {
+  color: #94A3B8;
+}
+
 .ild-filter-bar__search:focus {
   border-bottom-color: #64748B;
 }
@@ -964,10 +968,11 @@
 .ild-filter-bar__dates {
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  gap: 6px;
   direction: rtl;
   flex: 1 1 32%;
-  min-width: 200px;
+  min-width: 176px;
 }
 
 .ild-filter-bar__date-sep {
@@ -976,8 +981,8 @@
 }
 
 .ild-filter-bar__date {
-  height: 42px;
-  padding: 0 12px;
+  height: 36px;
+  padding: 0 8px;
   border: none;
   border-bottom: 1px solid #e5e7eb;
   border-radius: 0;
@@ -988,7 +993,7 @@
   outline: none;
   cursor: pointer;
   transition: border-color 0.2s ease;
-  min-width: 118px;
+  min-width: 98px;
 }
 
 .ild-filter-bar__date:focus {
@@ -1108,6 +1113,7 @@
   line-height: 1;
   cursor: pointer;
   transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
+  margin-left: 12px;
 }
 
 .ild-mini-stat__label {
