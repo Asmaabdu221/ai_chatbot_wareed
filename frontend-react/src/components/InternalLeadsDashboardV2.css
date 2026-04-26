@@ -56,20 +56,47 @@
 .ild-header__actions {
   display: flex;
   align-items: center;
-  gap: 24px;
+  justify-content: flex-end;
   flex-wrap: nowrap;
-  direction: ltr;
-  padding: 6px 8px;
-  border: none;
-  border-radius: 8px;
-  background: #fff;
+  direction: rtl;
+}
+
+.ild-header__action-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #F1F5F9;
+  border-radius: 12px;
+  padding: 4px 8px;
+}
+
+.ild-header__action-buttons {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ild-header__divider {
+  width: 1px;
+  height: 18px;
+  background: #E2E8F0;
+  flex-shrink: 0;
 }
 
 .ild-header .ild-btn {
-  height: 42px;
-  padding: 0 14px;
-  border-radius: 8px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
   white-space: nowrap;
+  background: transparent;
+  color: #475569;
+  border: 1px solid transparent;
+}
+
+.ild-header .ild-btn:hover:not(:disabled) {
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  color: #334155;
 }
 
 
@@ -285,49 +312,48 @@
   cursor: not-allowed;
 }
 
-.ild-btn--refresh {
-  width: 40px;
-  min-width: 40px;
-  height: 40px;
+.ild-header .ild-btn--refresh {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
   justify-content: center;
   padding: 0;
-  background: #f3f4f6;
-  color: #4b5563;
-  border-color: #e5e7eb;
+  background: transparent;
+  color: #475569;
+  border-color: transparent;
   border-radius: 999px;
-  margin-right: 12px;
+  margin-right: 0;
 }
 
-.ild-btn--refresh:hover:not(:disabled) {
+.ild-header .ild-btn--refresh:hover:not(:disabled) {
   background: #e5e7eb;
   color: #111827;
 }
 
-.ild-btn--analytics {
-  background: #E0F2FE;
-  color: #0369A1;
-  border-color: transparent;
-  padding: 0 16px;
-}
-
-.ild-btn--analytics:hover {
-  background: #bae6fd;
-}
-
-.ild-btn--logout {
+.ild-header .ild-btn--analytics {
   background: transparent;
-  color: #6b7280;
+  color: #475569;
   border-color: transparent;
-  margin-inline-start: 0;
+  padding: 0 12px;
 }
 
-.ild-btn--logout:hover {
+.ild-header .ild-btn--analytics:hover {
+  background: #ffffff;
+}
+
+.ild-header .ild-btn--logout {
+  background: transparent;
+  color: #64748B;
+  border-color: transparent;
+}
+
+.ild-header .ild-btn--logout:hover {
   background: #fff1f2;
   color: #b91c1c;
   border-color: #fecdd3;
 }
 
-.ild-btn--logout:focus-visible {
+.ild-header .ild-btn--logout:focus-visible {
   outline: 2px solid rgba(185, 28, 28, 0.22);
   outline-offset: 1px;
 }
@@ -802,8 +828,9 @@
   gap: 5px;
   font-size: var(--text-xs);
   font-weight: 500;
-  padding: 3px 8px;
-  border-radius: 8px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
   border: 1px solid transparent;
 }
 
