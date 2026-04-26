@@ -22,6 +22,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { getInternalLeads, closeInternalLead, retryInternalLeadCrm, getMe, API_BASE_URL } from '../services/api';
 import { getAccessToken } from '../services/auth';
+import DashboardChatWidget from './DashboardChatWidget';
 import './InternalLeadsDashboardV2.css';
 
 const ENV_API_KEY = process.env.REACT_APP_INTERNAL_API_KEY || '';
@@ -1094,7 +1095,8 @@ export default function InternalLeadsDashboard() {
           ? 'بث مباشر نشط — يتحدث فوراً عند كل Lead جديد'
           : 'يتجدد تلقائياً كل 30 ثانية'}
       </div>
+
+      <DashboardChatWidget />
     </div>
   );
 }
-
