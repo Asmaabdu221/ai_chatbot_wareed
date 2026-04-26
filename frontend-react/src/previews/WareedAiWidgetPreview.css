@@ -126,19 +126,22 @@
 .wareed-widget-preview__quick-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   padding: 12px 14px;
   background: #F8FAF9;
   border-bottom: 1px solid #E2E8F0;
+  justify-content: flex-end;
 }
 
 .wareed-widget-preview__quick-card {
   appearance: none;
-  border: 1px solid #2D9C8B;
-  background: transparent;
-  color: #2D9C8B;
-  border-radius: 50px;
-  padding: 8px 14px;
+  -webkit-appearance: none;
+  width: auto;
+  border: 1px solid #ddd4f7;
+  background: #fff;
+  color: #57479a;
+  border-radius: 999px;
+  padding: 7px 12px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -146,16 +149,17 @@
   font-size: 12px;
   font-weight: 500;
   line-height: 1.2;
-  box-shadow: 0 2px 10px rgba(45, 156, 139, 0.08);
+  min-height: 0;
+  box-shadow: 0 4px 12px rgba(87, 71, 154, 0.08);
   cursor: pointer;
-  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
 }
 
 .wareed-widget-preview__quick-card:hover:not(:disabled) {
   transform: translateY(-1px);
-  border-color: #2D9C8B;
-  background-color: rgba(45, 156, 139, 0.08);
-  box-shadow: 0 8px 18px rgba(45, 156, 139, 0.14);
+  border-color: #c8bbf3;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(87, 71, 154, 0.12);
 }
 
 .wareed-widget-preview__quick-card:disabled {
@@ -166,6 +170,7 @@
 .wareed-widget-preview__quick-label {
   font-size: 12px;
   font-weight: 600;
+  color: #57479a;
   white-space: nowrap;
 }
 
