@@ -4,6 +4,7 @@
    Uses global CSS variables from index.css.
    ============================================================= */
 
+/* UI Version 1.1 - Minimal Clean Fix */
 /* ── Layout shell ── */
 .ild-layout {
   display: flex;
@@ -1262,5 +1263,25 @@
     opacity: 1;
     transform: translateY(0) scale(1);
   }
+}
+
+/* Explicit minimal-clean overrides (force consistency on live bundle) */
+.ild-layout {
+  background: #F9FAFB !important;
+}
+
+.ild-filter-bar__search,
+.ild-filter-bar__select,
+.ild-filter-bar__date {
+  border: none !important;
+  border-bottom: 1px solid #e5e7eb !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+.ild-table__hint,
+.ild-table__date,
+.ild-source-icon {
+  color: #64748B !important;
 }
 
