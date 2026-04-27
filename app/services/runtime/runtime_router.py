@@ -77,6 +77,12 @@ def _result_context_from_dialogue_state(conversation_id: UUID | None) -> tuple[s
         return None, None
     test_name = _safe_str(state.get("active_result_test_name")) or None
     result_value = _safe_str(state.get("active_result_value")) or None
+    logger.debug(
+        "runtime_router | result_context | conversation_id=%s | ctx_test_name=%s | ctx_result_value=%s",
+        _safe_str(conversation_id),
+        _safe_str(test_name),
+        _safe_str(result_value),
+    )
     return test_name, result_value
 
 
@@ -1288,6 +1294,12 @@ def _try_ollama_classifier_fallback(
 
     if intent == "results":
         ctx_test_name, ctx_result_value = _result_context_from_dialogue_state(conversation_id)
+        logger.debug(
+            "runtime_router | before_interpret_result_query | intent=results | query=%s | ctx_test_name=%s | ctx_result_value=%s",
+            raw_text,
+            _safe_str(ctx_test_name),
+            _safe_str(ctx_result_value),
+        )
         result_answer = _safe_str(
             interpret_result_query(
                 raw_text,
@@ -1631,6 +1643,12 @@ def route_runtime_message(
                         is_tests_like,
                     )
                 ctx_test_name, ctx_result_value = _result_context_from_dialogue_state(conversation_id)
+                logger.debug(
+                    "runtime_router | before_interpret_result_query | stage=results_interpretation | query=%s | ctx_test_name=%s | ctx_result_value=%s",
+                    text,
+                    _safe_str(ctx_test_name),
+                    _safe_str(ctx_result_value),
+                )
                 result_answer = _safe_str(
                     interpret_result_query(
                         text,

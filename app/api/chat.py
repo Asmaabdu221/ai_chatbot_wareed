@@ -918,6 +918,18 @@ async def chat_endpoint(
                         _runtime_result,
                         user_text=_dm_resolved_text,
                     )
+                    try:
+                        from app.services.dialogue_state import get_dialogue_state
+                        _dm_saved_state = get_dialogue_state(str(conversation_id))
+                        logger.info(
+                            "dialogue_manager | state_after_update | conversation_id=%.8s | active_domain=%s | active_result_test_name=%s | active_result_value=%s",
+                            str(conversation_id),
+                            str(_dm_saved_state.get("active_domain") or ""),
+                            str(_dm_saved_state.get("active_result_test_name") or ""),
+                            str(_dm_saved_state.get("active_result_value") or ""),
+                        )
+                    except Exception as _dm_state_log_err:
+                        logger.warning("dialogue_manager state_after_update log skipped: %s", _dm_state_log_err)
                 except Exception as _dm_upd_err:
                     logger.warning(
                         "dialogue_manager update skipped (non-blocking): %s", _dm_upd_err
