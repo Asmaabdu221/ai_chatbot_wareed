@@ -20,7 +20,7 @@ from app.services.runtime.tests_description_index import find_test_description_f
 from app.services.runtime.selection_state import load_selection_state
 from app.services.runtime.text_normalizer import normalize_arabic
 
-TESTS_BUSINESS_JSONL_PATH = Path("app/data/runtime/rag/tests_business_clean.jsonl")
+TESTS_BUSINESS_JSONL_PATH = Path("app/data/runtime/rag/tests_clean.jsonl")
 logger = logging.getLogger(__name__)
 
 _FASTING_HINTS = (
@@ -126,6 +126,13 @@ def _as_str_list(value: Any) -> list[str]:
     return [text] if text else []
 
 
+def _price_to_text(value: Any) -> str:
+    """Normalize numeric/str price fields to a stable non-empty text when possible."""
+    if isinstance(value, (int, float)):
+        return f"{value:g}"
+    return _safe_str(value)
+
+
 def _normalize_suggestion_list(value: Any) -> list[str]:
     """Normalize list-like raw values into clean deterministic suggestion items."""
     raw_items = _as_str_list(value)
@@ -227,7 +234,7 @@ def _normalize_business_query_aliases(query_norm: str) -> str:
 
 @lru_cache(maxsize=1)
 def load_tests_business_records() -> list[dict[str, Any]]:
-    """Load business test records from runtime JSONL with normalized helpers."""
+    """Load business test records from unified tests_clean JSONL with compatibility mapping."""
     if not TESTS_BUSINESS_JSONL_PATH.exists():
         return []
 
@@ -244,7 +251,13 @@ def load_tests_business_records() -> list[dict[str, Any]]:
             if not isinstance(obj, dict):
                 continue
 
-            name = _safe_str(obj.get("test_name_ar"))
+            # Compatibility mapping for unified dataset fields.
+            name = _safe_str(
+                obj.get("canonical_name_ar")
+                or obj.get("test_name_ar")
+                or obj.get("title")
+                or obj.get("h1")
+            )
             if not name:
                 continue
 
@@ -252,12 +265,20 @@ def load_tests_business_records() -> list[dict[str, Any]]:
             item["id"] = _safe_str(obj.get("id"))
             item["source"] = _safe_str(obj.get("source")) or "tests_business"
             item["test_name_ar"] = name
-            item["english_name"] = _safe_str(obj.get("english_name"))
+            item["english_name"] = _safe_str(obj.get("english_name") or obj.get("search_text_en"))
             item["code_alt_name"] = _safe_str(obj.get("code_alt_name"))
-            item["matched_name"] = _safe_str(obj.get("matched_name"))
+            item["matched_name"] = _safe_str(obj.get("matched_name")) or name
             item["category"] = _safe_str(obj.get("category"))
-            item["benefit"] = _safe_str(obj.get("benefit"))
-            item["price_raw"] = _safe_str(obj.get("price_raw"))
+            item["benefit"] = _safe_str(obj.get("benefit")) or _safe_str(obj.get("benefit_ar"))
+            item["summary_ar"] = _safe_str(obj.get("summary_ar"))
+            item["result_time"] = _safe_str(obj.get("result_time"))
+            item["fasting"] = _safe_str(obj.get("fasting"))
+            item["price_raw"] = _price_to_text(
+                obj.get("price_raw")
+                or obj.get("price")
+                or obj.get("excel_price")
+                or obj.get("price_number")
+            )
             item["sample_type"] = _safe_str(obj.get("sample_type"))
             item["preparation"] = _safe_str(obj.get("preparation"))
             item["review_issues"] = _safe_str(obj.get("review_issues"))
@@ -267,11 +288,24 @@ def load_tests_business_records() -> list[dict[str, Any]]:
             item["complementary_tests"] = _as_str_list(obj.get("complementary_tests"))
             item["alternative_tests"] = _as_str_list(obj.get("alternative_tests"))
             item["test_name_norm"] = _norm(name)
-            item["alias_terms"] = _as_str_list(obj.get("alias_terms"))
-            item["match_terms"] = _as_str_list(obj.get("match_terms"))
+            item["alias_terms"] = _as_str_list(obj.get("alias_terms")) or _as_str_list(obj.get("aliases_ar"))
+            item["match_terms"] = (
+                _as_str_list(obj.get("match_terms"))
+                or _as_str_list(obj.get("aliases_ar"))
+                or _as_str_list(obj.get("aliases"))
+            )
             item["match_terms_norm"] = _as_str_list(obj.get("match_terms_norm"))
             if not item["match_terms_norm"]:
-                fallback_terms = [name, item["english_name"], item["code_alt_name"], item["matched_name"]]
+                fallback_terms = [
+                    name,
+                    item["english_name"],
+                    item["code_alt_name"],
+                    item["matched_name"],
+                    _safe_str(obj.get("search_text_ar")),
+                    _safe_str(obj.get("search_text_en")),
+                    *item["alias_terms"],
+                    *item["match_terms"],
+                ]
                 item["match_terms_norm"] = [_norm(x) for x in fallback_terms if _norm(x)]
             item["symptoms_norm"] = _norm(" ".join(item["symptoms"]))
             rows.append(item)
@@ -793,7 +827,7 @@ def _format_dual_intent_composed_answer(
 ) -> str:
     test_name = _safe_str(target.get("test_name_ar"))
     intents = intents_override or _detect_supported_dual_intents(query_norm)
-    prep_text = _safe_str(target.get("preparation"))
+    prep_text = _safe_str(target.get("fasting")) or _safe_str(target.get("preparation"))
     sample_type = _safe_str(target.get("sample_type"))
     price_raw = _safe_str(target.get("price_raw"))
 
@@ -1081,7 +1115,7 @@ def resolve_tests_business_query(user_text: str, conversation_id: UUID | None = 
         }
 
     if query_type == "test_fasting_query":
-        prep = _safe_str(target.get("preparation"))
+        prep = _safe_str(target.get("fasting")) or _safe_str(target.get("preparation"))
         if prep and ("صيام" in prep or "الصيام" in prep):
             answer = f"بالنسبة لتحليل {test_name}، {prep}"
             available = True

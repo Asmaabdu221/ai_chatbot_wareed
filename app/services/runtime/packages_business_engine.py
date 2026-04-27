@@ -12,7 +12,7 @@ from app.services.runtime.selection_state import save_selection_state
 from app.services.runtime.text_normalizer import normalize_arabic
 
 PACKAGES_BUSINESS_JSONL_PATH = Path("app/data/runtime/rag/packages_business_clean.jsonl")
-TESTS_BUSINESS_JSONL_PATH = Path("app/data/runtime/rag/tests_business_clean.jsonl")
+TESTS_BUSINESS_JSONL_PATH = Path("app/data/runtime/rag/tests_clean.jsonl")
 PRIMARY_PACKAGES_DATASET_PATH = PACKAGES_BUSINESS_JSONL_PATH
 
 _PRICE_HINTS = (
@@ -82,7 +82,7 @@ def _has_any_hint(query_norm: str, hints: tuple[str, ...]) -> bool:
 
 @lru_cache(maxsize=1)
 def _load_tests_business_match_index() -> list[dict[str, Any]]:
-    """Load minimal bilingual test matching index from tests_business dataset."""
+    """Load minimal bilingual test matching index from unified tests_clean dataset."""
     if not TESTS_BUSINESS_JSONL_PATH.exists():
         return []
 
@@ -99,10 +99,15 @@ def _load_tests_business_match_index() -> list[dict[str, Any]]:
             if not isinstance(obj, dict):
                 continue
 
-            test_name_ar = _safe_str(obj.get("test_name_ar"))
-            english_name = _safe_str(obj.get("english_name"))
+            test_name_ar = _safe_str(
+                obj.get("canonical_name_ar")
+                or obj.get("test_name_ar")
+                or obj.get("title")
+                or obj.get("h1")
+            )
+            english_name = _safe_str(obj.get("english_name") or obj.get("search_text_en"))
             code_alt_name = _safe_str(obj.get("code_alt_name"))
-            matched_name = _safe_str(obj.get("matched_name"))
+            matched_name = _safe_str(obj.get("matched_name")) or test_name_ar
 
             match_terms_norm = _as_list_of_str(obj.get("match_terms_norm"))
             if not match_terms_norm:
@@ -111,6 +116,9 @@ def _load_tests_business_match_index() -> list[dict[str, Any]]:
                     english_name,
                     code_alt_name,
                     matched_name,
+                    _safe_str(obj.get("search_text_ar")),
+                    _safe_str(obj.get("search_text_en")),
+                    *_as_list_of_str(obj.get("aliases_ar")),
                     *_as_list_of_str(obj.get("alias_terms")),
                     *_as_list_of_str(obj.get("match_terms")),
                 ]
