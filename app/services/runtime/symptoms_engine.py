@@ -1,5 +1,5 @@
 
-"""Deterministic symptom-to-tests/package suggestion engine."""
+"""Deterministic symptom-to-tests suggestion engine from unified tests dataset."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from typing import Any
 
 from app.services.runtime.text_normalizer import normalize_arabic
 
-SYMPTOMS_MAPPING_JSONL_PATH = Path("app/data/runtime/rag/symptoms_mapping.jsonl")
+TESTS_JSONL_PATH = Path("app/data/runtime/rag/tests_clean.jsonl")
 logger = logging.getLogger(__name__)
 
 _CLARIFICATION_MESSAGE = "اكتب الأعراض بشكل أوضح، وأعطيك أفضل التحاليل المناسبة."
@@ -26,6 +26,23 @@ _GENERIC_ONLY_TERMS = {
     normalize_arabic("\u0641\u064a"),
     normalize_arabic("\u0645\u0646"),
     normalize_arabic("\u0645\u0639"),
+}
+_SYMPTOM_STOPWORDS = {
+    normalize_arabic("عندي"),
+    normalize_arabic("عند"),
+    normalize_arabic("ايش"),
+    normalize_arabic("وش"),
+    normalize_arabic("اللي"),
+    normalize_arabic("تنصحني"),
+    normalize_arabic("به"),
+    normalize_arabic("في"),
+    normalize_arabic("من"),
+    normalize_arabic("مع"),
+    normalize_arabic("عن"),
+    normalize_arabic("تحليل"),
+    normalize_arabic("تحاليل"),
+    normalize_arabic("فحص"),
+    normalize_arabic("نتيجة"),
 }
 _SYMPTOM_QUERY_HINTS = tuple(
     normalize_arabic(v)
@@ -89,13 +106,19 @@ def _split_query_chunks(query_norm: str) -> list[str]:
     return [p for p in parts if p]
 
 
+def _extract_symptom_tokens(text_norm: str) -> set[str]:
+    tokens = {t for t in text_norm.split() if t}
+    return {t for t in tokens if len(t) > 1 and t not in _SYMPTOM_STOPWORDS}
+
+
 @lru_cache(maxsize=1)
 def load_symptoms_mappings() -> list[dict[str, Any]]:
-    if not SYMPTOMS_MAPPING_JSONL_PATH.exists():
+    """Build symptom mappings directly from unified tests_clean.jsonl."""
+    if not TESTS_JSONL_PATH.exists():
         return []
 
     rows: list[dict[str, Any]] = []
-    with SYMPTOMS_MAPPING_JSONL_PATH.open("r", encoding="utf-8") as f:
+    with TESTS_JSONL_PATH.open("r", encoding="utf-8") as f:
         for raw_line in f:
             line = _safe_str(raw_line)
             if not line:
@@ -107,22 +130,27 @@ def load_symptoms_mappings() -> list[dict[str, Any]]:
             if not isinstance(obj, dict):
                 continue
 
-            symptom = _safe_str(obj.get("symptom"))
-            aliases = _as_list_of_str(obj.get("aliases"))
-            tests = _as_list_of_str(obj.get("suggested_tests"))
-            packages = _as_list_of_str(obj.get("suggested_packages"))
-            if not symptom or (not tests and not packages):
+            test_name = _safe_str(obj.get("canonical_name_ar") or obj.get("test_name_ar"))
+            if not test_name:
                 continue
 
-            item = {
-                "symptom": symptom,
-                "aliases": aliases,
-                "suggested_tests": tests,
-                "suggested_packages": packages,
-                "symptom_norm": _norm(symptom),
-                "aliases_norm": [_norm(a) for a in aliases if _norm(a)],
-            }
-            rows.append(item)
+            symptoms = _as_list_of_str(obj.get("symptoms"))
+            if not symptoms:
+                continue
+
+            for symptom in symptoms:
+                symptom_text = _safe_str(symptom)
+                if not symptom_text:
+                    continue
+                item = {
+                    "symptom": symptom_text,
+                    "aliases": [],
+                    "suggested_tests": [test_name],
+                    "suggested_packages": [],
+                    "symptom_norm": _norm(symptom_text),
+                    "aliases_norm": [],
+                }
+                rows.append(item)
     return rows
 
 
@@ -259,6 +287,25 @@ def handle_symptoms_query(query: str) -> dict[str, Any] | None:
         score = _match_symptom_record(query_norm, record)
         if score > 0.0:
             scored_records.append((score, record))
+
+    # Fallback: token-level matching from unified tests symptoms when phrase matching is weak.
+    if not scored_records:
+        query_tokens = _extract_symptom_tokens(query_norm)
+        for record in load_symptoms_mappings():
+            symptom_norm = _safe_str(record.get("symptom_norm"))
+            symptom_tokens = _extract_symptom_tokens(symptom_norm)
+            if not query_tokens or not symptom_tokens:
+                continue
+            overlap = query_tokens.intersection(symptom_tokens)
+            if not overlap:
+                continue
+            overlap_score = len(overlap) / max(1, len(query_tokens))
+            phrase_boost = 0.0
+            if symptom_norm and (symptom_norm in query_norm or query_norm in symptom_norm):
+                phrase_boost = 0.10
+            score = min(1.0, overlap_score + phrase_boost)
+            if score >= 0.20:
+                scored_records.append((score, record))
 
     if not scored_records:
         return None
