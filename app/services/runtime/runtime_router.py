@@ -808,6 +808,9 @@ def _looks_like_symptoms_query(text: str) -> bool:
         "تعب",
         "ارهاق",
         "إرهاق",
+        "اسهال",
+        "إسهال",
+        "التهاب",
         "دوخه",
         "دوخة",
         "تساقط الشعر",
@@ -826,7 +829,7 @@ def _looks_like_symptoms_query(text: str) -> bool:
     scores = _detector_score(
         n,
         hints=norm_hints,
-        strong_keywords=("اعراض", "أعراض", "اعاني", "أعاني", "تعب", "ارهاق"),
+        strong_keywords=("اعراض", "أعراض", "اعاني", "أعاني", "تعب", "ارهاق", "اسهال", "التهاب"),
         blockers=blockers,
         ambiguity_terms=("عندي", "احس", "أحس"),
     )
@@ -854,6 +857,9 @@ def _looks_like_symptoms_query(text: str) -> bool:
             "\u0643\u062d\u0629",
             "\u0627\u0644\u062a\u0647\u0627\u0628 \u062d\u0644\u0642",
             "\u0627\u0644\u0645 \u0628\u0637\u0646",
+            "\u0627\u0633\u0647\u0627\u0644",
+            "\u0625\u0633\u0647\u0627\u0644",
+            "\u0627\u0644\u062a\u0647\u0627\u0628",
             "\u0645\u063a\u0635",
             "\u063a\u062b\u064a\u0627\u0646",
             "\u062e\u0641\u0642\u0627\u0646",

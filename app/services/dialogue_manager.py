@@ -49,6 +49,16 @@ def _norm(text: str) -> str:
         return text.strip()
 
 
+def _norm_for_match(text: str) -> str:
+    """Normalize text and strip punctuation for stable short-followup matching."""
+    n = _norm(text)
+    if not n:
+        return ""
+    n = re.sub(r"[؟?\.,!،:;\"'`()\[\]{}\-_/\\]+", " ", n)
+    n = re.sub(r"\s+", " ", n).strip()
+    return n
+
+
 # ---------------------------------------------------------------------------
 # Numeric guard — "1", "2", "١" etc. must NEVER be rewritten.
 # These are branch / test selection inputs handled by selection_state.
@@ -262,6 +272,24 @@ def _extract_result_value(text: str) -> str | None:
     return m.group(0) if m else None
 
 
+def _extract_result_test_name(text: str) -> str | None:
+    raw = (text or "").strip()
+    if not raw:
+        return None
+    # e.g. "Vitamin D نتيجتي 10"
+    m = re.search(r"^(.*?)\s+(?:نتيجتي|نتيجة|النتيجة)\b", raw, flags=re.IGNORECASE)
+    if m:
+        name = m.group(1).strip(" -:،,.؟?")
+        return name or None
+    # e.g. "نتيجة Vitamin D 10"
+    m = re.search(r"(?:نتيجتي|نتيجة|النتيجة)\s+([A-Za-z0-9\u0600-\u06FF\-\s]{2,})", raw, flags=re.IGNORECASE)
+    if m:
+        candidate = m.group(1).strip()
+        candidate = re.sub(r"\s+[-+]?\d+(?:\.\d+)?\s*$", "", candidate).strip(" -:،,.؟?")
+        return candidate or None
+    return None
+
+
 # ---------------------------------------------------------------------------
 # DialogueManager
 # ---------------------------------------------------------------------------
@@ -350,6 +378,8 @@ class DialogueManager:
                 or str(meta.get("test_name") or "").strip()
                 or str(meta.get("matched_test_name") or "").strip()
             )
+            if not active_result_test_name:
+                active_result_test_name = _extract_result_test_name(user_text)
             active_result_value = (
                 str(meta.get("result_value") or "").strip()
                 or str(meta.get("value") or "").strip()
@@ -432,7 +462,7 @@ class DialogueManager:
             logger.info("dialogue_manager | skipped | reason=numeric_input")
             return text
 
-        text_norm = _norm(text)
+        text_norm = _norm_for_match(text)
 
         # Guard 2 — domain-switch keywords present
         if self._has_domain_blocker(text_norm):
