@@ -1605,17 +1605,54 @@ def route_runtime_message(
                         },
                     }, "results_interpretation")
 
-        prefilter_enter = bool(is_numeric or is_branch_like or is_package_like or is_tests_like)
+        prefilter_enter = bool(is_numeric or is_branch_like or is_package_like or is_tests_like or is_symptoms_like)
         logger.debug(
-            "domains prefilter entry check | q=%s | enter=%s | numeric=%s | branch_like=%s | package_like=%s | tests_like=%s",
+            "domains prefilter entry check | q=%s | enter=%s | numeric=%s | branch_like=%s | package_like=%s | tests_like=%s | symptoms_like=%s",
             text,
             prefilter_enter,
             is_numeric,
             is_branch_like,
             is_package_like,
             is_tests_like,
+            is_symptoms_like,
         )
         if prefilter_enter:
+            # Symptom queries must be resolved before generic tests resolver to avoid irrelevant matches.
+            if is_symptoms_like:
+                symptoms_result = handle_symptoms_query(text)
+                if symptoms_result:
+                    if _safe_str(symptoms_result.get("type")) == "symptom_clarification":
+                        logger.debug("domains prefilter early return | stage=symptoms_clarification")
+                        return _final({
+                            "reply": format_runtime_answer(
+                                _safe_str(symptoms_result.get("answer"))
+                                or "Ø§ÙƒØªØ¨ Ø§Ù„Ø£Ø¹Ø±Ø§Ø¶ Ø¨Ø´ÙƒÙ„ Ø£ÙˆØ¶Ø­ØŒ ÙˆØ£Ø¹Ø·ÙŠÙƒ Ø£ÙØ¶Ù„ Ø§Ù„ØªØ­Ø§Ù„ÙŠÙ„ Ø§Ù„Ù…Ù†Ø§Ø³Ø¨Ø©."
+                            ),
+                            "route": "symptoms_clarification",
+                            "source": "symptoms_engine",
+                            "matched": True,
+                            "meta": {
+                                "query_type": "symptoms_query",
+                                "symptoms": list(symptoms_result.get("symptoms") or []),
+                                "tests_count": 0,
+                                "packages_count": 0,
+                                "clarification_needed": True,
+                            },
+                        }, "domains_prefilter_symptoms_clarification")
+                    logger.debug("domains prefilter early return | stage=symptoms_route")
+                    return _final({
+                        "reply": format_runtime_answer(_format_symptoms_suggestions_reply(symptoms_result)),
+                        "route": "symptoms_suggestions",
+                        "source": "symptoms_engine",
+                        "matched": True,
+                        "meta": {
+                            "query_type": "symptoms_query",
+                            "symptoms": list(symptoms_result.get("symptoms") or []),
+                            "tests_count": len(list(symptoms_result.get("tests") or [])),
+                            "packages_count": len(list(symptoms_result.get("packages") or [])),
+                        },
+                    }, "domains_prefilter_symptoms")
+
             if is_numeric or is_branch_like:
                 branches_result = resolve_branches_query(text, conversation_id=conversation_id)
                 if bool(branches_result.get("matched")):

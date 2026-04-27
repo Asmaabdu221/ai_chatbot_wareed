@@ -791,13 +791,32 @@ async def chat_endpoint(
                 conversation_closed=lead_captured_flag,
             )
         
+        # === DIALOGUE MANAGER — Phase 1: resolve follow-up before routing ===
+        _dm_resolved_text = request.message
+        try:
+            from app.services.dialogue_manager import get_dialogue_manager
+            _dm_state = get_dialogue_manager().load_state(str(conversation_id))
+            _dm_resolved_text = get_dialogue_manager().resolve_followup(
+                request.message, _dm_state
+            )
+            if _dm_resolved_text != request.message:
+                logger.info(
+                    "dialogue_manager | followup_rewrite"
+                    " | original=%r | rewritten=%r | conversation_id=%.8s",
+                    request.message[:80],
+                    _dm_resolved_text[:80],
+                    str(conversation_id),
+                )
+        except Exception as _dm_err:
+            logger.warning("dialogue_manager phase1 skipped (non-blocking): %s", _dm_err)
+
         # === RUNTIME ROUTER (branches, FAQ, results, packages, tests) ===
         # Attempt domain-specific resolution BEFORE cache/RAG/OpenAI so
         # follow-up selection state (e.g. "2", "23", branch name) is always respected.
         try:
             from app.services.runtime.runtime_router import route_runtime_message
             _runtime_result = route_runtime_message(
-                request.message,
+                _dm_resolved_text,
                 conversation_id=conversation_id,
                 faq_only_runtime_mode=True,  # enables branch/domain pipeline
             )
@@ -866,6 +885,20 @@ async def chat_endpoint(
                         )
                     except Exception as _em_err:
                         logger.warning("entity_memory update(branch) skipped: %s", _em_err)
+
+                # === DIALOGUE MANAGER — Phase 1: persist active topic after match ===
+                try:
+                    from app.services.dialogue_manager import get_dialogue_manager
+                    get_dialogue_manager().update_after_response(
+                        str(conversation_id),
+                        _runtime_result,
+                        user_text=_dm_resolved_text,
+                    )
+                except Exception as _dm_upd_err:
+                    logger.warning(
+                        "dialogue_manager update skipped (non-blocking): %s", _dm_upd_err
+                    )
+
                 get_usage_tracker().record("runtime", 0)
                 _runtime_final = _runtime_reply
                 try:
