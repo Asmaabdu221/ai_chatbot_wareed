@@ -793,10 +793,34 @@ async def chat_endpoint(
         
         # === DIALOGUE MANAGER — Phase 1: resolve follow-up before routing ===
         _dm_resolved_text = request.message
+        _dm_manager = None
+        _dm_state = {}
         try:
             from app.services.dialogue_manager import get_dialogue_manager
-            _dm_state = get_dialogue_manager().load_state(str(conversation_id))
-            _dm_resolved_text = get_dialogue_manager().resolve_followup(
+            _dm_manager = get_dialogue_manager()
+            _dm_state = _dm_manager.load_state(str(conversation_id))
+            _dm_missing_context_reply = _dm_manager.get_missing_context_clarification(
+                request.message, _dm_state
+            )
+            if _dm_missing_context_reply:
+                if db is not None and conversation is not None:
+                    _save_message(db, conversation, MessageRole.ASSISTANT, _dm_missing_context_reply, token_count=0)
+                    db.commit()
+                return ChatResponse(
+                    reply=_dm_missing_context_reply,
+                    success=True,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    message_id=uuid4(),
+                    tokens_used=0,
+                    model="dialogue_manager",
+                    timestamp=datetime.now(),
+                    error=None,
+                    lead_captured=lead_captured_flag,
+                    lead_id=lead_id,
+                    conversation_closed=lead_captured_flag,
+                )
+            _dm_resolved_text = _dm_manager.resolve_followup(
                 request.message, _dm_state
             )
             if _dm_resolved_text != request.message:
@@ -932,6 +956,36 @@ async def chat_endpoint(
                 "runtime_router | matched=no | route=%s | fallback=cache_rag",
                 _runtime_result.get("route"),
             )
+            try:
+                if _dm_manager and _dm_manager.should_block_non_deterministic_fallback(
+                    request.message, _dm_resolved_text, _dm_state
+                ):
+                    _domain = str((_dm_state or {}).get("active_domain") or "none").strip()
+                    if _domain == "result":
+                        _dm_safe_reply = "اكتب اسم التحليل والنتيجة حتى أقدر أساعدك."
+                    elif _domain == "symptom":
+                        _dm_safe_reply = "ما هي الأعراض التي تعاني منها؟"
+                    else:
+                        _dm_safe_reply = "وضّح طلبك بشكل أدق حتى أقدر أساعدك بشكل صحيح."
+                    if db is not None and conversation is not None:
+                        _save_message(db, conversation, MessageRole.ASSISTANT, _dm_safe_reply, token_count=0)
+                        db.commit()
+                    return ChatResponse(
+                        reply=_dm_safe_reply,
+                        success=True,
+                        user_id=user_id,
+                        conversation_id=conversation_id,
+                        message_id=uuid4(),
+                        tokens_used=0,
+                        model="dialogue_manager",
+                        timestamp=datetime.now(),
+                        error=None,
+                        lead_captured=lead_captured_flag,
+                        lead_id=lead_id,
+                        conversation_closed=lead_captured_flag,
+                    )
+            except Exception as _dm_guard_err:
+                logger.warning("dialogue_manager deterministic guard skipped: %s", _dm_guard_err)
         except Exception as _runtime_err:
             logger.warning("runtime_router skipped (non-blocking): %s", _runtime_err)
 

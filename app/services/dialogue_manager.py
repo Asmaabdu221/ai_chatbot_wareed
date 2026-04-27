@@ -59,6 +59,12 @@ def _norm_for_match(text: str) -> str:
     return n
 
 
+def _basic_match_key(text: str) -> str:
+    v = str(text or "").strip().lower()
+    v = re.sub(r"[؟?\.,!،:;\"'`()\[\]{}\-_/\\]+", " ", v)
+    return re.sub(r"\s+", " ", v).strip()
+
+
 # ---------------------------------------------------------------------------
 # Numeric guard — "1", "2", "١" etc. must NEVER be rewritten.
 # These are branch / test selection inputs handled by selection_state.
@@ -232,6 +238,8 @@ _SYMPTOM_LOOKUP: dict[str, str] = {
 _RESULT_LOOKUP: dict[str, str] = {
     _norm(p): t for phrases, t in _RESULT_FOLLOWUP_CATALOGUE for p in phrases if _norm(p)
 }
+_RESULT_CONTEXT_KEYS = {"هل هذا طبيعي", "هل هذا منخفض", "هل هذا مرتفع", "ماذا يعني"}
+_SYMPTOM_CONTEXT_KEYS = {"ايش التحاليل", "وش التحاليل", "ايش تنصح", "وش تنصح", "طيب ايش اسوي"}
 
 # A message longer than this many words is likely a full new question, not a
 # short follow-up, so we skip rewriting.
@@ -547,6 +555,50 @@ class DialogueManager:
             str(state.get("conversation_id", ""))[:8],
         )
         return rewritten
+
+    # ------------------------------------------------------------------
+    def get_missing_context_clarification(
+        self,
+        user_text: str,
+        state: dict[str, Any] | None,
+    ) -> str | None:
+        """Return safe clarification when follow-up needs missing context."""
+        text_norm = _norm_for_match(user_text)
+        text_basic = _basic_match_key(user_text)
+        active_domain = str((state or {}).get("active_domain") or "none").strip()
+        if (text_norm in _RESULT_LOOKUP or text_basic in _RESULT_CONTEXT_KEYS) and active_domain != "result":
+            return "اكتب اسم التحليل والنتيجة حتى أقدر أساعدك."
+        if (text_norm in _SYMPTOM_LOOKUP or text_basic in _SYMPTOM_CONTEXT_KEYS) and active_domain != "symptom":
+            return "ما هي الأعراض التي تعاني منها؟"
+        return None
+
+    # ------------------------------------------------------------------
+    def should_block_non_deterministic_fallback(
+        self,
+        user_text: str,
+        resolved_text: str,
+        state: dict[str, Any] | None,
+    ) -> bool:
+        """
+        Block cache/RAG/OpenAI for context-dependent follow-ups.
+        If we rewrote based on state, this must stay deterministic.
+        """
+        if (resolved_text or "").strip() != (user_text or "").strip():
+            return True
+        text_norm = _norm_for_match(user_text)
+        text_basic = _basic_match_key(user_text)
+        active_domain = str((state or {}).get("active_domain") or "none").strip()
+        if active_domain == "result" and (text_norm in _RESULT_LOOKUP or text_basic in _RESULT_CONTEXT_KEYS):
+            return True
+        if active_domain == "symptom" and (text_norm in _SYMPTOM_LOOKUP or text_basic in _SYMPTOM_CONTEXT_KEYS):
+            return True
+        if active_domain == "package" and text_norm in _PACKAGE_LOOKUP:
+            return True
+        if active_domain == "branch" and text_norm in _BRANCH_LOOKUP:
+            return True
+        if active_domain == "test" and text_norm in _LOOKUP:
+            return True
+        return False
 
     # ------------------------------------------------------------------
     @staticmethod

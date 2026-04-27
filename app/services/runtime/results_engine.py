@@ -354,6 +354,13 @@ def _extract_text_result_value(query: str) -> str | None:
     return found or None
 
 
+def _coerce_context_numeric_value(value: Any) -> float | None:
+    """Parse numeric value from context field safely."""
+    if isinstance(value, (int, float)):
+        return float(value)
+    return _extract_numeric_value(_safe_str(value))
+
+
 def _map_qualitative_to_verdict(token: str) -> str | None:
     t = _norm(token)
     if t in {"negative", "non_reactive", "normal"}:
@@ -389,12 +396,24 @@ def _classify_qualitative(record: dict[str, Any], query: str) -> str | None:
     return _map_qualitative_to_verdict(user_norm)
 
 
-def interpret_result_query(query: str) -> str:
+def interpret_result_query(
+    query: str,
+    *,
+    context_test_name: str | None = None,
+    context_result_value: str | float | int | None = None,
+) -> str:
     records = load_results_records()
     if not records:
         return _NEED_MORE_INFO
 
-    record = _match_record(query, records)
+    effective_query = _safe_str(query)
+    record = _match_record(effective_query, records)
+    if not record:
+        ctx_test = _safe_str(context_test_name)
+        if ctx_test:
+            # Context-aware follow-up: inject test name for pronoun-style queries.
+            effective_query = f"{ctx_test} {effective_query}".strip()
+            record = _match_record(effective_query, records)
     if not record:
         return _NEED_MORE_INFO
     if not bool(record.get("safe_interpretation")):
@@ -406,12 +425,18 @@ def interpret_result_query(query: str) -> str:
         structured_rules = _as_list(record.get("rules"))
 
     if mode == "qualitative":
-        verdict = _classify_qualitative(record, query)
+        verdict = _classify_qualitative(record, effective_query)
+        if verdict is None and context_result_value is not None:
+            ctx_token = _extract_text_result_value(_safe_str(context_result_value))
+            if ctx_token:
+                verdict = _map_qualitative_to_verdict(ctx_token)
         if verdict is None:
             return _NEED_MORE_INFO
         return f"{verdict}\n{_CONSULT_TEXT}"
 
-    value = _extract_numeric_value(query)
+    value = _extract_numeric_value(effective_query)
+    if value is None and context_result_value is not None:
+        value = _coerce_context_numeric_value(context_result_value)
     if value is None:
         return _NEED_MORE_INFO
 

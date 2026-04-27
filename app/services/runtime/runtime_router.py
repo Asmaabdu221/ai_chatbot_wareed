@@ -41,6 +41,7 @@ from app.services.runtime.runtime_fallbacks import (
     get_out_of_scope_message,
     get_rebuild_mode_message,
 )
+from app.services.dialogue_state import get_dialogue_state
 from app.services.runtime.symptoms_engine import handle_symptoms_query
 from app.services.runtime.tests_business_engine import resolve_tests_business_query
 from app.services.runtime.tests_disambiguation import resolve_tests_disambiguation_selection
@@ -65,6 +66,18 @@ _BUSINESS_TEST_QUERY_TYPES = {
 def _safe_str(value: Any) -> str:
     """Convert any value to a safely stripped string."""
     return str(value or "").strip()
+
+
+def _result_context_from_dialogue_state(conversation_id: UUID | None) -> tuple[str | None, str | None]:
+    if conversation_id is None:
+        return None, None
+    try:
+        state = get_dialogue_state(conversation_id)
+    except Exception:
+        return None, None
+    test_name = _safe_str(state.get("active_result_test_name")) or None
+    result_value = _safe_str(state.get("active_result_value")) or None
+    return test_name, result_value
 
 
 def _ensure_package_label(label: str) -> str:
@@ -882,6 +895,17 @@ def _looks_like_symptoms_query(text: str) -> bool:
         )
         return False
     has_strong_anchor = any(_contains_boundary_phrase(n, term) or term in n for term in strong_symptom_terms)
+    if has_strong_anchor and any(t in n for t in generic_only_terms):
+        logger.debug(
+            "runtime_router.detector name=%s query=%r score=%.3f scores=%s result=%s fallback_reason=%s",
+            "symptoms_like",
+            n,
+            float(scores.get("score", 0.0)),
+            scores,
+            True,
+            "strong_symptom_anchor_override",
+        )
+        return True
     if decision and not has_strong_anchor and len(tokens) <= 3:
         logger.debug(
             "runtime_router.detector name=%s query=%r score=%.3f scores=%s result=%s fallback_reason=%s",
@@ -1263,7 +1287,14 @@ def _try_ollama_classifier_fallback(
         return None
 
     if intent == "results":
-        result_answer = _safe_str(interpret_result_query(raw_text))
+        ctx_test_name, ctx_result_value = _result_context_from_dialogue_state(conversation_id)
+        result_answer = _safe_str(
+            interpret_result_query(
+                raw_text,
+                context_test_name=ctx_test_name,
+                context_result_value=ctx_result_value,
+            )
+        )
         if result_answer:
             return {
                 "reply": format_runtime_answer(result_answer),
@@ -1599,7 +1630,14 @@ def route_runtime_message(
                         has_result_test_token,
                         is_tests_like,
                     )
-                result_answer = _safe_str(interpret_result_query(text))
+                ctx_test_name, ctx_result_value = _result_context_from_dialogue_state(conversation_id)
+                result_answer = _safe_str(
+                    interpret_result_query(
+                        text,
+                        context_test_name=ctx_test_name,
+                        context_result_value=ctx_result_value,
+                    )
+                )
                 if result_answer:
                     return _final({
                         "reply": format_runtime_answer(result_answer),
