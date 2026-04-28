@@ -27,6 +27,7 @@ from uuid import UUID
 from app.services.runtime.entity_memory import load_entity_memory
 from app.services.runtime.selection_state import load_selection_state, save_selection_state
 from app.services.runtime.text_normalizer import normalize_arabic
+from app.services.dialogue_state import get_dialogue_state
 
 PACKAGES_JSONL_PATH = Path("app/data/runtime/rag/packages_clean.jsonl")
 logger = logging.getLogger(__name__)
@@ -1232,12 +1233,11 @@ def _is_package_details_followup_query(query_norm: str) -> bool:
         "كمل",
         "شرح",
         "اشرح",
+        "اشرحها",
+        "ايش هي",
+        "ما فائدتها",
         "التفاصيل",
         "تفاصيل",
-        "وش فيها",
-        "ايش فيها",
-        "وش تشمل",
-        "ايش تشمل",
     )
     return any(_norm(h) == query_norm or _norm(h) in query_norm for h in hints)
 
@@ -1468,85 +1468,129 @@ def _format_package_preview(record: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _format_package_full_details(record: dict[str, Any]) -> str:
+def _clean_included_item(value: str) -> str:
+    text = _safe_str(value)
+    if not text:
+        return ""
+    text = re.sub(r"^\d+\s*[\)\.-]\s*", "", text).strip()
+    text = re.sub(r"^(?:تحليل|تحاليل)\s+", "", text).strip()
+    low = _norm(text)
+    banned_parts = ("اهمية", "فوائد", "الخلاصة", "ختاما", "إذا حاب", "اذا حاب")
+    if any(_norm(x) in low for x in banned_parts):
+        return ""
+    if len(text) > 110:
+        return ""
+    return text
+
+
+def _extract_included_items(record: dict[str, Any]) -> list[str]:
+    direct = [_clean_included_item(v) for v in _as_list(record.get("tests_included"))]
+    direct = [v for v in direct if v]
+    if direct:
+        out: list[str] = []
+        seen: set[str] = set()
+        for item in direct:
+            key = _norm(item)
+            if key and key not in seen:
+                seen.add(key)
+                out.append(item)
+        return out[:8]
+
     full_desc = _safe_str(record.get("description_full"))
-    if full_desc:
-        return full_desc
+    if not full_desc:
+        return []
+
+    candidates: list[str] = []
+    for line in re.split(r"[\n\r]+", full_desc):
+        line = _safe_str(line)
+        if not line:
+            continue
+        if re.match(r"^\d+\s*[\)\.-]\s*", line):
+            cleaned = _clean_included_item(line)
+            if cleaned:
+                candidates.append(cleaned)
+
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in candidates:
+        key = _norm(item)
+        if key and key not in seen:
+            seen.add(key)
+            out.append(item)
+    return out[:8]
+
+
+def _extract_brief_benefit(record: dict[str, Any]) -> str:
+    best_for = _as_list(record.get("best_for"))
+    if best_for:
+        return "مناسبة غالباً لـ: " + "، ".join(best_for[:4]) + "."
+    full_desc = _safe_str(record.get("description_full"))
+    if not full_desc:
+        return ""
+    for part in re.split(r"[.\n\r]+", full_desc):
+        candidate = _safe_str(part)
+        if 15 <= len(candidate) <= 120:
+            return candidate
+    return ""
+
+
+def _format_package_full_details(record: dict[str, Any]) -> str:
+    name = _safe_str(record.get("package_name"))
     short_desc = _safe_str(record.get("description_short"))
+    if not short_desc:
+        short_desc = _safe_str(record.get("description_full"))[:220].strip()
+    benefit = _extract_brief_benefit(record)
+
+    lines = [name]
     if short_desc:
-        return short_desc
-    return "تفاصيل هذه الباقة غير متوفرة حالياً."
+        lines.extend(["", short_desc])
+    if benefit and _norm(benefit) != _norm(short_desc):
+        lines.extend(["", benefit])
+    lines.extend(
+        [
+            "",
+            "إذا حاب تعرف التحاليل اللي تشملها الباقة، اكتب: ايش تشمل.",
+            "وإذا حاب تحجزها، أرسل رقم جوالك وبيتم التواصل معك من خدمة العملاء.",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def _format_package_inclusions(record: dict[str, Any], *, query_norm: str = "") -> str:
     name = _safe_str(record.get("package_name"))
-    full_desc = _safe_str(record.get("description_full"))
-    short_desc = _safe_str(record.get("description_short"))
-    included_count = record.get("included_count")
+    included = _extract_included_items(record)
+    if not included:
+        return (
+            f"تشمل باقة {name}:\n"
+            "لا توجد تفاصيل واضحة حالياً عن التحاليل المشمولة.\n\n"
+            "إذا حاب تعرف أهمية هذه الباقة، أقدر أوضحها لك.\n"
+            "وإذا حاب تحجزها، أرسل رقم جوالك وبيتم التواصل معك من خدمة العملاء."
+        )
 
-    lines: list[str] = [name]
-
-    count_value: int | None = None
-    if isinstance(included_count, int):
-        count_value = included_count
-    elif isinstance(included_count, float):
-        count_value = int(included_count)
-    else:
-        txt = _safe_str(included_count)
-        if txt.isdigit():
-            count_value = int(txt)
-    if "كم تحليل" in query_norm and count_value is not None:
-        lines.extend(["", f"عدد التحاليل في الباقة: {count_value} تحليل."])
-
-    candidates: list[str] = []
-    for part in re.split(r"[\n\r]+", full_desc):
-        line = _safe_str(part)
-        if not line:
-            continue
-        if re.match(r"^\d+\s*[\.\)-]\s*", line):
-            candidates.append(line)
-            continue
-        if any(token in line for token in ("تشمل", "تحاليل", "تحليل", "contains", "include")):
-            candidates.append(line)
-
-    if not candidates and full_desc:
-        candidates = [s.strip() for s in re.split(r"[\.،\n]+", full_desc) if _safe_str(s)][:8]
-    if not candidates and short_desc:
-        candidates = [short_desc]
-
-    deduped: list[str] = []
-    seen: set[str] = set()
-    for item in candidates:
-        key = _norm(item)
-        if not key or key in seen:
-            continue
-        seen.add(key)
-        deduped.append(item)
-
-    if deduped:
-        lines.append("")
-        lines.append("تشمل الباقة:")
-        for item in deduped[:10]:
-            if re.match(r"^\d+\s*[\.\)-]\s*", item):
-                lines.append(item)
-            else:
-                lines.append(f"- {item}")
-    elif len(lines) == 1:
-        lines.extend(["", "تفاصيل التحاليل المشمولة غير واضحة حالياً في البيانات."])
-
+    lines = [f"تشمل باقة {name}:"]
+    for idx, item in enumerate(included[:8], start=1):
+        lines.append(f"{idx}) {item}")
+    lines.extend(
+        [
+            "",
+            "إذا حاب تعرف أهمية هذه الباقة، أقدر أوضحها لك.",
+            "وإذا حاب تحجزها، أرسل رقم جوالك وبيتم التواصل معك من خدمة العملاء.",
+        ]
+    )
     return "\n".join(lines)
 
 
 def _format_package_price(record: dict[str, Any]) -> str:
     name = _safe_str(record.get("package_name"))
-    currency = _safe_str(record.get("currency") or "ريال")
     price = record.get("price_number")
-    if isinstance(price, (int, float)):
-        return f"سعر {name}: {price:g} {currency}."
     price_text = _safe_str(record.get("price_text"))
-    if price_text:
-        return f"سعر {name}: {price_text}."
-    return _PRICE_NOT_AVAILABLE
+    if isinstance(price, (int, float)):
+        body = f"سعر باقة {name}: {price:g} ريال."
+    elif price_text:
+        body = f"سعر باقة {name}: {price_text} ريال." if "ريال" not in price_text else f"سعر باقة {name}: {price_text}."
+    else:
+        body = _PRICE_NOT_AVAILABLE
+    return body + "\nإذا حاب تحجزها، أرسل رقم جوالك وبيتم التواصل معك من خدمة العملاء."
 
 
 def _format_budget_recommendation(budget: float, rows: list[dict[str, Any]]) -> str:
@@ -1792,6 +1836,14 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
             remembered_package_label = _safe_str((memory.get("last_package") or {}).get("label"))
             if remembered_package_label:
                 remembered_package_record = _find_package_by_label(remembered_package_label, records)
+        if remembered_package_record is None:
+            try:
+                dialogue_state = get_dialogue_state(conversation_id)
+                remembered_package_label = _safe_str(dialogue_state.get("active_package_name"))
+                if remembered_package_label:
+                    remembered_package_record = _find_package_by_label(remembered_package_label, records)
+            except Exception:
+                pass
 
     explicit_package_match_for_override = _find_specific_package_by_name_pass(query, records)
     if explicit_package_match_for_override is None:

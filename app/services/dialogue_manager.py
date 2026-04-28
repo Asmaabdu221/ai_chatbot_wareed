@@ -190,9 +190,10 @@ _CATALOGUE: list[tuple[tuple[str, ...], str]] = [
 ]
 
 _PACKAGE_CATALOGUE: list[tuple[tuple[str, ...], str]] = [
-    (("وش تشمل", "ايش تشمل", "ماذا تشمل"), "ماذا تشمل باقة {name}"),
-    (("كم سعرها", "سعرها", "كم السعر", "السعر"), "كم سعر باقة {name}"),
+    (("وش تشمل", "ايش تشمل", "ماذا تشمل", "وش فيها", "ايش فيها", "المحتويات"), "ماذا تشمل باقة {name}"),
+    (("كم سعرها", "سعرها", "كم السعر", "السعر", "بكم", "كم"), "كم سعر باقة {name}"),
     (("مناسبة لمين", "مناسبه لمين", "تناسب مين", "لمن تناسب"), "لمن تناسب باقة {name}"),
+    (("اشرحها", "اشرح الباقه", "اشرح الباقة", "ايش هي", "ما فائدتها"), "اشرح باقة {name}"),
 ]
 
 _BRANCH_CATALOGUE: list[tuple[tuple[str, ...], str]] = [
@@ -286,6 +287,25 @@ def _detect_short_followup_intent_for_test(text_norm: str) -> str | None:
         return "sample"
     if any((term == text_norm) or (f" {term} " in padded) for term in info_terms):
         return "general_info"
+    return None
+
+
+def _detect_short_followup_intent_for_package(text_norm: str) -> str | None:
+    tokens = [t for t in text_norm.split() if t]
+    if not tokens or len(tokens) > _SHORT_FOLLOWUP_MAX_WORDS + 1:
+        return None
+
+    price_terms = {"بكم", "كم", "السعر", "سعر", "كم سعر", "كم سعرها"}
+    includes_terms = {"وش تشمل", "ايش تشمل", "ماذا تشمل", "وش فيها", "ايش فيها", "المحتويات"}
+    explain_terms = {"اشرحها", "اشرح الباقه", "اشرح الباقة", "ايش هي", "ما فائدتها"}
+
+    padded = f" {text_norm} "
+    if any((term == text_norm) or (f" {term} " in padded) for term in price_terms):
+        return "price"
+    if any((term == text_norm) or (f" {term} " in padded) for term in includes_terms):
+        return "includes"
+    if any((term == text_norm) or (f" {term} " in padded) for term in explain_terms):
+        return "explain"
     return None
 
 
@@ -491,6 +511,11 @@ class DialogueManager:
         current["active_entity_name"] = entity_name
         if domain == "package":
             current["active_package_name"] = entity_name
+            current["active_package_id"] = str(meta.get("matched_package_id") or "").strip() or None
+            package_price = meta.get("price_number")
+            if package_price in (None, ""):
+                package_price = meta.get("price_text")
+            current["active_package_price"] = package_price
         if domain == "branch":
             current["active_branch_name"] = entity_name
         if domain == "symptom":
@@ -608,6 +633,40 @@ class DialogueManager:
         entity_for_domain = active_entity
         if active_domain == "package":
             entity_for_domain = str(state.get("active_package_name") or "").strip()
+            package_short_intent = _detect_short_followup_intent_for_package(text_norm)
+            if package_short_intent == "price":
+                rewritten = f"كم سعر باقة {entity_for_domain}"
+                logger.info(
+                    "dialogue_manager | followup_rewrite"
+                    " | original=%r | rewritten=%r | entity=%s | conversation_id=%.8s",
+                    text,
+                    rewritten,
+                    entity_for_domain,
+                    str(state.get("conversation_id", ""))[:8],
+                )
+                return rewritten
+            if package_short_intent == "includes":
+                rewritten = f"ماذا تشمل باقة {entity_for_domain}"
+                logger.info(
+                    "dialogue_manager | followup_rewrite"
+                    " | original=%r | rewritten=%r | entity=%s | conversation_id=%.8s",
+                    text,
+                    rewritten,
+                    entity_for_domain,
+                    str(state.get("conversation_id", ""))[:8],
+                )
+                return rewritten
+            if package_short_intent == "explain":
+                rewritten = f"اشرح باقة {entity_for_domain}"
+                logger.info(
+                    "dialogue_manager | followup_rewrite"
+                    " | original=%r | rewritten=%r | entity=%s | conversation_id=%.8s",
+                    text,
+                    rewritten,
+                    entity_for_domain,
+                    str(state.get("conversation_id", ""))[:8],
+                )
+                return rewritten
             template = _PACKAGE_LOOKUP.get(text_norm)
         elif active_domain == "branch":
             entity_for_domain = str(state.get("active_branch_name") or "").strip()

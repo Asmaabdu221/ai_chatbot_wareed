@@ -44,6 +44,8 @@ def _default(conversation_id: str) -> dict[str, Any]:
         "active_domain": "none",
         "active_entity_name": None,
         "active_package_name": None,
+        "active_package_id": None,
+        "active_package_price": None,
         "active_branch_name": None,
         "active_symptoms": [],
         "active_result_test_name": None,
