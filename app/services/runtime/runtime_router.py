@@ -1409,22 +1409,31 @@ def _should_apply_ollama_final_formatter(result: dict[str, Any]) -> bool:
     if not matched or not reply:
         return False
 
-    eligible_sources = {"packages", "packages_business", "tests", "tests_business", "symptoms_engine"}
-    if source not in eligible_sources:
-        return False
-
-    # Keep short sensitive test-business answers exactly as deterministic output.
-    blocked_exact_routes = {
-        "tests_business_fasting",
-        "tests_business_preparation",
-        "tests_business_sample_type",
-        "tests_business_price",
-        "tests_explanation",
+    deterministic_sources = {
+        "tests",
+        "tests_business",
+        "packages",
+        "packages_business",
+        "branches",
+        "faq",
+        "results",
+        "results_engine",
     }
-    if route in blocked_exact_routes:
+    if source in deterministic_sources:
         return False
 
-    blocked_route_tokens = ("no_match", "error", "rebuild", "fallback", "critical")
+    rewrite_allowed_sources = {
+        "runtime_fallback",
+        "fallback",
+        "general",
+        "general_chat",
+        "clarification",
+        "clarify",
+    }
+    if source not in rewrite_allowed_sources:
+        return False
+
+    blocked_route_tokens = ("no_match", "error", "rebuild", "critical")
     if any(token in route for token in blocked_route_tokens):
         return False
     return True
