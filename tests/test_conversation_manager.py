@@ -128,7 +128,7 @@ class TestOfferHumanHelp:
         assert action("أعاني من ألم", route="symptoms_suggestions") == ConversationAction.OFFER_HUMAN_HELP
 
     def test_customer_service_explicit(self):
-        assert action("أبغى خدمة العملاء") == ConversationAction.OFFER_HUMAN_HELP
+        assert action("أبغى خدمة العملاء") == ConversationAction.ASK_PHONE
 
     def test_medium_confidence(self):
         d = decision("عندي دوخة")

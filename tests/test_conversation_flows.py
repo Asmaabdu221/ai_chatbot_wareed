@@ -220,7 +220,7 @@ class TestLeadCapture:
     def test_customer_service_triggers_transfer(self):
         """'أبغى أتواصل مع خدمة العملاء' should trigger TRANSFER_TO_HUMAN."""
         decision = decide_conversation_action("أبغى أتواصل مع خدمة العملاء")
-        assert decision.action == ConversationAction.TRANSFER_TO_HUMAN
+        assert decision.action == ConversationAction.ASK_PHONE
 
     def test_transfer_asks_for_phone(self):
         """Transfer without known phone → must ask for phone."""
@@ -389,4 +389,26 @@ class TestRouteAwareDecision:
             "أبغى أتواصل مع خدمة العملاء",
             detected_route="",
         )
-        assert decision.action == ConversationAction.TRANSFER_TO_HUMAN
+        assert decision.action == ConversationAction.ASK_PHONE
+
+
+class TestContactSupportUnifiedFlow:
+
+    def test_contact_support_response_is_unified_and_sets_awaiting_phone(self):
+        cid = _fresh_id()
+        base_reply = "\u062d\u064a\u0627\u0643 \u0627\u0644\u0644\u0647!\n\u0625\u0630\u0627 \u0633\u0645\u062d\u062a \u0627\u0643\u062a\u0628 \u0644\u064a \u0631\u0642\u0645 \u062c\u0648\u0627\u0644\u0643 \u0648\u0628\u0648\u0635\u0644\u0643 \u0627\u0644\u0622\u0646 \u0628\u062e\u062f\u0645\u0629 \u0627\u0644\u0639\u0645\u0644\u0627\u0621."
+        decision = decide_conversation_action("\u0627\u0628\u063a\u0649 \u0627\u062a\u0648\u0627\u0635\u0644 \u0645\u0639 \u062e\u062f\u0645\u0629 \u0627\u0644\u0639\u0645\u0644\u0627\u0621")
+
+        result = apply_flow_to_reply(base_reply, decision, "\u0627\u0628\u063a\u0649 \u0627\u062a\u0648\u0627\u0635\u0644 \u0645\u0639 \u062e\u062f\u0645\u0629 \u0627\u0644\u0639\u0645\u0644\u0627\u0621", cid)
+
+        assert result.final_reply == base_reply
+        assert result.state_after == StateEnum.AWAITING_PHONE
+
+    def test_support_variants_same_response_without_extra_cta(self):
+        base_reply = "\u062d\u064a\u0627\u0643 \u0627\u0644\u0644\u0647!\n\u0625\u0630\u0627 \u0633\u0645\u062d\u062a \u0627\u0643\u062a\u0628 \u0644\u064a \u0631\u0642\u0645 \u062c\u0648\u0627\u0644\u0643 \u0648\u0628\u0648\u0635\u0644\u0643 \u0627\u0644\u0622\u0646 \u0628\u062e\u062f\u0645\u0629 \u0627\u0644\u0639\u0645\u0644\u0627\u0621."
+        for text in ("\u0627\u0628\u064a \u0627\u0644\u062f\u0639\u0645", "\u0643\u064a\u0641 \u0627\u062a\u0648\u0627\u0635\u0644 \u0645\u0639\u0643\u0645"):
+            cid = _fresh_id()
+            decision = decide_conversation_action(text)
+            result = apply_flow_to_reply(base_reply, decision, text, cid)
+            assert result.final_reply == base_reply
+            assert result.state_after == StateEnum.AWAITING_PHONE

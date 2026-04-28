@@ -129,6 +129,13 @@ _CUSTOMER_SERVICE_RE = re.compile(
     r"خدمة العملاء|تواصل مع|وصلني بـ|موظف|شكوى|customer service",
     re.IGNORECASE,
 )
+_CONTACT_SUPPORT_RE = re.compile(
+    r"\u062e\u062f\u0645\u0629 \u0627\u0644\u0639\u0645\u0644\u0627\u0621|\u0627\u0644\u062f\u0639\u0645|"
+    r"\u0627\u0628\u064a \u0627\u0644\u062f\u0639\u0645|\u0627\u0628\u063a\u0649 \u0627\u0644\u062f\u0639\u0645|"
+    r"\u0643\u064a\u0641 \u0627\u062a\u0648\u0627\u0635\u0644|\u0627\u062a\u0648\u0627\u0635\u0644|"
+    r"\u062a\u0648\u0627\u0635\u0644|\u0627\u062a\u0635\u0627\u0644|customer service|support|contact",
+    re.IGNORECASE,
+)
 _BRANCH_RE = re.compile(
     r"فرع|فروع|موقع|وين|أقرب|عنوان|location",
     re.IGNORECASE,
@@ -316,10 +323,6 @@ def _check_urgent_transfer(text: str, route: str) -> str | None:
     for phrase in urgent_phrases:
         if _normalize_ar(phrase).lower() in norm:
             return f"urgent_phrase:{phrase[:20]}"
-            
-    if _CUSTOMER_SERVICE_RE.search(text):
-        return "customer_service_request"
-        
     return None
 
 
@@ -334,6 +337,9 @@ def _check_ask_phone(text: str, route: str, source: str) -> str | None:
     # Price inquiry without a branch context (branch + price = show branch info, not phone)
     if _PRICE_RE.search(text) and not _BRANCH_RE.search(text):
         return "pricing"
+    # Customer support/contact requests should directly ask for phone.
+    if _CONTACT_SUPPORT_RE.search(text):
+        return "customer_support"
     return None
 
 

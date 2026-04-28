@@ -54,6 +54,7 @@ _CTA_MARKERS = (
     "خدمة العملاء",
 )
 _STRICT_INVALID_PHONE_REPLY = "لو سمحت ممكن تعيد كتابة رقم الجوال بالطريقة الصحيحة؟ مثال: 05xxxxxxxx"
+_CONTACT_SUPPORT_UNIFIED_REPLY = "\u062d\u064a\u0627\u0643 \u0627\u0644\u0644\u0647!\n\u0625\u0630\u0627 \u0633\u0645\u062d\u062a \u0627\u0643\u062a\u0628 \u0644\u064a \u0631\u0642\u0645 \u062c\u0648\u0627\u0644\u0643 \u0648\u0628\u0648\u0635\u0644\u0643 \u0627\u0644\u0622\u0646 \u0628\u062e\u062f\u0645\u0629 \u0627\u0644\u0639\u0645\u0644\u0627\u0621."
 
 
 @dataclass
@@ -278,6 +279,21 @@ def apply_flow_to_reply(
 
     # ---- ASK_PHONE ----------------------------------------------------------
     if action == ConversationAction.ASK_PHONE:
+        # Customer-support intent uses one fixed CTA reply only.
+        if "customer_support" in (decision.reason or "").lower():
+            store.update(
+                conversation_id,
+                state=StateEnum.AWAITING_PHONE,
+                pending_action=ConversationAction.ASK_PHONE.value,
+                pending_intent_summary=user_text[:100],
+            )
+            _log(action, state_before, StateEnum.AWAITING_PHONE, note="contact_support_unified_cta")
+            return FlowResult(
+                final_reply=_CONTACT_SUPPORT_UNIFIED_REPLY,
+                state_before=state_before,
+                state_after=StateEnum.AWAITING_PHONE,
+            )
+
         # Don't spam if already waiting for a phone
         if state.state == StateEnum.AWAITING_PHONE:
             _log(action, state_before, state_before, note="no_repeat_cta")
