@@ -17,6 +17,7 @@ from app.services.runtime.faq_semantic_ranker import (
     rank_faq_candidates,
     select_best_ranked_candidate,
 )
+from app.services.runtime.faq_semantic_search import find_best_faq_semantic_match
 from app.services.runtime.text_normalizer import normalize_arabic
 
 logger = logging.getLogger(__name__)
@@ -430,6 +431,61 @@ def resolve_faq(
             faq_id,
             ranker_used,
             ranker_top_faq_id,
+        )
+        return result
+
+    semantic_best = find_best_faq_semantic_match(
+        raw_text,
+        faq_records,
+        min_score=0.62,
+        min_margin=0.02,
+        top_k=5,
+    )
+    if semantic_best:
+        record = semantic_best.get("record") or {}
+        faq_id = _safe_str(record.get("id"))
+        if _should_block_branch_faq(raw_text, faq_id):
+            logger.debug(
+                "faq_resolver blocked branch specific | query=%s | normalized=%s | deterministic_match_found=%s | deterministic_faq_id=%s | ranker_used=%s | ranker_top_faq_id=%s | final_route_decision=blocked_branch_specific_semantic",
+                _escape_debug(raw_text),
+                _escape_debug(normalized),
+                deterministic_match_found,
+                deterministic_faq_id,
+                ranker_used,
+                ranker_top_faq_id,
+            )
+            return None
+
+        concepts = _resolve_concepts_for_match(faq_id, None, rewrite)
+        answer = _refine_faq_answer_style(
+            user_text=raw_text,
+            answer=_safe_str(record.get("answer")),
+            concepts=concepts,
+        )
+        result = {
+            "faq_id": faq_id,
+            "question": _safe_str(record.get("question")),
+            "answer": answer,
+            "score": float(semantic_best.get("score") or 0.0),
+            "margin": float(semantic_best.get("margin") or 0.0),
+            "matched_text": _safe_str(semantic_best.get("matched_text")),
+            "concepts": concepts,
+            "canonical_candidates": [
+                _safe_str(x)
+                for x in [raw_text, rewrite.resolved_query, rewrite.rewritten_query]
+                if _safe_str(x)
+            ],
+            "matched_via": "faq_semantic_chroma",
+            "source": "faq",
+        }
+        logger.debug(
+            "faq_resolver matched semantic | query=%s | normalized=%s | detected_intent=%s | score=%.3f | margin=%.3f | faq_id=%s | final_route_decision=matched_semantic",
+            _escape_debug(raw_text),
+            _escape_debug(normalized),
+            detected_intent,
+            float(semantic_best.get("score") or 0.0),
+            float(semantic_best.get("margin") or 0.0),
+            faq_id,
         )
         return result
 
