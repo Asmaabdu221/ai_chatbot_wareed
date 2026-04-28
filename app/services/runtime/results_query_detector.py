@@ -45,6 +45,24 @@ _RESULT_VALUE_SIGNAL_HINTS = (
     "المدى",
 )
 
+_EXPLICIT_RESULT_INTENT_HINTS = (
+    "نتيجتي",
+    "نتيجة",
+    "النتيجة",
+    "طلعت",
+    "منخفض",
+    "مرتفعة",
+    "مرتفع",
+    "طبيعي",
+    "طبيعية",
+    "reference",
+    "range",
+    "unit",
+    "value",
+    "المرجع",
+    "المدى",
+)
+
 _TEST_LIKE_HINTS = (
     "تحليل",
     "تحاليل",
@@ -85,6 +103,9 @@ _CANONICAL_RESULT_TOKENS_NORM = {
 }
 _RESULT_VALUE_SIGNAL_HINTS_NORM = tuple(
     normalize_for_match(v) for v in _RESULT_VALUE_SIGNAL_HINTS if normalize_for_match(v)
+)
+_EXPLICIT_RESULT_INTENT_HINTS_NORM = tuple(
+    normalize_for_match(v) for v in _EXPLICIT_RESULT_INTENT_HINTS if normalize_for_match(v)
 )
 
 
@@ -183,6 +204,17 @@ def _has_explicit_result_signal(query_norm: str, details: dict[str, float]) -> b
     return False
 
 
+def _has_explicit_result_intent_terms(query_norm: str) -> bool:
+    if not query_norm:
+        return False
+    padded = f" {query_norm} "
+    return any(
+        (term == query_norm) or (f" {term} " in padded)
+        for term in _EXPLICIT_RESULT_INTENT_HINTS_NORM
+        if term
+    )
+
+
 def analyze_result_query(text: str) -> dict[str, Any]:
     raw_text = str(text or "").strip()
     query_norm = normalize_for_match(raw_text)
@@ -224,13 +256,14 @@ def analyze_result_query(text: str) -> dict[str, Any]:
     has_value_signal = any(h in query_norm for h in _RESULT_VALUE_SIGNAL_HINTS_NORM if h)
 
     has_explicit_result_phrase = _has_explicit_result_signal(query_norm, details)
+    has_explicit_intent_terms = _has_explicit_result_intent_terms(query_norm)
+    has_explicit_intent = bool(has_explicit_result_phrase or has_explicit_intent_terms)
     decision = bool(
-        has_explicit_result_phrase
+        has_explicit_intent
         or (has_number and has_test_like and has_value_signal and score >= 1.0)
-        or score >= 1.6
     )
     strong_result_intent = bool(
-        has_explicit_result_phrase
+        has_explicit_intent
         or (has_number and has_test_like and has_value_signal and score >= 1.0 and len([w for w in query_norm.split() if w]) <= 5)
     )
 
@@ -255,6 +288,7 @@ def analyze_result_query(text: str) -> dict[str, Any]:
         "has_number": has_number,
         "has_test_like": has_test_like,
         "has_value_signal": has_value_signal,
+        "has_explicit_intent": has_explicit_intent,
         "blocked": False,
         "blockers": [],
     }
