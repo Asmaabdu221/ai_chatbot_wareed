@@ -108,12 +108,21 @@ def _split_query_chunks(query_norm: str) -> list[str]:
 
 def _extract_symptom_tokens(text_norm: str) -> set[str]:
     tokens = {t for t in text_norm.split() if t}
-    return {t for t in tokens if len(t) > 1 and t not in _SYMPTOM_STOPWORDS}
+    out: set[str] = set()
+    for token in tokens:
+        t = token
+        # Normalize Arabic conjunction prefix for compact user writing:
+        # "واسهال" -> "اسهال"
+        if t.startswith("و") and len(t) > 2:
+            t = t[1:]
+        if len(t) > 1 and t not in _SYMPTOM_STOPWORDS:
+            out.add(t)
+    return out
 
 
 @lru_cache(maxsize=1)
 def load_symptoms_mappings() -> list[dict[str, Any]]:
-    """Build symptom mappings directly from unified tests_clean.jsonl."""
+    """Build per-test symptom index directly from unified tests_clean.jsonl."""
     if not TESTS_JSONL_PATH.exists():
         return []
 
@@ -130,93 +139,70 @@ def load_symptoms_mappings() -> list[dict[str, Any]]:
             if not isinstance(obj, dict):
                 continue
 
-            test_name = _safe_str(obj.get("canonical_name_ar") or obj.get("test_name_ar"))
+            test_name = _safe_str(
+                obj.get("canonical_name_ar")
+                or obj.get("test_name_ar")
+                or obj.get("title")
+                or obj.get("h1")
+            )
             if not test_name:
                 continue
 
             symptoms = _as_list_of_str(obj.get("symptoms"))
             if not symptoms:
+                symptoms = _as_list_of_str(obj.get("excel_symptoms"))
+            if not symptoms:
                 continue
 
+            symptom_norm_list: list[str] = []
+            symptom_tokens: set[str] = set()
             for symptom in symptoms:
-                symptom_text = _safe_str(symptom)
-                if not symptom_text:
+                symptom_norm = _norm(symptom)
+                if not symptom_norm:
                     continue
-                item = {
-                    "symptom": symptom_text,
-                    "aliases": [],
-                    "suggested_tests": [test_name],
-                    "suggested_packages": [],
-                    "symptom_norm": _norm(symptom_text),
-                    "aliases_norm": [],
+                symptom_norm_list.append(symptom_norm)
+                symptom_tokens.update(_extract_symptom_tokens(symptom_norm))
+
+            if not symptom_norm_list and not symptom_tokens:
+                continue
+
+            rows.append(
+                {
+                    "test_name": test_name,
+                    "symptoms_norm": symptom_norm_list,
+                    "symptom_tokens": symptom_tokens,
                 }
-                rows.append(item)
+            )
     return rows
 
 
 def _match_symptom_record(query_norm: str, record: dict[str, Any]) -> float:
     if not query_norm:
         return 0.0
-    terms = [_safe_str(record.get("symptom_norm"))] + list(record.get("aliases_norm") or [])
-    symptom_norm = _safe_str(record.get("symptom_norm"))
-    chunks = _split_query_chunks(query_norm)
-    query_tokens = [t for t in query_norm.split() if t]
-    short_generic_only = len(query_tokens) <= 2 and all(t in _GENERIC_ONLY_TERMS for t in query_tokens)
+    query_tokens = _extract_symptom_tokens(query_norm)
+    if not query_tokens:
+        return 0.0
 
-    best = 0.0
-    details = ""
-    for term in terms:
-        if not term:
-            continue
+    symptom_tokens = set(record.get("symptom_tokens") or set())
+    symptom_phrases = list(record.get("symptoms_norm") or [])
 
-        score = 0.0
-        local_details: list[str] = []
-        padded_q = f" {query_norm} "
-        padded_t = f" {term} "
-        if query_norm == term:
-            score += 1.0
-            local_details.append("exact")
-        elif padded_t in padded_q:
-            score += 0.95
-            local_details.append("boundary_contains")
-        elif term in query_norm:
-            score += 0.82
-            local_details.append("contains")
+    overlap = query_tokens.intersection(symptom_tokens)
+    phrase_hits = [p for p in symptom_phrases if p and p in query_norm]
+    if not overlap and not phrase_hits:
+        return 0.0
 
-        for chunk in chunks:
-            c = _safe_str(chunk)
-            if not c:
-                continue
-            if c == term:
-                score += 0.35
-                local_details.append("chunk_exact")
-            elif f" {term} " in f" {c} ":
-                score += 0.25
-                local_details.append("chunk_boundary")
-
-        overlap = _token_overlap_ratio(query_norm, term)
-        if overlap > 0:
-            boost = min(0.30, overlap * 0.30)
-            score += boost
-            local_details.append(f"token_overlap={overlap:.2f}")
-
-        if short_generic_only:
-            score -= 0.25
-            local_details.append("short_generic_penalty")
-
-        score = max(0.0, min(1.0, score))
-        if score > best:
-            best = score
-            details = ",".join(local_details)
-
+    overlap_count = len(overlap)
+    coverage = overlap_count / max(1, len(query_tokens))
+    score = float(overlap_count) + (0.25 * len(phrase_hits)) + (0.10 * coverage)
     logger.debug(
-        "symptoms_detector score | query=%s | symptom=%s | score=%.3f | details=%s",
+        "symptoms_detector score | query=%s | test=%s | overlap=%s | phrase_hits=%s | score=%.3f",
         query_norm,
-        symptom_norm,
-        best,
-        details,
+        _safe_str(record.get("test_name")),
+        overlap_count,
+        len(phrase_hits),
+        score,
     )
-    return best
+    return score
 
 
 def _looks_like_weak_symptom_query(query_norm: str) -> bool:
@@ -231,49 +217,21 @@ def _looks_like_weak_symptom_query(query_norm: str) -> bool:
 def _rank_merged_tests_and_packages(
     matches: list[tuple[float, dict[str, Any]]],
 ) -> tuple[list[str], list[str]]:
-    """Rank merged suggestions deterministically and keep output concise."""
+    """Rank tests by overlap score and return top 3-5 test names."""
     test_scores: dict[str, float] = {}
     test_labels: dict[str, str] = {}
-    test_support: dict[str, int] = {}
-
-    package_scores: dict[str, float] = {}
-    package_labels: dict[str, str] = {}
-    package_support: dict[str, int] = {}
 
     for match_score, record in matches:
-        for idx, test_name in enumerate(list(record.get("suggested_tests") or [])):
-            value = _safe_str(test_name)
-            key = _norm(value)
-            if not value or not key:
-                continue
-            # Earlier items in mapping are treated as slightly stronger.
-            position_weight = max(0.60, 1.0 - (idx * 0.10))
-            test_scores[key] = test_scores.get(key, 0.0) + (float(match_score) * position_weight)
-            test_support[key] = test_support.get(key, 0) + 1
-            test_labels.setdefault(key, value)
+        test_name = _safe_str(record.get("test_name"))
+        key = _norm(test_name)
+        if not test_name or not key:
+            continue
+        test_scores[key] = test_scores.get(key, 0.0) + float(match_score)
+        test_labels.setdefault(key, test_name)
 
-        for idx, package_name in enumerate(list(record.get("suggested_packages") or [])):
-            value = _safe_str(package_name)
-            key = _norm(value)
-            if not value or not key:
-                continue
-            position_weight = max(0.70, 1.0 - (idx * 0.12))
-            package_scores[key] = package_scores.get(key, 0.0) + (float(match_score) * position_weight)
-            package_support[key] = package_support.get(key, 0) + 1
-            package_labels.setdefault(key, value)
-
-    ranked_tests = sorted(
-        test_scores.keys(),
-        key=lambda k: (-test_scores.get(k, 0.0), -test_support.get(k, 0), k),
-    )
-    ranked_packages = sorted(
-        package_scores.keys(),
-        key=lambda k: (-package_scores.get(k, 0.0), -package_support.get(k, 0), k),
-    )
-
-    top_tests = [test_labels[k] for k in ranked_tests[:3] if test_labels.get(k)]
-    top_packages = [package_labels[k] for k in ranked_packages[:1] if package_labels.get(k)]
-    return top_tests, top_packages
+    ranked_tests = sorted(test_scores.keys(), key=lambda k: (-test_scores.get(k, 0.0), k))
+    top_tests = [test_labels[k] for k in ranked_tests[:5] if test_labels.get(k)]
+    return top_tests, []
 
 
 def handle_symptoms_query(query: str) -> dict[str, Any] | None:
@@ -288,56 +246,21 @@ def handle_symptoms_query(query: str) -> dict[str, Any] | None:
         if score > 0.0:
             scored_records.append((score, record))
 
-    # Fallback: token-level matching from unified tests symptoms when phrase matching is weak.
-    if not scored_records:
-        query_tokens = _extract_symptom_tokens(query_norm)
-        for record in load_symptoms_mappings():
-            symptom_norm = _safe_str(record.get("symptom_norm"))
-            symptom_tokens = _extract_symptom_tokens(symptom_norm)
-            if not query_tokens or not symptom_tokens:
-                continue
-            overlap = query_tokens.intersection(symptom_tokens)
-            if not overlap:
-                continue
-            overlap_score = len(overlap) / max(1, len(query_tokens))
-            phrase_boost = 0.0
-            if symptom_norm and (symptom_norm in query_norm or query_norm in symptom_norm):
-                phrase_boost = 0.10
-            score = min(1.0, overlap_score + phrase_boost)
-            if score >= 0.20:
-                scored_records.append((score, record))
-
     if not scored_records:
         return None
 
     scored_records.sort(key=lambda x: x[0], reverse=True)
-    strong_matches = [(s, r) for s, r in scored_records if s >= 0.78]
+    strong_matches = [(s, r) for s, r in scored_records if s >= 1.0]
 
     if not strong_matches:
-        top_score = float(scored_records[0][0])
-        if top_score >= 0.55 or _looks_like_weak_symptom_query(query_norm):
-            logger.debug(
-                "symptoms_detector clarification | query=%s | top_score=%.3f | reason=low_confidence",
-                query_norm,
-                top_score,
-            )
-            return {
-                "type": "symptom_clarification",
-                "symptoms": [],
-                "tests": [],
-                "packages": [],
-                "answer": _CLARIFICATION_MESSAGE,
-            }
+        logger.debug(
+            "symptoms_detector weak_match | query=%s | top_score=%.3f | reason=low_confidence",
+            query_norm,
+            float(scored_records[0][0]),
+        )
         return None
 
-    limited_matches = strong_matches[:4]
-    symptoms: list[str] = []
-
-    for _, record in limited_matches:
-        symptom = _safe_str(record.get("symptom"))
-        if symptom and symptom not in symptoms:
-            symptoms.append(symptom)
-    merged_tests, merged_packages = _rank_merged_tests_and_packages(limited_matches)
+    merged_tests, merged_packages = _rank_merged_tests_and_packages(strong_matches)
 
     if not merged_tests and not merged_packages:
         return {
@@ -350,7 +273,7 @@ def handle_symptoms_query(query: str) -> dict[str, Any] | None:
 
     return {
         "type": "symptom_match",
-        "symptoms": symptoms,
+        "symptoms": sorted(_extract_symptom_tokens(query_norm)),
         "tests": merged_tests,
         "packages": merged_packages,
     }

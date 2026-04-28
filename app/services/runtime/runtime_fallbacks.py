@@ -54,6 +54,31 @@ def get_prices_not_enabled_message() -> str:
     )
 
 
+def get_tests_clarification_message() -> str:
+    """Return clarification when test intent exists but match is unclear."""
+    return "اكتب اسم التحليل بشكل أوضح، مثل: فيتامين د أو CBC."
+
+
+def get_symptoms_clarification_message() -> str:
+    """Return clarification when symptoms are too vague for reliable suggestions."""
+    return "اكتب الأعراض بشكل أوضح، مثل: حمى، إسهال، ألم بطن."
+
+
+def get_results_clarification_message() -> str:
+    """Return clarification when result query misses test name/value."""
+    return "اكتب اسم التحليل والنتيجة حتى أقدر أساعدك."
+
+
+def get_packages_clarification_message() -> str:
+    """Return clarification when package name is unclear."""
+    return "اكتب اسم الباقة بشكل أوضح."
+
+
+def get_branches_clarification_message() -> str:
+    """Return clarification when branch/city context is unclear."""
+    return "اكتب اسم المدينة أو اختر رقم الفرع من القائمة."
+
+
 if __name__ == "__main__":
     print("REBUILD MODE MESSAGE:")
     print(get_rebuild_mode_message())

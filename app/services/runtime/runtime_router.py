@@ -37,9 +37,14 @@ from app.services.runtime.results_query_detector import analyze_result_query, lo
 from app.services.runtime.response_formatter import format_runtime_answer
 from app.services.runtime.selection_state import load_selection_state, clear_selection_state
 from app.services.runtime.runtime_fallbacks import (
+    get_branches_clarification_message,
     get_faq_no_match_message,
     get_out_of_scope_message,
+    get_packages_clarification_message,
     get_rebuild_mode_message,
+    get_results_clarification_message,
+    get_symptoms_clarification_message,
+    get_tests_clarification_message,
 )
 from app.services.dialogue_state import get_dialogue_state
 from app.services.runtime.symptoms_engine import handle_symptoms_query
@@ -1384,6 +1389,40 @@ def _apply_ollama_final_formatter_if_needed(result: dict[str, Any]) -> dict[str,
         payload["reply"] = formatted_reply
     return payload
 
+
+def _confidence_guard_clarification(
+    *,
+    text: str,
+    is_numeric: bool,
+    is_branch_like: bool,
+    is_package_like: bool,
+    is_tests_like: bool,
+    is_symptoms_like: bool,
+    result_analysis: dict[str, Any] | None,
+) -> tuple[str, str] | None:
+    """
+    Minimal deterministic guard:
+    block non-deterministic fallback when intent is present but entity/value is unclear.
+    """
+    analysis = dict(result_analysis or {})
+    result_detected = bool(analysis.get("decision"))
+    has_number = bool(analysis.get("has_number"))
+    has_test_like = bool(analysis.get("has_test_like"))
+    has_explicit_intent = bool(analysis.get("has_explicit_intent"))
+
+    # Results require both test-like token and numeric value.
+    if result_detected and has_explicit_intent and (not has_number or not has_test_like):
+        return "results_confidence_guard", get_results_clarification_message()
+    if is_symptoms_like:
+        return "symptoms_confidence_guard", get_symptoms_clarification_message()
+    if is_tests_like:
+        return "tests_confidence_guard", get_tests_clarification_message()
+    if is_package_like:
+        return "packages_confidence_guard", get_packages_clarification_message()
+    if is_branch_like or is_numeric:
+        return "branches_confidence_guard", get_branches_clarification_message()
+    return None
+
 def route_runtime_message(
     user_text: str,
     *,
@@ -1887,6 +1926,39 @@ def route_runtime_message(
                 "domains pre-faq guard fallback faq not matched | q=%s | route=faq_only_no_match_domains_prefilter",
                 text,
             )
+            confidence_guard = _confidence_guard_clarification(
+                text=text,
+                is_numeric=is_numeric,
+                is_branch_like=is_branch_like,
+                is_package_like=is_package_like,
+                is_tests_like=is_tests_like,
+                is_symptoms_like=is_symptoms_like,
+                result_analysis=mixed_result_signals,
+            )
+            if confidence_guard is not None:
+                guard_route, guard_reply = confidence_guard
+                logger.debug(
+                    "runtime confidence guard triggered | stage=domains_prefilter_no_match | route=%s | q=%s",
+                    guard_route,
+                    text,
+                )
+                return _final({
+                    "reply": format_runtime_answer(guard_reply),
+                    "route": guard_route,
+                    "source": "runtime_fallback",
+                    "matched": False,
+                    "meta": {
+                        "mode": "faq_only",
+                        "confidence_guard": True,
+                        "domains_prefilter": True,
+                        "numeric_query": is_numeric,
+                        "branch_like_query": is_branch_like,
+                        "package_like_query": is_package_like,
+                        "tests_like_query": is_tests_like,
+                        "symptoms_like_query": is_symptoms_like,
+                        "result_detected": bool(mixed_result_signals.get("decision")),
+                    },
+                }, "domains_prefilter_confidence_guard")
             logger.debug(
                 "ollama fallback calling | stage=domains_prefilter_after_faq_no_match | q=%s",
                 text,
@@ -1992,6 +2064,38 @@ def route_runtime_message(
             "faq_only no match | q=%s | route=faq_only_no_match",
             text,
         )
+        result_analysis_final = analyze_result_query(text)
+        confidence_guard_final = _confidence_guard_clarification(
+            text=text,
+            is_numeric=_is_numeric_selection_query(text),
+            is_branch_like=_looks_like_branch_query(text),
+            is_package_like=_looks_like_package_query(text),
+            is_tests_like=_looks_like_tests_query(text),
+            is_symptoms_like=_looks_like_symptoms_query(text),
+            result_analysis=result_analysis_final,
+        )
+        if confidence_guard_final is not None:
+            guard_route, guard_reply = confidence_guard_final
+            logger.debug(
+                "runtime confidence guard triggered | stage=faq_only_final_no_match | route=%s | q=%s",
+                guard_route,
+                text,
+            )
+            return _final({
+                "reply": format_runtime_answer(guard_reply),
+                "route": guard_route,
+                "source": "runtime_fallback",
+                "matched": False,
+                "meta": {
+                    "mode": "faq_only",
+                    "confidence_guard": True,
+                    "result_detected": bool(result_analysis_final.get("decision")),
+                    "tests_like_query": _looks_like_tests_query(text),
+                    "package_like_query": _looks_like_package_query(text),
+                    "branch_like_query": _looks_like_branch_query(text),
+                    "symptoms_like_query": _looks_like_symptoms_query(text),
+                },
+            }, "faq_only_confidence_guard")
         semantic_intent = ""
         semantic_score = 0.0
         semantic_routing_used = False
