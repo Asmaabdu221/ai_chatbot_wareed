@@ -682,25 +682,55 @@ def _format_direct_branch_reply(record: dict[str, Any]) -> str:
 
 
 def _format_selected_branch_reply(record: dict[str, Any]) -> str:
+    def _strip_opening_phrases(text: str) -> str:
+        value = _safe_str(text)
+        if not value:
+            return ""
+        # Display-only cleanup: remove launch-status phrases from address/details.
+        value = re.sub(r"\b\u062a\u0645\s+\u0627\u0644\u0625\u0641\u062a\u062a\u0627\u062d\b", "", value)
+        value = re.sub(r"\b\u062a\u0645\s+\u0627\u0644\u0627\u0641\u062a\u062a\u0627\u062d\b", "", value)
+        value = re.sub(r"\b\u062a\u0645\s+\u0627\u0641\u062a\u062a\u0627\u062d\u0647\b", "", value)
+        value = re.sub(r"[\u060c,:;\-\u2013]+\s*$", "", value).strip()
+        value = re.sub(r"\s{2,}", " ", value)
+        return value
+
+    def _is_unavailable_hours(text: str) -> bool:
+        value = _safe_str(text)
+        if not value:
+            return True
+        norm = normalize_arabic(value)
+        return norm in {
+            "",
+            normalize_arabic("\u063a\u064a\u0631 \u0645\u062a\u0648\u0641\u0631 \u062d\u0627\u0644\u064a\u0627"),
+            normalize_arabic("\u063a\u064a\u0631 \u0645\u062a\u0648\u0641\u0631 \u062d\u0627\u0644\u064a\u0627\u064b"),
+        }
+
     name = _format_branch_name_for_reply(_safe_str(record.get("branch_name")))
-    display_name = name if name.startswith("فرع") else f"فرع {name}"
-    address = _safe_str(record.get("address")) or "غير متوفر حالياً"
-    location_url = (
+    display_name = name if name.startswith("\u0641\u0631\u0639") else f"\u0641\u0631\u0639 {name}"
+
+    address = _strip_opening_phrases(_safe_str(record.get("address")))
+    address_norm = normalize_arabic(address)
+    branch_norm = normalize_arabic(_strip_opening_phrases(name))
+    show_address = bool(address) and bool(address_norm) and address_norm != branch_norm
+
+    location_url = _strip_opening_phrases(
         _safe_str(record.get("location_url"))
         or _safe_str(record.get("map_url"))
         or _safe_str(record.get("maps_url"))
-        or "غير متوفر حالياً"
     )
-    hours = _safe_str(record.get("working_hours")) or _safe_str(record.get("hours")) or "غير متوفر حالياً"
+    show_location = bool(location_url)
 
-    lines = [
-        display_name,
-        "",
-        f"العنوان: {address}",
-        f"الموقع: {location_url}",
-        f"ساعات العمل: {hours}",
-        "رقم الهاتف: 8001221220",
-    ]
+    hours = _strip_opening_phrases(_safe_str(record.get("working_hours")) or _safe_str(record.get("hours")))
+    show_hours = not _is_unavailable_hours(hours)
+
+    lines = [display_name, ""]
+    if show_address:
+        lines.append(f"\u0627\u0644\u0639\u0646\u0648\u0627\u0646: {address}")
+    if show_location:
+        lines.append(f"\u0627\u0644\u0645\u0648\u0642\u0639: {location_url}")
+    if show_hours:
+        lines.append(f"\u0633\u0627\u0639\u0627\u062a \u0627\u0644\u0639\u0645\u0644: {hours}")
+    lines.append("\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062a\u0641: 8001221220")
     return _normalize_reply_text("\n".join(lines))
 
 
@@ -1051,5 +1081,4 @@ if __name__ == "__main__":
         print(f"ANSWER: {result.get('answer')}")
         print(f"META: {result.get('meta')}")
         print("-" * 72)
-
 

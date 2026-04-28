@@ -168,6 +168,24 @@ def test_empty_query_returns_no_match(branches_data):
     assert result["matched"] is False
 
 
+def test_selected_branch_reply_hides_redundant_address_and_unavailable_hours(branches_data):
+    import app.services.runtime.branches_resolver as br_mod
+
+    answer = br_mod._format_selected_branch_reply(
+        {
+            "branch_name": "\u0641\u0631\u0639 \u0642\u0631\u0637\u0628\u0629",
+            "address": "\u0641\u0631\u0639 \u0642\u0631\u0637\u0628\u0629 \u062a\u0645 \u0627\u0644\u0627\u0641\u062a\u062a\u0627\u062d",
+            "location_url": "\u0641\u062a\u062d \u0627\u0644\u0645\u0648\u0642\u0639",
+            "working_hours": "\u063a\u064a\u0631 \u0645\u062a\u0648\u0641\u0631 \u062d\u0627\u0644\u064a\u0627\u064b",
+        }
+    )
+    assert "\u0641\u0631\u0639 \u0642\u0631\u0637\u0628\u0629" in answer
+    assert "\u0627\u0644\u0639\u0646\u0648\u0627\u0646:" not in answer
+    assert "\u0627\u0644\u0645\u0648\u0642\u0639:" in answer
+    assert "\u0633\u0627\u0639\u0627\u062a \u0627\u0644\u0639\u0645\u0644:" not in answer
+    assert "\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062a\u0641:" in answer
+
+
 # ─── B: entity memory after branch hit ────────────────────────────────────────
 
 def test_update_entity_memory_branch_sets_intent():
