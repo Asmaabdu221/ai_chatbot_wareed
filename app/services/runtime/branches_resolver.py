@@ -669,10 +669,10 @@ def _format_nearest_city_clarification(city: str) -> str:
 def _format_city_not_found_reply(records: list[dict[str, Any]]) -> str:
     return _normalize_reply_text(
         (
-            "حالياً لا يوجد لدينا فروع في هذه المدينة.\n\n"
-            "المدن المتاحة لدينا:\n"
+            "المدينة اللي ذكرتها مع الأسف ما عندنا فيها فروع حالياً.\n\n"
+            "بعطيك المدن المتوفر فيها فروعنا، وقولي أيش أقرب مدينة لك:\n"
             f"{_format_available_cities(records)}\n\n"
-            "أرسل اسم المدينة من القائمة، وبعطيك الفروع."
+            "ممكن تكتب اسم المدينة الأقرب لك، وبعطيك الفروع."
         )
     )
 
@@ -706,10 +706,10 @@ def _format_selected_branch_reply(record: dict[str, Any]) -> str:
 
 def _format_unknown_area_reply(records: list[dict[str, Any]]) -> str:
     return _normalize_reply_text(
-        "حالياً لا يوجد لدينا فروع في هذه المدينة.\n\n"
-        "المدن المتاحة لدينا:\n"
+        "المدينة اللي ذكرتها مع الأسف ما عندنا فيها فروع حالياً.\n\n"
+        "بعطيك المدن المتوفر فيها فروعنا، وقولي أيش أقرب مدينة لك:\n"
         f"{_format_available_cities(records)}\n\n"
-        "أرسل اسم المدينة من القائمة، وبعطيك الفروع."
+        "ممكن تكتب اسم المدينة الأقرب لك، وبعطيك الفروع."
     )
 
 

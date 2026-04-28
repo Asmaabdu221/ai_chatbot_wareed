@@ -56,17 +56,17 @@ def get_prices_not_enabled_message() -> str:
 
 def get_tests_clarification_message() -> str:
     """Return clarification when test intent exists but match is unclear."""
-    return "اكتب اسم التحليل بشكل أوضح، مثل: فيتامين د أو CBC."
+    return "إذا ممكن تكتب لي اسم التحليل بشكل أوضح، وبرد عليك مباشرة."
 
 
 def get_symptoms_clarification_message() -> str:
     """Return clarification when symptoms are too vague for reliable suggestions."""
-    return "اكتب الأعراض بشكل أوضح، مثل: حمى، إسهال، ألم بطن."
+    return "إذا ممكن تشرح لي الأعراض اللي تحس فيها بشكل أوضح، عشان أقدر أعطيك معلومات أدق."
 
 
 def get_results_clarification_message() -> str:
     """Return clarification when result query misses test name/value."""
-    return "اكتب اسم التحليل والنتيجة حتى أقدر أساعدك."
+    return "عشان أقدر أفسر لك النتيجة بشكل أدق، ممكن تكتب اسم التحليل والنتيجة اللي طالعة عندك (مع الرينج إذا متوفر)."
 
 
 def get_packages_clarification_message() -> str:
@@ -76,7 +76,7 @@ def get_packages_clarification_message() -> str:
 
 def get_branches_clarification_message() -> str:
     """Return clarification when branch/city context is unclear."""
-    return "اكتب اسم المدينة أو اختر رقم الفرع من القائمة."
+    return "ممكن تعطيني اسم المدينة اللي أنت فيها عشان أعطيك أقرب فرع."
 
 
 if __name__ == "__main__":

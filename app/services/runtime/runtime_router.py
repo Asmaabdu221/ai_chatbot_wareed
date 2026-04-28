@@ -936,7 +936,7 @@ def _format_symptoms_suggestions_reply(payload: dict[str, Any]) -> str:
     packages = [str(p).strip() for p in list(payload.get("packages") or []) if str(p).strip()][:1]
 
     if not tests and not packages:
-        return "اكتب الأعراض بشكل أوضح، وأعطيك أفضل التحاليل المناسبة."
+        return "إذا ممكن تشرح لي الأعراض اللي تحس فيها بشكل أوضح، عشان أقدر أعطيك معلومات أدق."
 
     lines: list[str] = []
     if tests:
@@ -1269,7 +1269,7 @@ def _try_ollama_classifier_fallback(
                 return {
                     "reply": format_runtime_answer(
                         _safe_str(symptoms_result.get("answer"))
-                        or "اكتب الأعراض بشكل أوضح، وأعطيك أفضل التحاليل المناسبة."
+                            or "إذا ممكن تشرح لي الأعراض اللي تحس فيها بشكل أوضح، عشان أقدر أعطيك معلومات أدق."
                     ),
                     "route": "symptoms_clarification",
                     "source": "symptoms_engine",
@@ -2006,7 +2006,7 @@ def route_runtime_message(
                     return _final({
                         "reply": format_runtime_answer(
                             _safe_str(symptoms_result.get("answer"))
-                            or "اكتب الأعراض بشكل أوضح، وأعطيك أفضل التحاليل المناسبة."
+                            or "إذا ممكن تشرح لي الأعراض اللي تحس فيها بشكل أوضح، عشان أقدر أعطيك معلومات أدق."
                         ),
                         "route": "symptoms_clarification",
                         "source": "symptoms_engine",

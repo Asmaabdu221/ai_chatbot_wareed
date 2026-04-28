@@ -14,7 +14,7 @@ from app.services.runtime.text_normalizer import normalize_for_match
 TESTS_JSONL_PATH = Path("app/data/runtime/rag/tests_clean.jsonl")
 logger = logging.getLogger(__name__)
 
-_CLARIFICATION_MESSAGE = "اكتب الأعراض بشكل أوضح، وأعطيك أفضل التحاليل المناسبة."
+_CLARIFICATION_MESSAGE = "إذا ممكن تشرح لي الأعراض اللي تحس فيها بشكل أوضح، عشان أقدر أعطيك معلومات أدق."
 _GENERIC_ONLY_TERMS = {
     normalize_for_match("\u0639\u0646\u062f\u064a"),
     normalize_for_match("\u0627\u062d\u0633"),
