@@ -705,13 +705,38 @@ def _format_selected_branch_reply(record: dict[str, Any]) -> str:
             normalize_arabic("\u063a\u064a\u0631 \u0645\u062a\u0648\u0641\u0631 \u062d\u0627\u0644\u064a\u0627\u064b"),
         }
 
+    def _is_redundant_address(address_text: str, branch_text: str) -> bool:
+        address_norm = normalize_arabic(_safe_str(address_text))
+        branch_norm = normalize_arabic(_safe_str(branch_text))
+        if not address_norm:
+            return True
+        if not branch_norm:
+            return False
+        if address_norm == branch_norm:
+            return True
+        if not address_norm.startswith(branch_norm):
+            return False
+
+        suffix = address_norm[len(branch_norm):].strip()
+        if not suffix:
+            return True
+
+        # Redundant suffixes that are service/status only, not real location details.
+        suffix = re.sub(r"[\u060c,:;\-\u2013]+", " ", suffix)
+        suffix = re.sub(r"\s+", " ", suffix).strip()
+        if not suffix:
+            return True
+        if suffix in {"24 ساعه", "24 ساعة", "24 hour", "24 hours"}:
+            return True
+        if re.fullmatch(r"(?:24|\d{1,2})\s*ساع(?:ه|ة)", suffix):
+            return True
+        return False
+
     name = _format_branch_name_for_reply(_safe_str(record.get("branch_name")))
     display_name = name if name.startswith("\u0641\u0631\u0639") else f"\u0641\u0631\u0639 {name}"
 
     address = _strip_opening_phrases(_safe_str(record.get("address")))
-    address_norm = normalize_arabic(address)
-    branch_norm = normalize_arabic(_strip_opening_phrases(name))
-    show_address = bool(address) and bool(address_norm) and address_norm != branch_norm
+    show_address = bool(address) and not _is_redundant_address(address, _strip_opening_phrases(name))
 
     location_url = _strip_opening_phrases(
         _safe_str(record.get("location_url"))
@@ -1081,4 +1106,3 @@ if __name__ == "__main__":
         print(f"ANSWER: {result.get('answer')}")
         print(f"META: {result.get('meta')}")
         print("-" * 72)
-

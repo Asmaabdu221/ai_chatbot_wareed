@@ -251,3 +251,36 @@ def test_runtime_router_greeting_returns_matched():
     result = route_runtime_message("مرحبا", faq_only_runtime_mode=True)
     assert result["matched"] is True
     assert result["route"] == "greeting"
+
+
+def test_branch_reply_hides_address_when_only_branch_plus_24h():
+    import app.services.runtime.branches_resolver as br_mod
+
+    answer = br_mod._format_selected_branch_reply(
+        {
+            "branch_name": "\u0641\u0631\u0639 \u0644\u0628\u0646",
+            "address": "\u0641\u0631\u0639 \u0644\u0628\u0646 \u0662\u0664 \u0633\u0627\u0639\u0629",
+            "location_url": "\u0641\u062a\u062d \u0627\u0644\u0645\u0648\u0642\u0639",
+            "working_hours": "\u0662\u0664 \u0633\u0627\u0639\u0629",
+        }
+    )
+    assert "\u0627\u0644\u0639\u0646\u0648\u0627\u0646:" not in answer
+    assert "\u0627\u0644\u0645\u0648\u0642\u0639:" in answer
+    assert "\u0633\u0627\u0639\u0627\u062a \u0627\u0644\u0639\u0645\u0644: \u0662\u0664 \u0633\u0627\u0639\u0629" in answer
+    assert "\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062a\u0641:" in answer
+
+
+def test_branch_reply_keeps_real_address():
+    import app.services.runtime.branches_resolver as br_mod
+
+    answer = br_mod._format_selected_branch_reply(
+        {
+            "branch_name": "\u0641\u0631\u0639 \u0627\u0644\u0639\u0644\u064a\u0627",
+            "address": "\u0637\u0631\u064a\u0642 \u0627\u0644\u0645\u0644\u0643 \u0641\u0647\u062f\u060c \u062d\u064a \u0627\u0644\u0639\u0644\u064a\u0627\u060c \u0627\u0644\u0631\u064a\u0627\u0636",
+            "location_url": "\u0641\u062a\u062d \u0627\u0644\u0645\u0648\u0642\u0639",
+            "working_hours": "8 \u0635 \u2013 10 \u0645",
+        }
+    )
+    assert "\u0627\u0644\u0639\u0646\u0648\u0627\u0646:" in answer
+    assert "\u0627\u0644\u0645\u0648\u0642\u0639:" in answer
+    assert "\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062a\u0641:" in answer
