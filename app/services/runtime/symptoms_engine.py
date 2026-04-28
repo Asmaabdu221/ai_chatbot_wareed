@@ -14,7 +14,13 @@ from app.services.runtime.text_normalizer import normalize_for_match
 TESTS_JSONL_PATH = Path("app/data/runtime/rag/tests_clean.jsonl")
 logger = logging.getLogger(__name__)
 
-_CLARIFICATION_MESSAGE = "إذا ممكن تشرح لي الأعراض اللي تحس فيها بشكل أوضح، عشان أقدر أعطيك معلومات أدق."
+_CLARIFICATION_MESSAGE = (
+    "\u0625\u0630\u0627 \u0645\u0645\u0643\u0646 \u062a\u0634\u0631\u062d \u0644\u064a "
+    "\u0627\u0644\u0623\u0639\u0631\u0627\u0636 \u0627\u0644\u0644\u064a \u062a\u062d\u0633 "
+    "\u0641\u064a\u0647\u0627 \u0628\u0634\u0643\u0644 \u0623\u0648\u0636\u062d\u060c "
+    "\u0639\u0634\u0627\u0646 \u0623\u0642\u062f\u0631 \u0623\u0639\u0637\u064a\u0643 "
+    "\u0645\u0639\u0644\u0648\u0645\u0627\u062a \u0623\u062f\u0642"
+)
 _GENERIC_ONLY_TERMS = {
     normalize_for_match("\u0639\u0646\u062f\u064a"),
     normalize_for_match("\u0627\u062d\u0633"),
@@ -28,21 +34,21 @@ _GENERIC_ONLY_TERMS = {
     normalize_for_match("\u0645\u0639"),
 }
 _SYMPTOM_STOPWORDS = {
-    normalize_for_match("عندي"),
-    normalize_for_match("عند"),
-    normalize_for_match("ايش"),
-    normalize_for_match("وش"),
-    normalize_for_match("اللي"),
-    normalize_for_match("تنصحني"),
-    normalize_for_match("به"),
-    normalize_for_match("في"),
-    normalize_for_match("من"),
-    normalize_for_match("مع"),
-    normalize_for_match("عن"),
-    normalize_for_match("تحليل"),
-    normalize_for_match("تحاليل"),
-    normalize_for_match("فحص"),
-    normalize_for_match("نتيجة"),
+    normalize_for_match("\u0639\u0646\u062f\u064a"),
+    normalize_for_match("\u0639\u0646\u062f"),
+    normalize_for_match("\u0627\u064a\u0634"),
+    normalize_for_match("\u0648\u0634"),
+    normalize_for_match("\u0627\u0644\u0644\u064a"),
+    normalize_for_match("\u062a\u0646\u0635\u062d\u0646\u064a"),
+    normalize_for_match("\u0628\u0647"),
+    normalize_for_match("\u0641\u064a"),
+    normalize_for_match("\u0645\u0646"),
+    normalize_for_match("\u0645\u0639"),
+    normalize_for_match("\u0639\u0646"),
+    normalize_for_match("\u062a\u062d\u0644\u064a\u0644"),
+    normalize_for_match("\u062a\u062d\u0627\u0644\u064a\u0644"),
+    normalize_for_match("\u0641\u062d\u0635"),
+    normalize_for_match("\u0646\u062a\u064a\u062c\u0629"),
 }
 _SYMPTOM_QUERY_HINTS = tuple(
     normalize_for_match(v)
@@ -66,6 +72,52 @@ _SYMPTOM_QUERY_HINTS = tuple(
         "\u0636\u0639\u0641 \u0639\u0627\u0645",
     )
     if normalize_for_match(v)
+)
+
+_GENERAL_FATIGUE_TOKENS = {
+    normalize_for_match(v)
+    for v in (
+        "\u062a\u0639\u0628",
+        "\u0627\u0631\u0647\u0627\u0642",
+        "\u062e\u0645\u0648\u0644",
+        "\u062f\u0648\u062e\u0629",
+        "\u0636\u0639\u0641",
+        "\u0636\u0639\u0641 \u0639\u0627\u0645",
+    )
+    if normalize_for_match(v)
+}
+
+_COMMON_TEST_PRIORITY_ALIASES: tuple[tuple[str, ...], ...] = (
+    # CBC
+    (
+        normalize_for_match("cbc"),
+        normalize_for_match("\u0635\u0648\u0631\u0629 \u062f\u0645"),
+        normalize_for_match("\u0635\u0648\u0631\u0629 \u0627\u0644\u062f\u0645"),
+    ),
+    # Vitamin D
+    (
+        normalize_for_match("\u0641\u064a\u062a\u0627\u0645\u064a\u0646 \u062f"),
+        normalize_for_match("vitamin d"),
+        normalize_for_match("vit d"),
+    ),
+    # Vitamin B12
+    (
+        normalize_for_match("\u0641\u064a\u062a\u0627\u0645\u064a\u0646 \u062812"),
+        normalize_for_match("vitamin b12"),
+        normalize_for_match("b12"),
+    ),
+    # Ferritin / iron
+    (
+        normalize_for_match("\u0641\u064a\u0631\u064a\u062a\u064a\u0646"),
+        normalize_for_match("ferritin"),
+        normalize_for_match("\u0627\u0644\u062d\u062f\u064a\u062f"),
+        normalize_for_match("iron"),
+    ),
+    # TSH / thyroid
+    (
+        normalize_for_match("tsh"),
+        normalize_for_match("\u0627\u0644\u063a\u062f\u0629 \u0627\u0644\u062f\u0631\u0642\u064a\u0629"),
+    ),
 )
 
 
@@ -113,7 +165,7 @@ def _extract_symptom_tokens(text_norm: str) -> set[str]:
         t = token
         # Normalize Arabic conjunction prefix for compact user writing:
         # "واسهال" -> "اسهال"
-        if t.startswith("و") and len(t) > 2:
+        if t.startswith("\u0648") and len(t) > 2:
             t = t[1:]
         if len(t) > 1 and t not in _SYMPTOM_STOPWORDS:
             out.add(t)
@@ -169,6 +221,7 @@ def load_symptoms_mappings() -> list[dict[str, Any]]:
             rows.append(
                 {
                     "test_name": test_name,
+                    "test_name_norm": _norm(test_name),
                     "symptoms_norm": symptom_norm_list,
                     "symptom_tokens": symptom_tokens,
                 }
@@ -214,12 +267,45 @@ def _looks_like_weak_symptom_query(query_norm: str) -> bool:
     return any(h in query_norm for h in _SYMPTOM_QUERY_HINTS) or any(t in _GENERIC_ONLY_TERMS for t in tokens)
 
 
+def _is_general_fatigue_query(query_norm: str) -> bool:
+    tokens = _extract_symptom_tokens(query_norm)
+    if not tokens:
+        return False
+    return bool(tokens.intersection(_GENERAL_FATIGUE_TOKENS))
+
+
+def _priority_boost_for_common_tests(test_name_norm: str, *, general_fatigue: bool) -> float:
+    if not general_fatigue or not test_name_norm:
+        return 0.0
+    for alias_group in _COMMON_TEST_PRIORITY_ALIASES:
+        for alias in alias_group:
+            if not alias:
+                continue
+            if alias in test_name_norm or test_name_norm in alias:
+                return 0.8
+    return 0.0
+
+def _general_fatigue_penalty(base_score: float, *, has_priority_boost: bool, general_fatigue: bool) -> float:
+    """De-prioritize niche tests for broad fatigue-like queries unless match is strong."""
+    if not general_fatigue or has_priority_boost:
+        return 0.0
+    # Keep ranking unchanged for strong symptom overlap.
+    if base_score >= 2.0:
+        return 0.0
+    return -0.25
+
+
+
 def _rank_merged_tests_and_packages(
     matches: list[tuple[float, dict[str, Any]]],
+    *,
+    query_norm: str,
 ) -> tuple[list[str], list[str]]:
     """Rank tests by overlap score and return top 3-5 test names."""
     test_scores: dict[str, float] = {}
     test_labels: dict[str, str] = {}
+    test_boosts: dict[str, float] = {}
+    general_fatigue = _is_general_fatigue_query(query_norm)
 
     for match_score, record in matches:
         test_name = _safe_str(record.get("test_name"))
@@ -228,8 +314,33 @@ def _rank_merged_tests_and_packages(
             continue
         test_scores[key] = test_scores.get(key, 0.0) + float(match_score)
         test_labels.setdefault(key, test_name)
+        test_boosts[key] = max(
+            test_boosts.get(key, 0.0),
+            _priority_boost_for_common_tests(
+                _safe_str(record.get("test_name_norm")) or key,
+                general_fatigue=general_fatigue,
+            ),
+        )
 
-    ranked_tests = sorted(test_scores.keys(), key=lambda k: (-test_scores.get(k, 0.0), k))
+    adjusted_scores: dict[str, float] = {}
+    for key, base_score in test_scores.items():
+        boost = test_boosts.get(key, 0.0)
+        penalty = _general_fatigue_penalty(
+            base_score,
+            has_priority_boost=boost > 0.0,
+            general_fatigue=general_fatigue,
+        )
+        adjusted_scores[key] = base_score + boost + penalty
+
+    ranked_tests = sorted(
+        test_scores.keys(),
+        key=lambda k: (
+            -adjusted_scores.get(k, 0.0),
+            -test_boosts.get(k, 0.0),
+            -test_scores.get(k, 0.0),
+            k,
+        ),
+    )
     top_tests = [test_labels[k] for k in ranked_tests[:5] if test_labels.get(k)]
     return top_tests, []
 
@@ -260,7 +371,10 @@ def handle_symptoms_query(query: str) -> dict[str, Any] | None:
         )
         return None
 
-    merged_tests, merged_packages = _rank_merged_tests_and_packages(strong_matches)
+    merged_tests, merged_packages = _rank_merged_tests_and_packages(
+        strong_matches,
+        query_norm=query_norm,
+    )
 
     if not merged_tests and not merged_packages:
         return {
