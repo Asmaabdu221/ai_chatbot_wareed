@@ -95,6 +95,20 @@ _PRICE_HINTS = (
     "cost",
     "how much",
 )
+_CHEAPEST_HINTS = (
+    "ارخص",
+    "الأرخص",
+    "اقل سعر",
+    "أقل سعر",
+    "cheapest",
+)
+_BUDGET_HINTS = (
+    "ميزانية",
+    "بحدود",
+    "عندي",
+    "ريال",
+    "budget",
+)
 
 _DETAIL_HINTS = (
     "وش تشمل",
@@ -282,6 +296,23 @@ def _safe_str(value: Any) -> str:
     return str(value or "").strip()
 
 
+def _first_present(obj: dict[str, Any], keys: tuple[str, ...]) -> Any:
+    for key in keys:
+        if key in obj and obj.get(key) not in (None, ""):
+            return obj.get(key)
+    return None
+
+
+def _as_list(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [_safe_str(v) for v in value if _safe_str(v)]
+    text = _safe_str(value)
+    if not text:
+        return []
+    parts = re.split(r"[,\n،;|]+", text)
+    return [_safe_str(p) for p in parts if _safe_str(p)]
+
+
 def _parse_numeric_selection_value(text: str) -> int | None:
     value = _safe_str(text).translate(
         str.maketrans({"٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4", "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9"})
@@ -412,6 +443,15 @@ def _to_float_or_none(value: Any) -> float | None:
         return float(match.group(0))
     except ValueError:
         return None
+
+
+def _extract_budget_value(query: str) -> float | None:
+    n = _norm(query)
+    if not n:
+        return None
+    if not any(h in n for h in tuple(_norm(v) for v in _BUDGET_HINTS)):
+        return None
+    return _to_float_or_none(query)
 
 
 def _contains_boundary_phrase(query_norm: str, phrase: str) -> bool:
@@ -559,28 +599,41 @@ def load_packages_records() -> list[dict[str, Any]]:
             if not isinstance(obj, dict):
                 continue
 
-            package_name = _safe_str(obj.get("package_name"))
-            main_category = _safe_str(obj.get("main_category"))
-            offering_type = _safe_str(obj.get("offering_type"))
+            package_name = _safe_str(_first_present(obj, ("package_name", "Package Name")))
+            main_category = _safe_str(_first_present(obj, ("main_category", "Main Category", "category")))
+            offering_type = _safe_str(_first_present(obj, ("offering_type", "Offering Type")))
             if not package_name:
                 continue
 
             item = dict(obj)
-            item["id"] = _safe_str(obj.get("id"))
-            item["source"] = _safe_str(obj.get("source")) or "packages"
+            item["id"] = _safe_str(_first_present(obj, ("id", "package_id", "Package ID")))
+            item["package_id"] = _safe_str(_first_present(obj, ("package_id", "id", "Package ID")))
+            item["source"] = _safe_str(_first_present(obj, ("source",))) or "packages"
             item["main_category"] = main_category
+            item["category"] = main_category
             item["offering_type"] = offering_type or "package"
             item["package_name"] = package_name
-            item["description_short"] = _safe_str(obj.get("description_short"))
-            item["description_full"] = _safe_str(obj.get("description_full"))
-            item["price_raw"] = _safe_str(obj.get("price_raw"))
-            item["price_number"] = _to_float_or_none(obj.get("price_number") or obj.get("price_raw"))
-            item["currency"] = _safe_str(obj.get("currency")) or "ريال"
-            item["included_count"] = obj.get("included_count")
-            item["runtime_present"] = bool(obj.get("runtime_present", True))
-            item["review_issues"] = _safe_str(obj.get("review_issues"))
-            item["source_row"] = obj.get("source_row")
-            item["is_active"] = bool(obj.get("is_active", True))
+            item["description_short"] = _safe_str(
+                _first_present(obj, ("description_short", "Description Short"))
+            )
+            item["description_full"] = _safe_str(
+                _first_present(obj, ("description_full", "Description Full"))
+            )
+            item["price_raw"] = _safe_str(_first_present(obj, ("price_raw", "Price Raw", "price_text", "Price Text")))
+            item["price_number"] = _to_float_or_none(
+                _first_present(obj, ("price_number", "Price Number", "Runtime Price Number", "price_raw", "Price Raw"))
+            )
+            item["price_text"] = _safe_str(_first_present(obj, ("price_text", "Price Text")))
+            item["currency"] = _safe_str(_first_present(obj, ("currency", "Currency"))) or "ريال"
+            item["included_count"] = _first_present(obj, ("included_count", "Included Count"))
+            item["runtime_present"] = bool(_first_present(obj, ("runtime_present", "Runtime Present")) or True)
+            item["review_issues"] = _safe_str(_first_present(obj, ("review_issues", "Review Issues")))
+            item["source_row"] = _first_present(obj, ("source_row", "Source Row"))
+            item["is_active"] = bool(_first_present(obj, ("is_active",)) if "is_active" in obj else True)
+            item["tests_included"] = _as_list(_first_present(obj, ("tests_included", "Tests Included")))
+            item["best_for"] = _as_list(_first_present(obj, ("best_for", "Best For", "themes", "Themes")))
+            item["aliases"] = _as_list(_first_present(obj, ("aliases", "Aliases")))
+            item["search_text"] = _safe_str(_first_present(obj, ("search_text", "Search Text")))
 
             combined_text = " ".join(
                 [
@@ -588,6 +641,10 @@ def load_packages_records() -> list[dict[str, Any]]:
                     main_category,
                     item["description_short"],
                     item["description_full"],
+                    " ".join(item["tests_included"]),
+                    " ".join(item["best_for"]),
+                    " ".join(item["aliases"]),
+                    item["search_text"],
                 ]
             )
             item["package_name_norm"] = _norm(package_name)
@@ -609,6 +666,17 @@ def _is_price_query(query_norm: str) -> bool:
         blockers=("الفرق بين", "قارن"),
     )
     return _detector_pick("price", query_norm, scores, min_score=2.0, legacy_match=legacy)
+
+
+def _is_cheapest_query(query_norm: str) -> bool:
+    legacy = any(_norm(h) in query_norm for h in _CHEAPEST_HINTS)
+    scores = _detector_score(
+        query_norm,
+        hints=_CHEAPEST_HINTS,
+        strong_keywords=("ارخص", "الأرخص", "اقل", "أقل", "cheapest"),
+        blockers=("وش تشمل", "ايش تشمل", "الفرق بين"),
+    )
+    return _detector_pick("cheapest", query_norm, scores, min_score=1.5, legacy_match=legacy)
 
 
 def _is_general_query(query_norm: str) -> bool:
@@ -1475,7 +1543,24 @@ def _format_package_price(record: dict[str, Any]) -> str:
     price = record.get("price_number")
     if isinstance(price, (int, float)):
         return f"سعر {name}: {price:g} {currency}."
+    price_text = _safe_str(record.get("price_text"))
+    if price_text:
+        return f"سعر {name}: {price_text}."
     return _PRICE_NOT_AVAILABLE
+
+
+def _format_budget_recommendation(budget: float, rows: list[dict[str, Any]]) -> str:
+    affordable = [r for r in rows if isinstance(r.get("price_number"), (int, float)) and float(r.get("price_number")) <= budget]
+    if affordable:
+        affordable.sort(key=lambda r: float(r.get("price_number") or 0), reverse=True)
+        best = affordable[0]
+        return f"بناءً على ميزانيتك ({budget:g} ريال)، أنسب خيار: {_safe_str(best.get('package_name'))} بسعر {float(best.get('price_number')):g} ريال."
+    priced = [r for r in rows if isinstance(r.get("price_number"), (int, float))]
+    if priced:
+        priced.sort(key=lambda r: abs(float(r.get("price_number") or 0) - budget))
+        near = priced[0]
+        return f"ما لقيت باقة ضمن {budget:g} ريال، أقرب خيار: {_safe_str(near.get('package_name'))} بسعر {float(near.get('price_number')):g} ريال."
+    return "حالياً ما توفرت أسعار واضحة للباقات."
 
 
 def _format_audience_packages(
@@ -1658,6 +1743,34 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
             "route": "packages_no_match",
             "meta": {"query_type": "no_match", "reason": "packages_data_unavailable"},
         }
+
+    budget_value = _extract_budget_value(query)
+    if budget_value is not None:
+        return {
+            "matched": True,
+            "answer": _format_budget_recommendation(budget_value, records),
+            "route": "packages_budget",
+            "meta": {
+                "query_type": "package_budget_query",
+                "budget": budget_value,
+            },
+        }
+
+    if _is_cheapest_query(query_norm):
+        priced = [r for r in records if isinstance(r.get("price_number"), (int, float))]
+        if priced:
+            priced.sort(key=lambda r: float(r.get("price_number") or 0))
+            cheapest = priced[0]
+            return {
+                "matched": True,
+                "answer": f"أرخص باقة حالياً: {_safe_str(cheapest.get('package_name'))} بسعر {float(cheapest.get('price_number')):g} ريال.",
+                "route": "packages_cheapest",
+                "meta": {
+                    "query_type": "package_cheapest_query",
+                    "matched_package_id": _safe_str(cheapest.get("id")),
+                    "matched_package_name": _safe_str(cheapest.get("package_name")),
+                },
+            }
 
     # Highest priority: numbered package selection from conversation state.
     numeric_selection_result = _resolve_package_numeric_selection(

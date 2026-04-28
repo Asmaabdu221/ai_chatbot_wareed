@@ -30,7 +30,6 @@ from app.services.runtime.ollama_intent_classifier import (
     classify_intent_label,
     format_final_response_with_ollama,
 )
-from app.services.runtime.packages_business_engine import handle_packages_business_query
 from app.services.runtime.packages_resolver import resolve_packages_query
 from app.services.runtime.results_engine import interpret_result_query
 from app.services.runtime.results_query_detector import analyze_result_query, looks_like_result_query
@@ -1199,24 +1198,6 @@ def _try_ollama_classifier_fallback(
         return None
 
     if intent == "package":
-        packages_business_result = handle_packages_business_query(
-            raw_text,
-            conversation_id=conversation_id,
-        )
-        if bool(packages_business_result.get("matched")):
-            top_package = (list(packages_business_result.get("results") or []) or [{}])[0]
-            return {
-                "reply": format_runtime_answer(_safe_str(packages_business_result.get("answer"))),
-                "route": "packages_business",
-                "source": "packages_business",
-                "matched": True,
-                "meta": {
-                    "query_type": _safe_str(packages_business_result.get("query_type")),
-                    "results_count": len(list(packages_business_result.get("results") or [])),
-                    "matched_package_id": _safe_str((top_package or {}).get("id")),
-                    "matched_package_name": _safe_str((top_package or {}).get("package_name")),
-                },
-            }
         packages_result = resolve_packages_query(raw_text, conversation_id=conversation_id)
         if bool(packages_result.get("matched")):
             return {
