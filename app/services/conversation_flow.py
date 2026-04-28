@@ -49,6 +49,12 @@ from app.services.phone_utils import detect_phone, extract_phone, is_phone_attem
 
 logger = logging.getLogger(__name__)
 
+_CTA_MARKERS = (
+    "أرسل رقم جوالك",
+    "سيتواصل معك",
+    "خدمة العملاء",
+)
+
 
 @dataclass
 class FlowResult:
@@ -63,6 +69,12 @@ class FlowResult:
     # When True the caller must NOT run the normal pipeline — the phone
     # submission already produced the complete reply.
     skip_pipeline: bool = False
+
+
+def contains_cta(text: str) -> bool:
+    if not text:
+        return False
+    return any(marker in text for marker in _CTA_MARKERS)
 
 
 # ---------------------------------------------------------------------------
@@ -275,6 +287,20 @@ def apply_flow_to_reply(
                 state_after=state_before,
             )
 
+        if contains_cta(base_reply):
+            _log(action, state_before, StateEnum.AWAITING_PHONE, note="cta_already_present")
+            store.update(
+                conversation_id,
+                state=StateEnum.AWAITING_PHONE,
+                pending_action=ConversationAction.ASK_PHONE.value,
+                pending_intent_summary=user_text[:100],
+            )
+            return FlowResult(
+                final_reply=base_reply,
+                state_before=state_before,
+                state_after=StateEnum.AWAITING_PHONE,
+            )
+
         cta = get_ask_phone_cta(decision.reason)
         store.update(
             conversation_id,
@@ -309,6 +335,13 @@ def apply_flow_to_reply(
             state=StateEnum.HUMAN_HELP_OFFERED,
             pending_intent_summary=user_text[:100],
         )
+        if contains_cta(base_reply):
+            _log(action, state_before, StateEnum.HUMAN_HELP_OFFERED, note="cta_already_present")
+            return FlowResult(
+                final_reply=base_reply,
+                state_before=state_before,
+                state_after=StateEnum.HUMAN_HELP_OFFERED,
+            )
         _log(action, state_before, StateEnum.HUMAN_HELP_OFFERED, phone_detected=False)
         return FlowResult(
             final_reply=f"{base_reply}\n\n{OFFER_HUMAN_HELP}",
@@ -337,6 +370,20 @@ def apply_flow_to_reply(
             )
 
         # Phone unknown → ask for it (urgent CTA)
+        if contains_cta(base_reply):
+            _log(action, state_before, StateEnum.AWAITING_PHONE, note="cta_already_present")
+            store.update(
+                conversation_id,
+                state=StateEnum.AWAITING_PHONE,
+                pending_action=ConversationAction.TRANSFER_TO_HUMAN.value,
+                pending_intent_summary=user_text[:100],
+            )
+            return FlowResult(
+                final_reply=base_reply,
+                state_before=state_before,
+                state_after=StateEnum.AWAITING_PHONE,
+            )
+
         cta = get_ask_phone_cta("transfer")
         store.update(
             conversation_id,

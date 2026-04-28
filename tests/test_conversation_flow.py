@@ -532,3 +532,33 @@ class TestHandleAwaitingPhoneState:
         result = apply_flow_to_reply("السعر 200 ريال.", decision, "كم السعر؟", cid)
         assert "رقم جوالك" in result.final_reply
         assert get_state_store().get(cid).state == StateEnum.AWAITING_PHONE
+
+class TestCtaDedup:
+
+    def test_price_reply_cta_once(self):
+        cid = fresh_id()
+        decision = make_decision(ConversationAction.ASK_PHONE, "phone_required:price_route")
+        base = "سعر باقة X: 199 ريال.\nإذا حاب تحجزها، أرسل رقم جوالك وبيتم التواصل معك من خدمة العملاء."
+        result = apply_flow_to_reply(base, decision, "بكم سعر باقة X", cid)
+        assert result.final_reply.count("أرسل رقم جوالك") == 1
+
+    def test_explain_package_cta_once(self):
+        cid = fresh_id()
+        decision = make_decision(ConversationAction.OFFER_HUMAN_HELP, "packages_explain")
+        base = "شرح الباقة: تشمل فحوصات أساسية.\nإذا حاب تحجزها، أرسل رقم جوالك وبيتم التواصل معك من خدمة العملاء."
+        result = apply_flow_to_reply(base, decision, "اشرح الباقة", cid)
+        assert result.final_reply.count("أرسل رقم جوالك") == 1
+
+    def test_inclusions_reply_cta_once(self):
+        cid = fresh_id()
+        decision = make_decision(ConversationAction.ASK_PHONE, "phone_required:price_route")
+        base = "تشمل الباقة:\n1) CBC\n2) Vit D\nإذا حاب تحجزها، أرسل رقم جوالك وبيتم التواصل معك من خدمة العملاء."
+        result = apply_flow_to_reply(base, decision, "ايش تشمل", cid)
+        assert result.final_reply.count("أرسل رقم جوالك") == 1
+
+    def test_followup_price_cta_once(self):
+        cid = fresh_id()
+        decision = make_decision(ConversationAction.ASK_PHONE, "phone_required:price_route")
+        base = "سعر الباقة 199 ريال.\nإذا حاب تحجزها، أرسل رقم جوالك وبيتم التواصل معك من خدمة العملاء."
+        result = apply_flow_to_reply(base, decision, "بكم", cid)
+        assert result.final_reply.count("أرسل رقم جوالك") == 1

@@ -1550,7 +1550,6 @@ def _format_package_full_details(record: dict[str, Any]) -> str:
         [
             "",
             "إذا حاب تعرف التحاليل اللي تشملها الباقة، اكتب: ايش تشمل.",
-            "وإذا حاب تحجزها، أرسل رقم جوالك وبيتم التواصل معك من خدمة العملاء.",
         ]
     )
     return "\n".join(lines)
@@ -1564,7 +1563,6 @@ def _format_package_inclusions(record: dict[str, Any], *, query_norm: str = "") 
             f"تشمل باقة {name}:\n"
             "لا توجد تفاصيل واضحة حالياً عن التحاليل المشمولة.\n\n"
             "إذا حاب تعرف أهمية هذه الباقة، أقدر أوضحها لك.\n"
-            "وإذا حاب تحجزها، أرسل رقم جوالك وبيتم التواصل معك من خدمة العملاء."
         )
 
     lines = [f"تشمل باقة {name}:"]
@@ -1574,7 +1572,6 @@ def _format_package_inclusions(record: dict[str, Any], *, query_norm: str = "") 
         [
             "",
             "إذا حاب تعرف أهمية هذه الباقة، أقدر أوضحها لك.",
-            "وإذا حاب تحجزها، أرسل رقم جوالك وبيتم التواصل معك من خدمة العملاء.",
         ]
     )
     return "\n".join(lines)
@@ -1590,7 +1587,7 @@ def _format_package_price(record: dict[str, Any]) -> str:
         body = f"سعر باقة {name}: {price_text} ريال." if "ريال" not in price_text else f"سعر باقة {name}: {price_text}."
     else:
         body = _PRICE_NOT_AVAILABLE
-    return body + "\nإذا حاب تحجزها، أرسل رقم جوالك وبيتم التواصل معك من خدمة العملاء."
+    return body
 
 
 def _format_budget_recommendation(budget: float, rows: list[dict[str, Any]]) -> str:
@@ -2428,3 +2425,4 @@ if __name__ == "__main__":
         print(f"META: {result.get('meta')}")
         print(f"ANSWER: {result.get('answer')}")
         print("-" * 72)
+
