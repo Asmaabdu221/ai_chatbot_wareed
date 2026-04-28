@@ -18,7 +18,7 @@ from app.services.runtime.tests_disambiguation import (
 )
 from app.services.runtime.tests_description_index import find_test_description_for_business_target
 from app.services.runtime.selection_state import load_selection_state
-from app.services.runtime.text_normalizer import normalize_arabic
+from app.services.runtime.text_normalizer import normalize_for_match
 
 TESTS_BUSINESS_JSONL_PATH = Path("app/data/runtime/rag/tests_business_clean.jsonl")
 logger = logging.getLogger(__name__)
@@ -116,7 +116,7 @@ def get_clean_description_for_business_test(test_name: str) -> dict[str, Any] | 
 
 
 def _norm(value: Any) -> str:
-    return normalize_arabic(_safe_str(value))
+    return normalize_for_match(_safe_str(value))
 
 
 def _as_str_list(value: Any) -> list[str]:

@@ -16,7 +16,7 @@ from app.services.runtime.tests_disambiguation import (
 )
 from app.services.runtime.tests_description_index import find_test_description_record
 from app.services.runtime.tests_business_engine import resolve_tests_business_query
-from app.services.runtime.text_normalizer import normalize_arabic
+from app.services.runtime.text_normalizer import normalize_for_match
 
 TESTS_JSONL_PATH = Path("app/data/runtime/rag/tests_clean.jsonl")
 logger = logging.getLogger(__name__)
@@ -125,7 +125,7 @@ def _safe_str(value: Any) -> str:
 
 
 def _norm(value: Any) -> str:
-    return normalize_arabic(_safe_str(value))
+    return normalize_for_match(_safe_str(value))
 
 
 def _as_list_of_str(value: Any) -> list[str]:

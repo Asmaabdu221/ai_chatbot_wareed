@@ -6,7 +6,7 @@ import logging
 import re
 from typing import Any
 
-from app.services.runtime.text_normalizer import normalize_arabic
+from app.services.runtime.text_normalizer import normalize_for_match
 
 _RESULT_INTENT_HINTS = (
     "نتيجة",
@@ -77,14 +77,14 @@ _STANDALONE_NUMBER_RE = re.compile(
 )
 logger = logging.getLogger(__name__)
 
-_RESULT_INTENT_HINTS_NORM = tuple(normalize_arabic(h) for h in _RESULT_INTENT_HINTS)
-_TEST_LIKE_HINTS_NORM = tuple(normalize_arabic(h) for h in _TEST_LIKE_HINTS)
-_NON_RESULT_BLOCK_HINTS_NORM = tuple(normalize_arabic(h) for h in _NON_RESULT_BLOCK_HINTS)
+_RESULT_INTENT_HINTS_NORM = tuple(normalize_for_match(h) for h in _RESULT_INTENT_HINTS)
+_TEST_LIKE_HINTS_NORM = tuple(normalize_for_match(h) for h in _TEST_LIKE_HINTS)
+_NON_RESULT_BLOCK_HINTS_NORM = tuple(normalize_for_match(h) for h in _NON_RESULT_BLOCK_HINTS)
 _CANONICAL_RESULT_TOKENS_NORM = {
-    normalize_arabic(v) for v in ("نتيجة", "نتيجه", "نتيجتي", "النتائج")
+    normalize_for_match(v) for v in ("نتيجة", "نتيجه", "نتيجتي", "النتائج")
 }
 _RESULT_VALUE_SIGNAL_HINTS_NORM = tuple(
-    normalize_arabic(v) for v in _RESULT_VALUE_SIGNAL_HINTS if normalize_arabic(v)
+    normalize_for_match(v) for v in _RESULT_VALUE_SIGNAL_HINTS if normalize_for_match(v)
 )
 
 
@@ -185,7 +185,7 @@ def _has_explicit_result_signal(query_norm: str, details: dict[str, float]) -> b
 
 def analyze_result_query(text: str) -> dict[str, Any]:
     raw_text = str(text or "").strip()
-    query_norm = normalize_arabic(raw_text)
+    query_norm = normalize_for_match(raw_text)
     if not query_norm:
         return {
             "query_norm": "",

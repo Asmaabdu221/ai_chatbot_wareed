@@ -30,6 +30,11 @@ _NOISE_RE = re.compile(
 
 _MULTISPACE_RE = re.compile(r"\s+")
 _TATWEEL = "ـ"
+_PUNCTUATION_RE = re.compile(r"[؟?,،\.;:!()\[\]{}\"'`“”«»…/\\|+\-_=~@#$%^&*<>]")
+_AR_LETTER_NUM_JOIN_RE = re.compile(r"(?<![\w\u0621-\u064A])([\u0621-\u064A])\s+(\d+)(?![\w\u0621-\u064A])")
+_EN_LETTER_NUM_JOIN_RE = re.compile(r"(?<!\w)([A-Za-z])\s+(\d+)(?!\w)")
+_NUM_LETTER_JOIN_RE = re.compile(r"(?<!\w)(\d+)\s+([A-Za-z])(?!\w)")
+_HBA1C_JOIN_RE = re.compile(r"\bhb\s*a1c\b", re.IGNORECASE)
 
 
 # ---------------------------------------------------------------------------
@@ -119,6 +124,60 @@ def _safe_str(value: Any) -> str:
     return str(value or "").strip()
 
 
+def normalize_digits(text: str) -> str:
+    """Normalize Arabic-Indic digits to Latin digits."""
+    value = _safe_str(text)
+    if not value:
+        return ""
+    value = value.translate(_DIGIT_MAP)
+    value = value.translate(_DIGIT_MAP_EXTENDED)
+    return value
+
+
+def normalize_punctuation(text: str) -> str:
+    """Replace punctuation/noise with spaces while keeping letters and digits."""
+    value = _safe_str(text)
+    if not value:
+        return ""
+    value = _PUNCTUATION_RE.sub(" ", value)
+    value = _NOISE_RE.sub(" ", value)
+    return _MULTISPACE_RE.sub(" ", value).strip()
+
+
+def normalize_token_joining(text: str) -> str:
+    """
+    Join medically common split alpha-numeric tokens safely:
+    - ب 12 -> ب12
+    - B 12 -> b12
+    - 12 B -> 12b
+    - Hb A1c -> hba1c
+    """
+    value = _safe_str(text)
+    if not value:
+        return ""
+    value = _HBA1C_JOIN_RE.sub("hba1c", value)
+    value = _AR_LETTER_NUM_JOIN_RE.sub(r"\1\2", value)
+    value = _EN_LETTER_NUM_JOIN_RE.sub(r"\1\2", value)
+    value = _NUM_LETTER_JOIN_RE.sub(r"\1\2", value)
+    return _MULTISPACE_RE.sub(" ", value).strip()
+
+
+def normalize_text(text: str) -> str:
+    """General normalized text pipeline for consistent matching/search."""
+    value = _safe_str(text)
+    if not value:
+        return ""
+
+    value = value.lower()
+    value = _ARABIC_DIACRITICS_RE.sub("", value)
+    value = value.replace(_TATWEEL, "")
+    value = value.translate(_CHAR_NORMALIZATION)
+    value = normalize_digits(value)
+    value = normalize_punctuation(value)
+    value = normalize_token_joining(value)
+    return _MULTISPACE_RE.sub(" ", value).strip()
+
+
 def normalize_arabic(text: str) -> str:
     """
     Normalize Arabic/Latin text into a deterministic matching-friendly form.
@@ -133,27 +192,9 @@ def normalize_arabic(text: str) -> str:
     - apply light colloquial replacements
     - collapse repeated whitespace
     """
-    value = _safe_str(text)
+    value = normalize_text(text)
     if not value:
         return ""
-
-    value = value.lower()
-
-    # Remove Arabic diacritics
-    value = _ARABIC_DIACRITICS_RE.sub("", value)
-
-    # Remove tatweel
-    value = value.replace(_TATWEEL, "")
-
-    # Normalize characters
-    value = value.translate(_CHAR_NORMALIZATION)
-
-    # Normalize digits
-    value = value.translate(_DIGIT_MAP)
-    value = value.translate(_DIGIT_MAP_EXTENDED)
-
-    # Remove punctuation / noise
-    value = _NOISE_RE.sub(" ", value)
 
     # Apply light colloquial replacements
     for old, new in _COLLOQUIAL_REPLACEMENTS:
@@ -166,6 +207,20 @@ def normalize_arabic(text: str) -> str:
     value = _MULTISPACE_RE.sub(" ", value).strip()
 
     return value
+
+
+def normalize_for_match(text: str) -> str:
+    """
+    Project-wide matcher normalization:
+    - base Arabic/Latin cleanup
+    - colloquial normalization (existing behavior)
+    - safe alpha-numeric token joining
+    """
+    value = normalize_arabic(text)
+    if not value:
+        return ""
+    value = normalize_token_joining(value)
+    return _MULTISPACE_RE.sub(" ", value).strip()
 
 
 def tokenize_arabic(text: str, remove_stopwords: bool = True) -> list[str]:

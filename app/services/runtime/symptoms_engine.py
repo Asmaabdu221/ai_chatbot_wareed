@@ -9,43 +9,43 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from app.services.runtime.text_normalizer import normalize_arabic
+from app.services.runtime.text_normalizer import normalize_for_match
 
 TESTS_JSONL_PATH = Path("app/data/runtime/rag/tests_clean.jsonl")
 logger = logging.getLogger(__name__)
 
 _CLARIFICATION_MESSAGE = "اكتب الأعراض بشكل أوضح، وأعطيك أفضل التحاليل المناسبة."
 _GENERIC_ONLY_TERMS = {
-    normalize_arabic("\u0639\u0646\u062f\u064a"),
-    normalize_arabic("\u0627\u062d\u0633"),
-    normalize_arabic("\u0623\u062d\u0633"),
-    normalize_arabic("\u0627\u0639\u0627\u0646\u064a"),
-    normalize_arabic("\u0623\u0639\u0627\u0646\u064a"),
-    normalize_arabic("\u0627\u0639\u0631\u0627\u0636"),
-    normalize_arabic("\u0623\u0639\u0631\u0627\u0636"),
-    normalize_arabic("\u0641\u064a"),
-    normalize_arabic("\u0645\u0646"),
-    normalize_arabic("\u0645\u0639"),
+    normalize_for_match("\u0639\u0646\u062f\u064a"),
+    normalize_for_match("\u0627\u062d\u0633"),
+    normalize_for_match("\u0623\u062d\u0633"),
+    normalize_for_match("\u0627\u0639\u0627\u0646\u064a"),
+    normalize_for_match("\u0623\u0639\u0627\u0646\u064a"),
+    normalize_for_match("\u0627\u0639\u0631\u0627\u0636"),
+    normalize_for_match("\u0623\u0639\u0631\u0627\u0636"),
+    normalize_for_match("\u0641\u064a"),
+    normalize_for_match("\u0645\u0646"),
+    normalize_for_match("\u0645\u0639"),
 }
 _SYMPTOM_STOPWORDS = {
-    normalize_arabic("عندي"),
-    normalize_arabic("عند"),
-    normalize_arabic("ايش"),
-    normalize_arabic("وش"),
-    normalize_arabic("اللي"),
-    normalize_arabic("تنصحني"),
-    normalize_arabic("به"),
-    normalize_arabic("في"),
-    normalize_arabic("من"),
-    normalize_arabic("مع"),
-    normalize_arabic("عن"),
-    normalize_arabic("تحليل"),
-    normalize_arabic("تحاليل"),
-    normalize_arabic("فحص"),
-    normalize_arabic("نتيجة"),
+    normalize_for_match("عندي"),
+    normalize_for_match("عند"),
+    normalize_for_match("ايش"),
+    normalize_for_match("وش"),
+    normalize_for_match("اللي"),
+    normalize_for_match("تنصحني"),
+    normalize_for_match("به"),
+    normalize_for_match("في"),
+    normalize_for_match("من"),
+    normalize_for_match("مع"),
+    normalize_for_match("عن"),
+    normalize_for_match("تحليل"),
+    normalize_for_match("تحاليل"),
+    normalize_for_match("فحص"),
+    normalize_for_match("نتيجة"),
 }
 _SYMPTOM_QUERY_HINTS = tuple(
-    normalize_arabic(v)
+    normalize_for_match(v)
     for v in (
         "\u062a\u0639\u0628",
         "\u0627\u0631\u0647\u0627\u0642",
@@ -65,7 +65,7 @@ _SYMPTOM_QUERY_HINTS = tuple(
         "\u062e\u0645\u0648\u0644",
         "\u0636\u0639\u0641 \u0639\u0627\u0645",
     )
-    if normalize_arabic(v)
+    if normalize_for_match(v)
 )
 
 
@@ -74,7 +74,7 @@ def _safe_str(value: Any) -> str:
 
 
 def _norm(value: Any) -> str:
-    return normalize_arabic(_safe_str(value))
+    return normalize_for_match(_safe_str(value))
 
 
 def _as_list_of_str(value: Any) -> list[str]:

@@ -43,8 +43,8 @@ logger = logging.getLogger(__name__)
 
 def _norm(text: str) -> str:
     try:
-        from app.services.runtime.text_normalizer import normalize_arabic
-        return normalize_arabic(text)
+        from app.services.runtime.text_normalizer import normalize_for_match
+        return normalize_for_match(text)
     except Exception:
         return text.strip()
 
@@ -244,6 +244,7 @@ _SYMPTOM_CONTEXT_KEYS = {"ايش التحاليل", "وش التحاليل", "ا
 # A message longer than this many words is likely a full new question, not a
 # short follow-up, so we skip rewriting.
 _MAX_FOLLOWUP_WORDS = 6
+_SHORT_FOLLOWUP_MAX_WORDS = 3
 
 _SYMPTOM_CONTEXT_STOPWORDS = {
     _norm(v)
@@ -260,6 +261,32 @@ def _is_clearly_new_question(text_norm: str) -> bool:
         return True
     starters = ("ابغى", "ابي", "أبغى", "أبي", "اريد", "أريد", "عندي", "عندنا")
     return len(words) >= 4 and any(s in text_norm for s in starters)
+
+
+def _detect_short_followup_intent_for_test(text_norm: str) -> str | None:
+    """
+    Generic short follow-up intent detection for test domain.
+    Returns: one of price|preparation|sample|general_info or None.
+    """
+    tokens = [t for t in text_norm.split() if t]
+    if not tokens or len(tokens) > _SHORT_FOLLOWUP_MAX_WORDS:
+        return None
+
+    price_terms = {"بكم", "كم", "السعر", "سعر", "كم سعر"}
+    prep_terms = {"صيام", "تحضير", "يحتاج صيام", "كيف التحضير"}
+    sample_terms = {"العينة", "العينه", "نوع العينة", "نوع العينه"}
+    info_terms = {"اشرح", "وش هو", "ما هو", "ماهو"}
+
+    padded = f" {text_norm} "
+    if any((term == text_norm) or (f" {term} " in padded) for term in price_terms):
+        return "price"
+    if any((term == text_norm) or (f" {term} " in padded) for term in prep_terms):
+        return "preparation"
+    if any((term == text_norm) or (f" {term} " in padded) for term in sample_terms):
+        return "sample"
+    if any((term == text_norm) or (f" {term} " in padded) for term in info_terms):
+        return "general_info"
+    return None
 
 
 def _extract_symptom_keywords(text: str) -> list[str]:
@@ -486,6 +513,32 @@ class DialogueManager:
         if _is_clearly_new_question(text_norm):
             logger.info("dialogue_manager | skipped | reason=new_or_long_question")
             return text
+
+        # Generic short follow-up rewrite for active test context.
+        if active_domain == "test":
+            short_intent = _detect_short_followup_intent_for_test(text_norm)
+            if short_intent:
+                if short_intent == "price":
+                    rewritten = f"كم سعر {active_entity}"
+                elif short_intent == "preparation":
+                    if "صيام" in text_norm:
+                        rewritten = f"هل يحتاج {active_entity} صيام"
+                    else:
+                        rewritten = f"كيف التحضير ل {active_entity}"
+                elif short_intent == "sample":
+                    rewritten = f"ما نوع عينة {active_entity}"
+                else:
+                    rewritten = f"اشرح تحليل {active_entity}"
+
+                logger.info(
+                    "dialogue_manager | followup_detected"
+                    " | active_domain=%s | original_text=%r | rewritten_text=%r | conversation_id=%.8s",
+                    active_domain,
+                    text,
+                    rewritten,
+                    str(state.get("conversation_id", ""))[:8],
+                )
+                return rewritten
 
         template: str | None = None
         entity_for_domain = active_entity
