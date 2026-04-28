@@ -16,6 +16,7 @@ from app.services.phone_utils import (
     is_phone_attempt,
     is_phone_message,
     normalize_phone,
+    normalize_saudi_mobile_phone,
     should_exit_awaiting_phone,
 )
 from app.services.conversation_state import (
@@ -59,22 +60,23 @@ def make_decision(action: ConversationAction, reason: str = "test") -> Conversat
 class TestPhoneUtils:
 
     def test_saudi_local_05(self):
-        assert extract_phone("0512345678") == "0512345678"
+        assert extract_phone("0512345678") == "+966501234567"
 
     def test_saudi_local_5(self):
-        assert extract_phone("512345678") == "512345678"
+        assert extract_phone("512345678") == "+966512345678"
 
     def test_saudi_international_plus(self):
         assert extract_phone("+966512345678") == "+966512345678"
 
     def test_saudi_international_00(self):
-        result = extract_phone("00966512345678")
-        assert result is not None
-        assert "966512345678" in result
+        assert extract_phone("00966512345678") == "+966512345678"
+
+    def test_saudi_international_009665012(self):
+        assert extract_phone("00966501234567") == "+966501234567"
 
     def test_eastern_arabic_digits(self):
         result = extract_phone("٠٥١٢٣٤٥٦٧٨")  # 05١٢٣٤٥٦٧٨ in Eastern
-        assert result is not None
+        assert result == "+966501234567"
 
     def test_too_short_rejected(self):
         assert extract_phone("12345") is None
@@ -94,8 +96,7 @@ class TestPhoneUtils:
         assert extract_phone(text) is None
 
     def test_sentence_with_embedded_phone(self):
-        # 8 tokens max → "رقمي 0512345678" has 2 tokens → passes
-        assert extract_phone("رقمي 0512345678") == "0512345678"
+        assert extract_phone("رقمي 0512345678") == "+966501234567"
 
     def test_is_phone_message_true(self):
         assert is_phone_message("0512345678") is True
@@ -109,6 +110,20 @@ class TestPhoneUtils:
     def test_normalize_eastern_plus_spaces(self):
         result = normalize_phone("+٩٦٦ ٥١٢٣٤٥٦٧٨")
         assert "966" in result
+
+    def test_normalize_saudi_mobile_phone_valid_cases(self):
+        assert normalize_saudi_mobile_phone("0501234567") == "+966501234567"
+        assert normalize_saudi_mobile_phone("501234567") == "+966501234567"
+        assert normalize_saudi_mobile_phone("+966501234567") == "+966501234567"
+        assert normalize_saudi_mobile_phone("966501234567") == "+966501234567"
+        assert normalize_saudi_mobile_phone("00966501234567") == "+966501234567"
+
+    def test_normalize_saudi_mobile_phone_invalid_cases(self):
+        assert normalize_saudi_mobile_phone("7488220588") is None
+        assert normalize_saudi_mobile_phone("578933220") is None
+        assert normalize_saudi_mobile_phone("1234567890") is None
+        assert normalize_saudi_mobile_phone("555") is None
+        assert normalize_saudi_mobile_phone("05555") is None
 
 
 # ===========================================================================
@@ -166,7 +181,7 @@ class TestProcessPhoneSubmission:
 
         assert result is not None
         assert result.phone_captured is True
-        assert result.phone == "0512345678"
+        assert result.phone == "+966501234567"
         assert result.skip_pipeline is True
         assert result.state_after == StateEnum.PHONE_RECEIVED
 
@@ -190,7 +205,7 @@ class TestProcessPhoneSubmission:
         result = process_phone_submission("0512345678", state, cid)
         assert result.lead_draft is not None
         assert isinstance(result.lead_draft, LeadDraft)
-        assert result.lead_draft.phone == "0512345678"
+        assert result.lead_draft.phone == "+966501234567"
         assert result.lead_draft.status == "ready"
 
     def test_transfer_pending_goes_to_ready_for_transfer(self):
@@ -292,7 +307,7 @@ class TestApplyFlowToReply:
 
     def test_transfer_with_phone_known_goes_to_ready(self):
         cid = fresh_id()
-        get_state_store().update(cid, phone="0512345678", state=StateEnum.IDLE)
+        get_state_store().update(cid, phone="+966501234567", state=StateEnum.IDLE)
         decision = make_decision(ConversationAction.TRANSFER_TO_HUMAN)
         result = apply_flow_to_reply("سأوصلك.", decision, "أبغى أكلم موظف", cid)
         assert result.state_after == StateEnum.READY_FOR_TRANSFER
@@ -473,6 +488,16 @@ class TestHandleAwaitingPhoneState:
         result = handle_awaiting_phone_state("12345", state, cid)
         assert result is not None
         assert result.skip_pipeline is True
+        assert get_state_store().get(cid).state == StateEnum.AWAITING_PHONE
+
+    def test_invalid_saudi_prefix_gets_strict_rewrite_prompt(self):
+        cid = fresh_id()
+        state = self._put_in_awaiting(cid)
+        result = handle_awaiting_phone_state("7488220588", state, cid)
+        assert result is not None
+        assert result.skip_pipeline is True
+        assert result.final_reply == "لو سمحت ممكن تعيد كتابة رقم الجوال بالطريقة الصحيحة؟ مثال: 05xxxxxxxx"
+        assert result.phone_captured is False
         assert get_state_store().get(cid).state == StateEnum.AWAITING_PHONE
 
     def test_soft_message_is_helpful(self):

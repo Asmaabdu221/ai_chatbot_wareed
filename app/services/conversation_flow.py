@@ -42,7 +42,6 @@ from app.services.cta_templates import (
     CONFIRM_PHONE_RECEIVED,
     CONFIRM_TRANSFER_READY,
     OFFER_HUMAN_HELP,
-    PHONE_ATTEMPT_SOFT,
     get_ask_phone_cta,
 )
 from app.services.phone_utils import detect_phone, extract_phone, is_phone_attempt, should_exit_awaiting_phone
@@ -54,6 +53,7 @@ _CTA_MARKERS = (
     "سيتواصل معك",
     "خدمة العملاء",
 )
+_STRICT_INVALID_PHONE_REPLY = "لو سمحت ممكن تعيد كتابة رقم الجوال بالطريقة الصحيحة؟ مثال: 05xxxxxxxx"
 
 
 @dataclass
@@ -188,7 +188,7 @@ def handle_awaiting_phone_state(
             conversation_id,
         )
         return FlowResult(
-            final_reply=PHONE_ATTEMPT_SOFT,
+            final_reply=_STRICT_INVALID_PHONE_REPLY,
             state_before=StateEnum.AWAITING_PHONE,
             state_after=StateEnum.AWAITING_PHONE,
             skip_pipeline=True,

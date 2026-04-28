@@ -28,7 +28,7 @@ from typing import Optional
 _EASTERN_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
 
 # Greedy pattern: optional leading +/00, then 9–13 contiguous digits
-_PHONE_RE = re.compile(r"(?<!\d)(\+?(?:00)?\d{9,13})(?!\d)")
+_PHONE_RE = re.compile(r"(?<!\d)(\+?(?:00)?\d{9,14})(?!\d)")
 
 
 def _to_western(text: str) -> str:
@@ -44,42 +44,53 @@ def _digits_only(value: str) -> str:
     return re.sub(r"\D", "", value)
 
 
-def _is_valid(normalized: str) -> bool:
-    """Return True only for well-formed mobile numbers."""
-    if not normalized:
-        return False
-    digits = _digits_only(normalized)
-    n = len(digits)
-    if not (9 <= n <= 14):
-        return False
+def normalize_saudi_mobile_phone(text: str) -> str | None:
+    """
+    Normalize Saudi mobile numbers to +9665XXXXXXXX.
 
-    # Saudi local 05XXXXXXXX (10 digits)
-    if re.fullmatch(r"05\d{8}", digits):
-        return True
+    Accepted inputs:
+      - 05XXXXXXXX
+      - 5XXXXXXXX
+      - +9665XXXXXXXX
+      - 9665XXXXXXXX
+      - 009665XXXXXXXX
+    """
+    if not text:
+        return None
+    cleaned = normalize_phone(text)
+    if not cleaned:
+        return None
 
-    # Saudi local 5XXXXXXXX (9 digits)
-    if re.fullmatch(r"5\d{8}", digits):
-        return True
+    if cleaned.startswith("+"):
+        if not re.fullmatch(r"\+9665\d{8}", cleaned):
+            return None
+        return cleaned
 
-    # Saudi international +9665XXXXXXXX (12 digits) or 009665XXXXXXXX (14 digits)
-    if re.fullmatch(r"9665\d{8}", digits):
-        return True
-    if re.fullmatch(r"009665\d{8}", digits):
-        return True
+    if not cleaned.isdigit():
+        return None
 
-    # Generic international: + prefix required, 10-14 total digits
-    if normalized.startswith("+") and 10 <= n <= 14:
-        return True
-
-    return False
+    if re.fullmatch(r"050\d{7}", cleaned):
+        return f"+966{cleaned[1:]}"
+    if re.fullmatch(r"50\d{7}", cleaned):
+        return f"+966{cleaned}"
+    if re.fullmatch(r"96650\d{7}", cleaned):
+        return f"+{cleaned}"
+    if re.fullmatch(r"0096650\d{7}", cleaned):
+        return f"+{cleaned[2:]}"
+    return None
 
 
 def detect_phone(text: str) -> str | None:
-    text = text.strip()
-    match = re.search(r'(?:\+?966|0)?5\d{8}', text)
-    if match:
-        return match.group()
+    text = _to_western(_safe_text(text))
+    for m in _PHONE_RE.finditer(text):
+        normalized = normalize_saudi_mobile_phone(m.group(1))
+        if normalized:
+            return normalized
     return None
+
+
+def _safe_text(text: str) -> str:
+    return str(text or "").strip()
 
 
 def extract_phone(text: str) -> Optional[str]:
