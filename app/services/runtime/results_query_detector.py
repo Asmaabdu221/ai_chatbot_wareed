@@ -24,6 +24,27 @@ _RESULT_INTENT_HINTS = (
     "result",
 )
 
+_RESULT_VALUE_SIGNAL_HINTS = (
+    "طلعت",
+    "منخفض",
+    "منخفضة",
+    "مرتفع",
+    "مرتفعة",
+    "طبيعي",
+    "طبيعية",
+    "abnormal",
+    "normal",
+    "low",
+    "high",
+    "ng/ml",
+    "ng ml",
+    "value",
+    "reference",
+    "range",
+    "المرجع",
+    "المدى",
+)
+
 _TEST_LIKE_HINTS = (
     "تحليل",
     "تحاليل",
@@ -62,6 +83,9 @@ _NON_RESULT_BLOCK_HINTS_NORM = tuple(normalize_arabic(h) for h in _NON_RESULT_BL
 _CANONICAL_RESULT_TOKENS_NORM = {
     normalize_arabic(v) for v in ("نتيجة", "نتيجه", "نتيجتي", "النتائج")
 }
+_RESULT_VALUE_SIGNAL_HINTS_NORM = tuple(
+    normalize_arabic(v) for v in _RESULT_VALUE_SIGNAL_HINTS if normalize_arabic(v)
+)
 
 
 def _has_number(text: str) -> bool:
@@ -197,20 +221,21 @@ def analyze_result_query(text: str) -> dict[str, Any]:
     score, details = _score_result_intent(query_norm, raw_text)
     has_number = _has_number(raw_text)
     has_test_like = any(h in query_norm for h in _TEST_LIKE_HINTS_NORM if h)
+    has_value_signal = any(h in query_norm for h in _RESULT_VALUE_SIGNAL_HINTS_NORM if h)
 
     has_explicit_result_phrase = _has_explicit_result_signal(query_norm, details)
     decision = bool(
         has_explicit_result_phrase
-        or (has_number and has_test_like and score >= 1.0)
+        or (has_number and has_test_like and has_value_signal and score >= 1.0)
         or score >= 1.6
     )
     strong_result_intent = bool(
         has_explicit_result_phrase
-        or (has_number and has_test_like and score >= 1.0 and len([w for w in query_norm.split() if w]) <= 4)
+        or (has_number and has_test_like and has_value_signal and score >= 1.0 and len([w for w in query_norm.split() if w]) <= 5)
     )
 
     logger.debug(
-        "results_detector score | query=%s | score=%.3f | details=%s | decision=%s | strong_intent=%s | has_number=%s | has_test_like=%s",
+        "results_detector score | query=%s | score=%.3f | details=%s | decision=%s | strong_intent=%s | has_number=%s | has_test_like=%s | has_value_signal=%s",
         query_norm,
         score,
         details,
@@ -218,6 +243,7 @@ def analyze_result_query(text: str) -> dict[str, Any]:
         strong_result_intent,
         has_number,
         has_test_like,
+        has_value_signal,
     )
 
     return {
@@ -228,6 +254,7 @@ def analyze_result_query(text: str) -> dict[str, Any]:
         "strong_result_intent": strong_result_intent,
         "has_number": has_number,
         "has_test_like": has_test_like,
+        "has_value_signal": has_value_signal,
         "blocked": False,
         "blockers": [],
     }
