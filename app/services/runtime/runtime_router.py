@@ -1398,6 +1398,16 @@ def _log_final_route_decision(
         _safe_str(path_stage),
         _safe_str(meta_dict.get("query_type")),
     )
+    print(
+        "DEBUG_SOURCE:",
+        _safe_str(payload.get("source")) or "unknown",
+        "| route=",
+        _safe_str(payload.get("route")) or "unknown",
+        "| matched=",
+        bool(payload.get("matched")),
+        "| stage=",
+        _safe_str(path_stage),
+    )
     return payload
 
 
@@ -2102,6 +2112,26 @@ def route_runtime_message(
                     guard_route,
                     text,
                 )
+                if guard_route == "results_confidence_guard":
+                    return _final({
+                        "reply": format_runtime_answer(guard_reply),
+                        "route": "results_interpretation",
+                        "source": "results_engine",
+                        "matched": True,
+                        "meta": {
+                            "mode": "faq_only",
+                            "confidence_guard": True,
+                            "domains_prefilter": True,
+                            "query_type": "result_interpretation",
+                            "result_clarification": True,
+                            "numeric_query": is_numeric,
+                            "branch_like_query": is_branch_like,
+                            "package_like_query": is_package_like,
+                            "tests_like_query": is_tests_like,
+                            "symptoms_like_query": is_symptoms_like,
+                            "result_detected": bool(mixed_result_signals.get("decision")),
+                        },
+                    }, "domains_prefilter_results_confidence_guard")
                 return _final({
                     "reply": format_runtime_answer(guard_reply),
                     "route": guard_route,
@@ -2241,6 +2271,24 @@ def route_runtime_message(
                 guard_route,
                 text,
             )
+            if guard_route == "results_confidence_guard":
+                return _final({
+                    "reply": format_runtime_answer(guard_reply),
+                    "route": "results_interpretation",
+                    "source": "results_engine",
+                    "matched": True,
+                    "meta": {
+                        "mode": "faq_only",
+                        "confidence_guard": True,
+                        "query_type": "result_interpretation",
+                        "result_clarification": True,
+                        "result_detected": bool(result_analysis_final.get("decision")),
+                        "tests_like_query": _looks_like_tests_query(text),
+                        "package_like_query": _looks_like_package_query(text),
+                        "branch_like_query": _looks_like_branch_query(text),
+                        "symptoms_like_query": _looks_like_symptoms_query(text),
+                    },
+                }, "faq_only_results_confidence_guard")
             return _final({
                 "reply": format_runtime_answer(guard_reply),
                 "route": guard_route,

@@ -405,6 +405,7 @@ def interpret_result_query(
     context_test_name: str | None = None,
     context_result_value: str | float | int | None = None,
 ) -> str:
+    print("DEBUG_SOURCE:", "results_engine", "| stage=interpret_result_query")
     records = load_results_records()
     if not records:
         return _NEED_MORE_INFO
