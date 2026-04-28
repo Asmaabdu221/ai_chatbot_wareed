@@ -325,6 +325,27 @@ def _extract_result_test_name(text: str) -> str | None:
     return None
 
 
+def _extract_test_name_from_user_text(text: str) -> str | None:
+    """
+    Conservative fallback when runtime_result did not return matched_test_name.
+    Only accepts short, noun-like inputs (e.g., "فيتامين ب12", "cbc").
+    """
+    raw = (text or "").strip()
+    if not raw:
+        return None
+    text_norm = _norm_for_match(raw)
+    if not text_norm:
+        return None
+    words = [w for w in text_norm.split() if w]
+    if len(words) == 0 or len(words) > 4:
+        return None
+    # Skip obvious question/follow-up intents to avoid storing whole sentences.
+    blockers = {"كم", "بكم", "السعر", "صيام", "تحضير", "العينة", "العينه", "اشرح", "وش", "ما", "هل", "متى", "وين"}
+    if any(w in blockers for w in words):
+        return None
+    return raw
+
+
 # ---------------------------------------------------------------------------
 # DialogueManager
 # ---------------------------------------------------------------------------
@@ -378,7 +399,15 @@ class DialogueManager:
         active_result_value: str | None = None
 
         if source in {"tests", "tests_business"}:
-            raw = entity_from_result or str(meta.get("matched_test_name") or "").strip()
+            raw = (
+                entity_from_result
+                or str(meta.get("matched_test_name") or "").strip()
+                or str(meta.get("test_name") or "").strip()
+                or str(meta.get("selected_test") or "").strip()
+                or str(meta.get("canonical_name_ar") or "").strip()
+            )
+            if not raw:
+                raw = _extract_test_name_from_user_text(user_text) or ""
             if raw:
                 domain = "test"
                 entity_name = raw
@@ -484,6 +513,12 @@ class DialogueManager:
 
         active_domain = str(state.get("active_domain") or "none").strip()
         active_entity = str(state.get("active_entity_name") or "").strip()
+        logger.info(
+            "dialogue_manager | state_before_followup | active_domain=%s | active_entity_name=%s | conversation_id=%.8s",
+            active_domain,
+            active_entity,
+            str(state.get("conversation_id", ""))[:8],
+        )
 
         if active_domain not in {"test", "package", "branch", "symptom", "result"}:
             logger.info("dialogue_manager | skipped | reason=no_active_domain")
