@@ -333,17 +333,40 @@ def _extract_test_name_from_user_text(text: str) -> str | None:
     raw = (text or "").strip()
     if not raw:
         return None
-    text_norm = _norm_for_match(raw)
+
+    # Remove conversational prefixes so a new standalone test name replaces
+    # previous context correctly (e.g. "طيب و فيتامين د", "و TSH").
+    candidate_raw = raw
+    prefix_re = re.compile(
+        r"^\s*(?:طيب\s+و|طيب|و|بالنسبة(?:\s+ل)?|عن)\s+",
+        flags=re.IGNORECASE,
+    )
+    for _ in range(3):
+        stripped = prefix_re.sub("", candidate_raw).strip()
+        if stripped == candidate_raw:
+            break
+        candidate_raw = stripped
+    candidate_raw = candidate_raw.strip(" -:،,.؟?")
+    if candidate_raw.lower().startswith("تحليل "):
+        candidate_raw = candidate_raw[6:].strip()
+    if not candidate_raw:
+        return None
+
+    text_norm = _norm_for_match(candidate_raw)
     if not text_norm:
         return None
     words = [w for w in text_norm.split() if w]
     if len(words) == 0 or len(words) > 4:
         return None
     # Skip obvious question/follow-up intents to avoid storing whole sentences.
-    blockers = {"كم", "بكم", "السعر", "صيام", "تحضير", "العينة", "العينه", "اشرح", "وش", "ما", "هل", "متى", "وين"}
+    blockers = {
+        "كم", "بكم", "السعر", "صيام", "تحضير", "العينة", "العينه",
+        "اشرح", "وش", "ما", "هل", "متى", "وين",
+        "طيب", "و", "بالنسبة", "عن",
+    }
     if any(w in blockers for w in words):
         return None
-    return raw
+    return candidate_raw
 
 
 # ---------------------------------------------------------------------------
@@ -481,6 +504,12 @@ class DialogueManager:
             "dialogue_manager | state_updated | domain=%s | entity=%s | conversation_id=%.8s",
             domain,
             entity_name,
+            str(conversation_id),
+        )
+        logger.info(
+            "dialogue_manager | state_after_update | active_domain=%s | active_entity_name=%s | conversation_id=%.8s",
+            str(current.get("active_domain") or ""),
+            str(current.get("active_entity_name") or ""),
             str(conversation_id),
         )
 
