@@ -8,6 +8,12 @@ import re
 _MULTISPACE_RE = re.compile(r"[ \t]+")
 _MULTILINE_RE = re.compile(r"\n{3,}")
 _PY_LIST_RE = re.compile(r"\[[^\[\]]+\]")
+_BAD_FALLBACK_PHRASES = (
+    "البيانات مجمدة ولم تحدد التفاصيل الكافية",
+    "البيانات مجمدة",
+    "لم تحدد التفاصيل الكافية",
+)
+_SAFE_CLARIFICATION = "ممكن توضح سؤالك أكثر؟ وأنا أساعدك بشكل أدق."
 
 _TERM_TRANSLATIONS = {
     "Calcium": "الكالسيوم",
@@ -105,6 +111,9 @@ def format_runtime_answer(answer: str) -> str:
     value = _replace_python_lists(value)
     value = _normalize_bullets(value)
     value = _normalize_spacing(value)
+    for bad in _BAD_FALLBACK_PHRASES:
+        if bad and bad in value:
+            return _SAFE_CLARIFICATION
     return value
 
 

@@ -355,6 +355,39 @@ _GENERAL_LAYER_DOMAIN_BLOCKERS = (
     "\u0646\u062a\u0627\u064a\u062c",
 )
 
+_FAQ_PRIORITY_HINTS = (
+    "هل",
+    "ايش",
+    "وش",
+    "ينفع",
+    "مناسب",
+    "مناسبه",
+    "للاطفال",
+    "اطفال",
+    "خدماتكم",
+    "خدمات",
+    "زيارة منزلية",
+    "زياره منزليه",
+    "الزيارات المنزلية",
+)
+_RESULT_KEYWORDS_STRICT = (
+    "نتيجة",
+    "نتيجه",
+    "result",
+    "reference range",
+    "reference",
+    "range",
+    "الطبيعي",
+    "المعدل",
+)
+_PREPARATION_HINTS = (
+    "صيام",
+    "تحضير",
+    "التحضير",
+    "قبل التحليل",
+    "قبل الفحص",
+)
+
 
 def _has_any_domain_blocker(text: str) -> bool:
     q = normalize_arabic(_safe_str(text)).lower()
@@ -403,6 +436,44 @@ def _is_general_conversation_query(text: str) -> bool:
         if q == k or _contains_boundary_phrase(q, k):
             return True
     return False
+
+
+def _normalize_router_text(text: str) -> str:
+    return re.sub(r"\s+", " ", normalize_arabic(_safe_str(text))).strip()
+
+
+def _contains_hint(text_norm: str, hint: str) -> bool:
+    h = _normalize_router_text(hint)
+    if not text_norm or not h:
+        return False
+    return text_norm == h or _contains_boundary_phrase(text_norm, h) or h in text_norm
+
+
+def _is_faq_priority_query(text: str) -> bool:
+    q = _normalize_router_text(text)
+    if not q:
+        return False
+    if _has_explicit_branch_action_anchor(q):
+        return False
+    return any(_contains_hint(q, hint) for hint in _FAQ_PRIORITY_HINTS)
+
+
+def _is_strict_results_query(text: str, analysis: dict[str, Any] | None = None) -> bool:
+    q = _normalize_router_text(text)
+    a = dict(analysis or analyze_result_query(text))
+    has_number = bool(a.get("has_number"))
+    has_test_like = bool(a.get("has_test_like"))
+    has_value_signal = bool(a.get("has_value_signal"))
+    has_keyword = any(_contains_hint(q, k) for k in _RESULT_KEYWORDS_STRICT)
+    has_pattern = bool(has_number and has_test_like)
+    # strict guard: explicit "test + number" pattern is enough (e.g., TSH 5.5),
+    # otherwise require number + result-context keyword.
+    return bool(has_pattern or (has_number and has_keyword and has_test_like))
+
+
+def _is_tests_preparation_query(text: str) -> bool:
+    q = _normalize_router_text(text)
+    return _looks_like_tests_query(q) and any(_contains_hint(q, h) for h in _PREPARATION_HINTS)
 
 
 def _is_context_followup_query(text: str, triggers: tuple[str, ...]) -> bool:
@@ -1427,6 +1498,7 @@ def route_runtime_message(
     rewritten = _resolve_reference_rewrite(text, conversation_id=conversation_id)
     if rewritten:
         text = rewritten
+    text_norm = _normalize_router_text(text)
     def _final(result: dict[str, Any], path_stage: str) -> dict[str, Any]:
         final_result = _apply_ollama_final_formatter_if_needed(result)
         return _log_final_route_decision(
@@ -1462,6 +1534,54 @@ def route_runtime_message(
                 },
             }, "general_layer_greeting")
 
+        # Priority rule: general FAQ questions should be handled by FAQ first and
+        # should not be hijacked by other deterministic domains.
+        if _is_faq_priority_query(text):
+            faq_priority_blocked = any(
+                (
+                    _looks_like_package_query(text),
+                    _is_tests_preparation_query(text),
+                    _looks_like_branch_query(text),
+                    _looks_like_symptoms_query(text),
+                    _is_strict_results_query(text),
+                )
+            )
+            if faq_priority_blocked:
+                logger.debug("faq priority skipped due strong domain intent | q=%s", text)
+            else:
+                faq_priority_result = resolve_faq(
+                    text,
+                    last_user_text=last_user_text,
+                    last_assistant_text=last_assistant_text,
+                    recent_runtime_messages=recent_runtime_messages,
+                )
+                if faq_priority_result:
+                    return _final({
+                        "reply": format_runtime_answer(_safe_str(faq_priority_result.get("answer"))),
+                        "route": "faq_only",
+                        "source": "faq",
+                        "matched": True,
+                        "meta": {
+                            "faq_id": _safe_str(faq_priority_result.get("faq_id")),
+                            "question": _safe_str(faq_priority_result.get("question")),
+                            "score": float(faq_priority_result.get("score") or 0.0),
+                            "margin": float(faq_priority_result.get("margin") or 0.0),
+                            "matched_text": _safe_str(faq_priority_result.get("matched_text")),
+                            "concepts": list(faq_priority_result.get("concepts") or []),
+                            "priority": "faq_question_first",
+                        },
+                    }, "faq_priority_early_match")
+                return _final({
+                    "reply": format_runtime_answer("ممكن توضح سؤالك أكثر؟ وأنا أساعدك بشكل أدق."),
+                    "route": "faq_only_no_match",
+                    "source": "runtime_fallback",
+                    "matched": False,
+                    "meta": {
+                        "mode": "faq_only",
+                        "priority": "faq_question_first",
+                    },
+                }, "faq_priority_early_no_match")
+
         if _is_general_conversation_query(text):
             logger.debug("runtime_router.general_layer matched | type=general_conversation | q=%s", text)
             return _final({
@@ -1487,17 +1607,16 @@ def route_runtime_message(
         is_symptoms_like = _looks_like_symptoms_query(text)
         # Mixed-query arbitration:
         # location is a secondary modifier unless there is explicit branch-action intent.
-        query_norm = normalize_arabic(text)
+        query_norm = text_norm
         is_definition_or_benefit_like = _is_definition_or_benefit_query(query_norm)
         explicit_branch_action = _has_explicit_branch_action_anchor(query_norm)
         has_location_modifier = _has_location_modifier(query_norm)
         mixed_test_cues = _has_test_intent_cues(query_norm)
         mixed_package_cues = _has_package_intent_cues(query_norm)
         mixed_result_signals = analyze_result_query(text)
+        strict_results_like = _is_strict_results_query(text, mixed_result_signals)
         mixed_result_primary = bool(
-            mixed_result_signals.get("strong_result_intent")
-            and mixed_result_signals.get("has_number")
-            and mixed_result_signals.get("has_test_like")
+            strict_results_like
         )
         if (
             not is_numeric
@@ -1640,11 +1759,11 @@ def route_runtime_message(
                     }, "context_followup_branch")
 
         result_analysis = analyze_result_query(text)
-        result_detected = bool(result_analysis.get("decision"))
+        result_detected = _is_strict_results_query(text, result_analysis)
         strong_result_intent = bool(result_analysis.get("strong_result_intent"))
         has_result_number = bool(result_analysis.get("has_number"))
         has_result_test_token = bool(result_analysis.get("has_test_like"))
-        force_results_route = bool(strong_result_intent and has_result_number and has_result_test_token)
+        force_results_route = bool(result_detected and strong_result_intent and has_result_number and has_result_test_token)
 
         if result_detected:
             if is_tests_like and not force_results_route:
@@ -1687,7 +1806,7 @@ def route_runtime_message(
                         },
                     }, "results_interpretation")
 
-        prefilter_enter = bool(is_numeric or is_branch_like or is_package_like or is_tests_like or is_symptoms_like)
+        prefilter_enter = bool(is_numeric or is_branch_like or is_package_like or is_tests_like or is_symptoms_like or result_detected)
         logger.debug(
             "domains prefilter entry check | q=%s | enter=%s | numeric=%s | branch_like=%s | package_like=%s | tests_like=%s | symptoms_like=%s",
             text,
@@ -1699,6 +1818,66 @@ def route_runtime_message(
             is_symptoms_like,
         )
         if prefilter_enter:
+            # Priority 1: explicit numeric result interpretation.
+            if result_detected and not is_branch_like and not is_package_like and not is_symptoms_like:
+                ctx_test_name, ctx_result_value = _result_context_from_dialogue_state(conversation_id)
+                result_answer = _safe_str(
+                    interpret_result_query(
+                        text,
+                        context_test_name=ctx_test_name,
+                        context_result_value=ctx_result_value,
+                    )
+                )
+                if not result_answer:
+                    result_answer = get_results_clarification_message()
+                return _final({
+                    "reply": format_runtime_answer(result_answer),
+                    "route": "results_interpretation",
+                    "source": "results_engine",
+                    "matched": True,
+                    "meta": {"query_type": "result_interpretation"},
+                }, "domains_prefilter_results_priority")
+
+            # Priority 2: FAQ-first for general questions (safe fallback).
+            if _is_faq_priority_query(text):
+                faq_priority_result = resolve_faq(
+                    text,
+                    last_user_text=last_user_text,
+                    last_assistant_text=last_assistant_text,
+                    recent_runtime_messages=recent_runtime_messages,
+                )
+                if faq_priority_result:
+                    return _final({
+                        "reply": format_runtime_answer(_safe_str(faq_priority_result.get("answer"))),
+                        "route": "faq_only",
+                        "source": "faq",
+                        "matched": True,
+                        "meta": {
+                            "faq_id": _safe_str(faq_priority_result.get("faq_id")),
+                            "question": _safe_str(faq_priority_result.get("question")),
+                            "score": float(faq_priority_result.get("score") or 0.0),
+                            "margin": float(faq_priority_result.get("margin") or 0.0),
+                            "matched_text": _safe_str(faq_priority_result.get("matched_text")),
+                            "concepts": list(faq_priority_result.get("concepts") or []),
+                            "priority": "faq_question_first",
+                        },
+                    }, "domains_prefilter_faq_priority")
+
+            # Priority 3: tests preparation.
+            if _is_tests_preparation_query(text):
+                tests_business_result = resolve_tests_business_query(
+                    text,
+                    conversation_id=conversation_id,
+                )
+                if _is_supported_tests_business_result(tests_business_result):
+                    return _final({
+                        "reply": format_runtime_answer(_safe_str(tests_business_result.get("answer"))),
+                        "route": _safe_str(tests_business_result.get("route")) or "tests_business",
+                        "source": "tests_business",
+                        "matched": True,
+                        "meta": _tests_business_meta(tests_business_result.get("meta") or {}),
+                    }, "domains_prefilter_tests_preparation_priority")
+
             # Symptom queries must be resolved before generic tests resolver to avoid irrelevant matches.
             if is_symptoms_like:
                 symptoms_result = handle_symptoms_query(text)
@@ -1734,6 +1913,18 @@ def route_runtime_message(
                             "packages_count": len(list(symptoms_result.get("packages") or [])),
                         },
                     }, "domains_prefilter_symptoms")
+
+            if is_package_like and ENABLE_PACKAGES_RUNTIME_AFTER_BRANCHES:
+                packages_result = resolve_packages_query(text, conversation_id=conversation_id)
+                if bool(packages_result.get("matched")):
+                    logger.debug("domains prefilter early return | stage=packages_match")
+                    return _final({
+                        "reply": format_runtime_answer(_safe_str(packages_result.get("answer"))),
+                        "route": _safe_str(packages_result.get("route")) or "packages",
+                        "source": "packages",
+                        "matched": True,
+                        "meta": dict(packages_result.get("meta") or {}),
+                    }, "domains_prefilter_packages")
 
             if is_numeric or is_branch_like:
                 branches_result = resolve_branches_query(text, conversation_id=conversation_id)
@@ -1786,27 +1977,6 @@ def route_runtime_message(
                                     "matched": True,
                                     "meta": _tests_meta(tests_selected.get("meta") or {}),
                                 }, "numeric_selection_tests")
-
-            if is_package_like and ENABLE_PACKAGES_RUNTIME_AFTER_BRANCHES:
-                packages_result = resolve_packages_query(text, conversation_id=conversation_id)
-                if bool(packages_result.get("matched")):
-                    logger.debug(
-                        "packages pre-faq guard matched | q=%s | numeric=%s | branch_like=%s | package_like=%s | tests_like=%s | route=%s",
-                        text,
-                        is_numeric,
-                        is_branch_like,
-                        is_package_like,
-                        is_tests_like,
-                        _safe_str(packages_result.get("route")),
-                    )
-                    logger.debug("domains prefilter early return | stage=packages_match")
-                    return _final({
-                        "reply": format_runtime_answer(_safe_str(packages_result.get("answer"))),
-                        "route": _safe_str(packages_result.get("route")) or "packages",
-                        "source": "packages",
-                        "matched": True,
-                        "meta": dict(packages_result.get("meta") or {}),
-                    }, "domains_prefilter_packages")
 
             if is_tests_like and ENABLE_TESTS_RUNTIME_AFTER_PACKAGES:
                 if not is_definition_or_benefit_like:
