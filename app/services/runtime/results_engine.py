@@ -11,8 +11,11 @@ from typing import Any
 from app.services.runtime.text_normalizer import normalize_arabic
 
 RESULTS_JSONL_PATH = Path("app/data/runtime/rag/results_clean.jsonl")
-_CONSULT_TEXT = "يرجى استشارة الطبيب، ولمزيد من المعلومات تواصل معنا."
-_NEED_MORE_INFO = "أرسل صورة التحليل أو اكتب اسم التحليل مع النتيجة والمرجع الأدنى والأعلى."
+_CONSULT_TEXT = "هذا تفسير عام فقط، ويفضل مراجعة الطبيب للتقييم الدقيق."
+_NEED_MORE_INFO = (
+    "عطيني اسم التحليل مع النتيجة وبعطيك تفسير عام لها\n"
+    "لكن خلّي في بالك إن هذا مجرد إرشاد عام وما يغني عن مراجعة الطبيب."
+)
 _GENERIC_WORDS = ("نتيجتي", "نتيجة", "النتيجة", "تحليل", "فحص", "test", "result")
 _ALIAS_NOISE_HINTS = ("باقة", "باقه", "package", "offer", "عرض")
 _GENERIC_WORDS_NORM = {normalize_arabic(w) for w in _GENERIC_WORDS}
@@ -236,9 +239,9 @@ def _match_record(query: str, records: list[dict[str, Any]]) -> dict[str, Any] |
 
 def _classify_by_range(value: float, min_v: float | None, max_v: float | None) -> str | None:
     if min_v is not None and value < min_v:
-        return "أقل من المستوى الطبيعي"
+        return "منخفض"
     if max_v is not None and value > max_v:
-        return "فوق المستوى الطبيعي"
+        return "مرتفع"
     if min_v is not None or max_v is not None:
         return "ضمن الطبيعي"
     return None
@@ -266,15 +269,15 @@ def _classify_by_rules(value: float, rules: list[Any]) -> str | None:
             continue
 
         if op == "<=":
-            return "ضمن الطبيعي" if value <= threshold else "فوق المستوى الطبيعي"
+            return "ضمن الطبيعي" if value <= threshold else "مرتفع"
         if op == "<":
-            return "ضمن الطبيعي" if value < threshold else "فوق المستوى الطبيعي"
+            return "ضمن الطبيعي" if value < threshold else "مرتفع"
         if op == ">=":
-            return "ضمن الطبيعي" if value >= threshold else "أقل من المستوى الطبيعي"
+            return "ضمن الطبيعي" if value >= threshold else "منخفض"
         if op == ">":
-            return "ضمن الطبيعي" if value > threshold else "أقل من المستوى الطبيعي"
+            return "ضمن الطبيعي" if value > threshold else "منخفض"
         if op in {"=", "=="}:
-            return "ضمن الطبيعي" if value == threshold else ("فوق المستوى الطبيعي" if value > threshold else "أقل من المستوى الطبيعي")
+            return "ضمن الطبيعي" if value == threshold else ("مرتفع" if value > threshold else "منخفض")
 
     return None
 
@@ -313,7 +316,7 @@ def _map_rule_to_verdict(rule: dict[str, Any]) -> str | None:
     text = f"{status} {label}".strip()
 
     if "below_normal" in text or "deficien" in text or "insuff" in text or "sever" in text:
-        return "أقل من المستوى الطبيعي"
+        return "منخفض"
     if "normal" in text or "sufficient" in text:
         return "ضمن الطبيعي"
     if (
@@ -324,7 +327,7 @@ def _map_rule_to_verdict(rule: dict[str, Any]) -> str | None:
         or "prediabetic" in text
         or "diabetic" in text
     ):
-        return "فوق المستوى الطبيعي"
+        return "مرتفع"
     return None
 
 
@@ -366,7 +369,7 @@ def _map_qualitative_to_verdict(token: str) -> str | None:
     if t in {"negative", "non_reactive", "normal"}:
         return "ضمن الطبيعي"
     if t in {"positive", "reactive", "abnormal"}:
-        return "فوق المستوى الطبيعي"
+        return "مرتفع"
     return None
 
 

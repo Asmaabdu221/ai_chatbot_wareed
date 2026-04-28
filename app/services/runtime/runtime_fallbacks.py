@@ -66,7 +66,10 @@ def get_symptoms_clarification_message() -> str:
 
 def get_results_clarification_message() -> str:
     """Return clarification when result query misses test name/value."""
-    return "عشان أقدر أفسر لك النتيجة بشكل أدق، ممكن تكتب اسم التحليل والنتيجة اللي طالعة عندك (مع الرينج إذا متوفر)."
+    return (
+        "عطيني اسم التحليل مع النتيجة وبعطيك تفسير عام لها\n"
+        "لكن خلّي في بالك إن هذا مجرد إرشاد عام وما يغني عن مراجعة الطبيب."
+    )
 
 
 def get_packages_clarification_message() -> str:
