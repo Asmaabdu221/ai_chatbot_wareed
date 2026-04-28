@@ -101,6 +101,21 @@ class TestPhoneUtils:
     def test_is_phone_message_true(self):
         assert is_phone_message("0512345678") is True
 
+    def test_spaced_phone_detected(self):
+        assert extract_phone("053 705 6688") == "+966537056688"
+
+    def test_dashed_phone_detected(self):
+        assert extract_phone("053-705-6688") == "+966537056688"
+
+    def test_plus_spaced_international_detected(self):
+        assert extract_phone("+966 537 056 688") == "+966537056688"
+
+    def test_text_with_embedded_phone_detected(self):
+        assert extract_phone("هذا رقمي 0537056688") == "+966537056688"
+
+    def test_eastern_digits_detected_requested_case(self):
+        assert extract_phone("٠٥٣٧٠٥٦٦٨٨") == "+966537056688"
+
     def test_is_phone_message_false(self):
         assert is_phone_message("أبغى أعرف الفروع") is False
 

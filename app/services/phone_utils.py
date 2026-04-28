@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 _EASTERN_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
 
 # Greedy pattern: optional leading +/00, then 9–13 contiguous digits
-_PHONE_RE = re.compile(r"(?<!\d)(\+?(?:00)?\d{9,14})(?!\d)")
+_PHONE_CANDIDATE_RE = re.compile(r"(?<!\d)(\+?\d[\d\s\-\(\)\.]{7,20}\d)(?!\d)")
 
 
 def _to_western(text: str) -> str:
@@ -99,11 +99,30 @@ def normalize_saudi_mobile_phone(text: str) -> str | None:
 
 
 def detect_phone(text: str) -> str | None:
-    text = _to_western(_safe_text(text))
-    for m in _PHONE_RE.finditer(text):
-        normalized = normalize_saudi_mobile_phone(m.group(1))
+    raw_input = _safe_text(text)
+    western_input = _to_western(raw_input)
+
+    for m in _PHONE_CANDIDATE_RE.finditer(western_input):
+        detected_number = _safe_text(m.group(1))
+        cleaned_input = normalize_phone(detected_number)
+        normalized = normalize_saudi_mobile_phone(detected_number)
+        logger.info(
+            "phone_utils.detect | raw_input=%r | cleaned_input=%s | detected_number=%s | normalized_number=%s",
+            raw_input,
+            cleaned_input,
+            detected_number,
+            normalized or "",
+        )
         if normalized:
             return normalized
+
+    logger.info(
+        "phone_utils.detect | raw_input=%r | cleaned_input=%s | detected_number=%s | normalized_number=%s",
+        raw_input,
+        normalize_phone(western_input),
+        "",
+        "",
+    )
     return None
 
 
