@@ -21,8 +21,11 @@ Rejection rules
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 # Eastern Arabic → Western Arabic
 _EASTERN_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
@@ -55,29 +58,44 @@ def normalize_saudi_mobile_phone(text: str) -> str | None:
       - 9665XXXXXXXX
       - 009665XXXXXXXX
     """
-    if not text:
+    raw_input = _safe_text(text)
+    if not raw_input:
+        logger.info("phone_utils | raw_input=%r | normalized_phone=%s | valid=%s", raw_input, "", False)
         return None
-    cleaned = normalize_phone(text)
+
+    cleaned = normalize_phone(raw_input)
     if not cleaned:
+        logger.info("phone_utils | raw_input=%r | normalized_phone=%s | valid=%s", raw_input, "", False)
         return None
+
+    normalized: str | None = None
 
     if cleaned.startswith("+"):
-        if not re.fullmatch(r"\+9665\d{8}", cleaned):
-            return None
-        return cleaned
+        if re.fullmatch(r"\+9665[0345689]\d{7}", cleaned):
+            normalized = cleaned
+    elif cleaned.isdigit():
+        if re.fullmatch(r"05[0345689]\d{7}", cleaned):
+            normalized = f"+966{cleaned[1:]}"
+        elif re.fullmatch(r"5[0345689]\d{7}", cleaned):
+            normalized = f"+966{cleaned}"
+        elif re.fullmatch(r"9665[0345689]\d{7}", cleaned):
+            normalized = f"+{cleaned}"
+        elif re.fullmatch(r"009665[0345689]\d{7}", cleaned):
+            normalized = f"+{cleaned[2:]}"
 
-    if not cleaned.isdigit():
-        return None
-
-    if re.fullmatch(r"050\d{7}", cleaned):
-        return f"+966{cleaned[1:]}"
-    if re.fullmatch(r"50\d{7}", cleaned):
-        return f"+966{cleaned}"
-    if re.fullmatch(r"96650\d{7}", cleaned):
-        return f"+{cleaned}"
-    if re.fullmatch(r"0096650\d{7}", cleaned):
-        return f"+{cleaned[2:]}"
-    return None
+    is_valid = bool(
+        normalized
+        and normalized.startswith("+9665")
+        and len(normalized) == 13
+        and re.fullmatch(r"\+966\d+", normalized)
+    )
+    logger.info(
+        "phone_utils | raw_input=%r | normalized_phone=%s | valid=%s",
+        raw_input,
+        normalized or "",
+        is_valid,
+    )
+    return normalized if is_valid else None
 
 
 def detect_phone(text: str) -> str | None:

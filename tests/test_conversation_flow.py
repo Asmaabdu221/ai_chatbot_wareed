@@ -113,9 +113,13 @@ class TestPhoneUtils:
 
     def test_normalize_saudi_mobile_phone_valid_cases(self):
         assert normalize_saudi_mobile_phone("0501234567") == "+966501234567"
+        assert normalize_saudi_mobile_phone("0537059911") == "+966537059911"
         assert normalize_saudi_mobile_phone("501234567") == "+966501234567"
+        assert normalize_saudi_mobile_phone("537059911") == "+966537059911"
         assert normalize_saudi_mobile_phone("+966501234567") == "+966501234567"
+        assert normalize_saudi_mobile_phone("+966537059911") == "+966537059911"
         assert normalize_saudi_mobile_phone("966501234567") == "+966501234567"
+        assert normalize_saudi_mobile_phone("966537059911") == "+966537059911"
         assert normalize_saudi_mobile_phone("00966501234567") == "+966501234567"
 
     def test_normalize_saudi_mobile_phone_invalid_cases(self):
