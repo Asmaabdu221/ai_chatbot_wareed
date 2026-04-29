@@ -5,10 +5,12 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import gc
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from app.services.runtime.semantic_model_pool import get_shared_sentence_transformer
 from app.services.runtime.unified_normalizer import get_wareed_normalizer
 
 logger = logging.getLogger(__name__)
@@ -103,7 +105,6 @@ class TestsSemanticSearch:
         self._initialized = True
         try:
             import chromadb  # type: ignore
-            from sentence_transformers import SentenceTransformer  # type: ignore
         except Exception as exc:
             self._available = False
             self._reason = f"deps_missing:{exc.__class__.__name__}"
@@ -117,7 +118,7 @@ class TestsSemanticSearch:
                 name=CHROMA_COLLECTION_NAME,
                 metadata={"hnsw:space": "cosine"},
             )
-            self._model = SentenceTransformer(DEFAULT_EMBED_MODEL)
+            self._model = get_shared_sentence_transformer(DEFAULT_EMBED_MODEL)
             self._available = True
             self._reason = ""
         except Exception as exc:
@@ -166,10 +167,13 @@ class TestsSemanticSearch:
                 }
             )
 
-        embeddings = self._model.encode(docs, normalize_embeddings=True).tolist()
-        self._collection.delete(where={})
-        self._collection.add(ids=ids, documents=docs, metadatas=metas, embeddings=embeddings)
-        self._collection.modify(metadata={"hnsw:space": "cosine", "tests_fingerprint": fingerprint})
+        try:
+            embeddings = self._model.encode(docs, normalize_embeddings=True).tolist()
+            self._collection.delete(where={})
+            self._collection.add(ids=ids, documents=docs, metadatas=metas, embeddings=embeddings)
+            self._collection.modify(metadata={"hnsw:space": "cosine", "tests_fingerprint": fingerprint})
+        finally:
+            gc.collect()
 
     def query(
         self,
@@ -240,4 +244,3 @@ def search_tests(query: str, records: list[dict[str, Any]], limit: int = 3) -> l
             }
         )
     return out
-
