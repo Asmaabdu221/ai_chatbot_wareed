@@ -6,7 +6,7 @@ import logging
 import re
 from typing import Any
 
-from app.services.runtime.text_normalizer import normalize_for_match
+from app.services.runtime.unified_normalizer import get_wareed_normalizer
 
 _RESULT_INTENT_HINTS = (
     "نتيجة",
@@ -94,6 +94,8 @@ _STANDALONE_NUMBER_RE = re.compile(
     r"(?<![A-Za-z\u0621-\u063A\u0641-\u064A])[-+]?\d+(?:[.,]\d+)?(?![A-Za-z\u0621-\u063A\u0641-\u064A])"
 )
 logger = logging.getLogger(__name__)
+_NORMALIZER = get_wareed_normalizer()
+normalize_for_match = _NORMALIZER.normalize
 
 _RESULT_INTENT_HINTS_NORM = tuple(normalize_for_match(h) for h in _RESULT_INTENT_HINTS)
 _TEST_LIKE_HINTS_NORM = tuple(normalize_for_match(h) for h in _TEST_LIKE_HINTS)

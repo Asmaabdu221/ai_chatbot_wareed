@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import re
 from typing import Any
+import warnings
+
+from app.services.runtime.unified_normalizer import get_wareed_normalizer
 
 
 # ---------------------------------------------------------------------------
@@ -192,21 +195,12 @@ def normalize_arabic(text: str) -> str:
     - apply light colloquial replacements
     - collapse repeated whitespace
     """
-    value = normalize_text(text)
-    if not value:
-        return ""
-
-    # Apply light colloquial replacements
-    for old, new in _COLLOQUIAL_REPLACEMENTS:
-        old_n = _safe_str(old)
-        new_n = _safe_str(new)
-        if old_n and old_n in value:
-            value = value.replace(old_n, new_n)
-
-    # Collapse whitespace
-    value = _MULTISPACE_RE.sub(" ", value).strip()
-
-    return value
+    warnings.warn(
+        "normalize_arabic() is deprecated. Use WareedNormalizer.normalize() from unified_normalizer.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return get_wareed_normalizer().normalize(text)
 
 
 def normalize_for_match(text: str) -> str:
@@ -216,11 +210,15 @@ def normalize_for_match(text: str) -> str:
     - colloquial normalization (existing behavior)
     - safe alpha-numeric token joining
     """
-    value = normalize_arabic(text)
+    warnings.warn(
+        "normalize_for_match() is deprecated. Use WareedNormalizer.normalize() from unified_normalizer.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    value = get_wareed_normalizer().normalize(text)
     if not value:
         return ""
-    value = normalize_token_joining(value)
-    return _MULTISPACE_RE.sub(" ", value).strip()
+    return normalize_token_joining(value)
 
 
 def tokenize_arabic(text: str, remove_stopwords: bool = True) -> list[str]:

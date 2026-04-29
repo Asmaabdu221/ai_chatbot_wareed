@@ -33,8 +33,10 @@ from typing import Any
 from uuid import UUID
 
 from app.services.dialogue_state import get_dialogue_state, set_dialogue_state
+from app.services.runtime.unified_normalizer import get_wareed_normalizer
 
 logger = logging.getLogger(__name__)
+_NORMALIZER = get_wareed_normalizer()
 
 
 # ---------------------------------------------------------------------------
@@ -42,11 +44,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 def _norm(text: str) -> str:
-    try:
-        from app.services.runtime.text_normalizer import normalize_for_match
-        return normalize_for_match(text)
-    except Exception:
-        return text.strip()
+    return _NORMALIZER.normalize(text)
 
 
 def _norm_for_match(text: str) -> str:

@@ -15,9 +15,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from app.core.runtime_paths import TESTS_CHUNKS_PATH, path_exists
-from app.utils.arabic_normalizer import normalize_for_matching
+from app.services.runtime.unified_normalizer import get_wareed_normalizer
 
 logger = logging.getLogger(__name__)
+_NORMALIZER = get_wareed_normalizer()
+normalize_for_matching = _NORMALIZER.normalize
 
 # Paths
 RAG_KNOWLEDGE_PATH = os.path.join(os.path.dirname(__file__), "rag_knowledge_base.json")
@@ -846,27 +848,8 @@ def _contains_arabic(text: str) -> bool:
 
 
 def _safe_normalize_for_matching(text: str) -> str:
-    """
-    Fast, safe normalization for retrieval.
-    Uses a local normalization path to avoid runtime stalls in legacy normalizers.
-    """
-    raw = (text or "").strip()
-    if not raw:
-        return ""
-    t = raw.lower()
-    if _contains_arabic(t):
-        t = re.sub(r"[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED]", "", t)
-        t = re.sub(r"[\u0622\u0623\u0625\u0671]", "\u0627", t)
-        t = re.sub(r"[\u0649\u064A]", "\u064A", t)
-        t = re.sub(r"\u0640", "", t)
-    else:
-        try:
-            return normalize_for_matching(t)
-        except Exception:
-            pass
-    t = re.sub(r"[^\w\s\u0600-\u06FF]", " ", t)
-    t = re.sub(r"\s+", " ", t)
-    return t.strip()
+    """Unified normalizer bridge for retrieval/indexing paths."""
+    return _NORMALIZER.normalize(text or "")
 
 
 def identify_test_concept(query_norm: str) -> Dict[str, Any]:

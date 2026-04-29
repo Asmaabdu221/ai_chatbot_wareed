@@ -1,4 +1,4 @@
-﻿"""
+"""
 Message business logic and AI integration.
 Ownership enforced via conversation belonging to user.
 AI logic isolated here (OpenAI or other providers).
@@ -40,13 +40,11 @@ from app.data.rag_pipeline import (
 )
 from app.core.config import settings
 from app.core.runtime_paths import FAQ_CLEAN_PATH, TESTS_PRICE_INDEX_PATH, path_exists
-from app.utils.arabic_normalizer import normalize_for_matching
 from app.utils.gender_tone import apply_gender_variant, guess_gender, safe_clarify_message
 from app.services.report_parser_service import parse_lab_report_text, compose_report_summary, is_report_explanation_request
 from app.services.response_fallback_service import sanitize_for_ui, compose_context_fallback
 from app.data.style_pipeline import search_style_examples
 from app.services.context_cache import get_context_cache
-from app.utils.text_normalize import normalize_text
 from app.data.branches_service import (
     get_available_cities,
     find_branches_by_city,
@@ -67,8 +65,10 @@ from app.services.message_runtime_orchestrator import (
     run_message_runtime_orchestration,
 )
 from app.services.runtime.runtime_router import route_runtime_message
+from app.services.runtime.unified_normalizer import get_wareed_normalizer
 
 logger = logging.getLogger(__name__)
+_WAREED_NORMALIZER = get_wareed_normalizer()
 
 # ============================================================================
 # constants/config
@@ -264,25 +264,7 @@ def load_runtime_synonyms():
 
 
 def normalize_text_ar(s: str) -> str:
-    value = str(s or "").strip().lower()
-    if not value:
-        return ""
-    value = re.sub(r"[\u064B-\u065F\u0670\u0640]", "", value)
-    value = (
-        value.replace("أ", "ا")
-        .replace("إ", "ا")
-        .replace("آ", "ا")
-        .replace("ى", "ي")
-        .replace("ة", "ه")
-        .replace("Ø£", "Ø§")
-        .replace("Ø¥", "Ø§")
-        .replace("Ø¢", "Ø§")
-        .replace("Ù‰", "ÙŠ")
-        .replace("Ø©", "Ù‡")
-    )
-    value = re.sub(r"[^\w\s\u0600-\u06FF]", " ", value)
-    value = re.sub(r"\s+", " ", value).strip()
-    return value
+    return _WAREED_NORMALIZER.normalize(s)
 
 
 _FAQ_SEMANTIC_CONFIDENCE_THRESHOLD = 0.60
@@ -371,7 +353,7 @@ def _faq_semantic_similarity(query_norm: str, candidate_norm: str) -> float:
 
 
 def _slugify_faq_intent_text(text: str) -> str:
-    n = normalize_text_ar(text)
+    n = _WAREED_NORMALIZER.normalize(text)
     tokens = [t for t in n.split() if t and t not in _FAQ_INTENT_STOPWORDS]
     if not tokens:
         return "general"
@@ -387,7 +369,7 @@ def _build_faq_intent_name(item: dict) -> str:
 def _expand_faq_paraphrases(base_texts: list[str]) -> list[str]:
     variants: set[str] = set()
     for raw in base_texts:
-        n = normalize_text_ar(raw)
+        n = _WAREED_NORMALIZER.normalize(raw)
         if not n:
             continue
         variants.add(n)
@@ -399,8 +381,8 @@ def _expand_faq_paraphrases(base_texts: list[str]) -> list[str]:
             variants.add(" ".join(core_tokens[:8]))
             variants.add(" ".join(core_tokens))
         for src, dst in _FAQ_PARAPHRASE_REPLACEMENTS:
-            src_n = normalize_text_ar(src)
-            dst_n = normalize_text_ar(dst)
+            src_n = _WAREED_NORMALIZER.normalize(src)
+            dst_n = _WAREED_NORMALIZER.normalize(dst)
             if src_n and dst_n and src_n in n:
                 variants.add(re.sub(re.escape(src_n), dst_n, n))
 
@@ -446,8 +428,8 @@ def _build_faq_semantic_router() -> dict[str, dict]:
         intent_name = _build_faq_intent_name(item)
         paraphrases = _expand_faq_paraphrases([question, q_norm, answer])
         if q_norm:
-            paraphrases.append(normalize_text_ar(q_norm))
-        paraphrases.append(normalize_text_ar(question))
+            paraphrases.append(_WAREED_NORMALIZER.normalize(q_norm))
+        paraphrases.append(_WAREED_NORMALIZER.normalize(question))
 
         intent_record = {
             "intent_name": intent_name,
@@ -465,7 +447,7 @@ def _build_faq_semantic_router() -> dict[str, dict]:
 
 
 def _classify_faq_semantic_intent(query: str) -> dict | None:
-    n = normalize_text_ar(query)
+    n = _WAREED_NORMALIZER.normalize(query)
     if len(n) < _FAQ_ROUTE_MIN_QUERY_CHARS:
         return None
 
@@ -531,7 +513,7 @@ def _expand_faq_query_aliases(query_norm: str) -> list[str]:
     Expand common user FAQ phrasings into canonical dataset-like forms.
     This stays intentionally narrow to avoid broad FAQ hijacking.
     """
-    base = normalize_text_ar(query_norm)
+    base = _WAREED_NORMALIZER.normalize(query_norm)
     if not base:
         return []
 
@@ -550,8 +532,8 @@ def _expand_faq_query_aliases(query_norm: str) -> list[str]:
     ]
 
     for raw_src, raw_dst in alias_pairs:
-        src = normalize_text_ar(raw_src)
-        dst = normalize_text_ar(raw_dst)
+        src = _WAREED_NORMALIZER.normalize(raw_src)
+        dst = _WAREED_NORMALIZER.normalize(raw_dst)
         if not src or not dst:
             continue
         current = list(variants)
@@ -593,7 +575,7 @@ def _runtime_faq_lookup_by_intent(intent: str) -> dict | None:
     matched = dict(canonical)
     matched["_match_method"] = "faq_semantic_intent"
     matched["_match_score"] = 1.0
-    matched["_matched_q_norm"] = normalize_text_ar(matched.get("q_norm") or matched.get("question") or "")
+    matched["_matched_q_norm"] = _WAREED_NORMALIZER.normalize(matched.get("q_norm") or matched.get("question") or "")
     matched["_faq_intent"] = intent_key
     return matched
 
@@ -605,7 +587,7 @@ def _recognize_faq_class_intent(query: str) -> str | None:
     intent = _detect_faq_intent(query)
     if intent == "not_faq":
         return None
-    n = normalize_text_ar(query)
+    n = _WAREED_NORMALIZER.normalize(query)
     if any(t in n for t in {"منزل", "بيت", "سحب العينات", "زيارات منزلية"}):
         return "home_visit"
     if any(t in n for t in {"نتيجة", "نتائج", "واتساب", "الكترونيا", "اونلاين"}):
@@ -635,7 +617,7 @@ def _runtime_faq_lookup_by_class_intent(intent: str) -> dict | None:
     best: tuple[int, str] | None = None
     for intent_name, rec in intents.items():
         item = rec.get("item") or {}
-        text = normalize_text_ar(f"{item.get('q_norm') or ''} {item.get('question') or ''}")
+        text = _WAREED_NORMALIZER.normalize(f"{item.get('q_norm') or ''} {item.get('question') or ''}")
         score = sum(1 for h in hints if h and h in text)
         if score > 0 and (best is None or score > best[0]):
             best = (score, intent_name)
@@ -713,7 +695,7 @@ def _render_faq_answer_for_query(query: str, answer: str, faq_meta: dict | None 
     if not rendered:
         return ""
 
-    n = normalize_text_ar(query)
+    n = _WAREED_NORMALIZER.normalize(query)
     intent = str((faq_meta or {}).get("_faq_intent") or "").strip() or _detect_faq_intent(query)
     faq_id = str((faq_meta or {}).get("id") or "").strip()
     privacy_intent = ("privacy" in intent) or faq_id in {"faq::13", "faq::14"}
@@ -793,7 +775,7 @@ def _faq_hijack_guard_reason(query: str) -> str | None:
 
 
 def expand_query_with_synonyms(text: str) -> str:
-    query_norm = normalize_text_ar(text)
+    query_norm = _WAREED_NORMALIZER.normalize(text)
     if not query_norm:
         return ""
 
@@ -805,7 +787,7 @@ def expand_query_with_synonyms(text: str) -> str:
     seen = {query_norm}
 
     def _add_term(term: str) -> None:
-        n = normalize_text_ar(term)
+        n = _WAREED_NORMALIZER.normalize(term)
         if not n or n in seen:
             return
         seen.add(n)
@@ -814,7 +796,7 @@ def expand_query_with_synonyms(text: str) -> str:
     def _match_aliases(aliases: list[str], display: str = "") -> None:
         matched = []
         for alias in aliases:
-            a = normalize_text_ar(alias)
+            a = _WAREED_NORMALIZER.normalize(alias)
             if not a:
                 continue
             if a in query_norm or query_norm in a:
@@ -857,7 +839,7 @@ def expand_query_with_synonyms(text: str) -> str:
 
 
 def _runtime_faq_lookup(query: str) -> dict | None:
-    query_norm = normalize_text_ar(query)
+    query_norm = _WAREED_NORMALIZER.normalize(query)
     if not query_norm:
         return None
     guard_reason = _faq_hijack_guard_reason(query)
@@ -879,8 +861,8 @@ def _runtime_faq_lookup(query: str) -> dict | None:
         if not isinstance(item, dict):
             continue
         for candidate_norm in (
-            normalize_text_ar(item.get("q_norm") or ""),
-            normalize_text_ar(item.get("question") or ""),
+            _WAREED_NORMALIZER.normalize(item.get("q_norm") or ""),
+            _WAREED_NORMALIZER.normalize(item.get("question") or ""),
         ):
             if candidate_norm and candidate_norm == query_norm:
                 matched = dict(item)
@@ -895,7 +877,7 @@ def _runtime_faq_lookup(query: str) -> dict | None:
 
 
 def extract_price_query_candidate(text: str) -> str:
-    normalized = normalize_text_ar(text)
+    normalized = _WAREED_NORMALIZER.normalize(text)
     if not normalized:
         return ""
     # Remove query fillers to keep only the core test phrase/code.
@@ -949,7 +931,7 @@ def build_price_aliases(record: dict) -> list[str]:
             if part:
                 derived.add(part)
 
-        norm_words = normalize_text_ar(cleaned).split()
+        norm_words = _WAREED_NORMALIZER.normalize(cleaned).split()
         for token in norm_words:
             if token.isdigit() or len(token) > 3:
                 derived.add(token)
@@ -970,7 +952,7 @@ def build_price_aliases(record: dict) -> list[str]:
 
 
 def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
-    query_norm = normalize_text_ar(query)
+    query_norm = _WAREED_NORMALIZER.normalize(query)
     if not query_norm:
         return None
 
@@ -987,7 +969,7 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
         price_items = []
 
     def _cap_terms(text: str, max_terms: int, max_chars: int) -> str:
-        n = normalize_text_ar(text)
+        n = _WAREED_NORMALIZER.normalize(text)
         if not n:
             return ""
         kept: list[str] = []
@@ -1021,7 +1003,7 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
         return out
 
     candidate_raw = extract_price_query_candidate(query)
-    candidate_norm_seed = normalize_text_ar(candidate_raw)
+    candidate_norm_seed = _WAREED_NORMALIZER.normalize(candidate_raw)
     candidate_tokens = candidate_norm_seed.split()
     is_broad_ar_seed = bool(candidate_norm_seed) and not re.search(r"[a-z0-9]", candidate_norm_seed) and len(candidate_tokens) <= 3
     use_candidate_seed = bool(candidate_norm_seed)
@@ -1033,7 +1015,7 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
     ):
         use_candidate_seed = False
     base_price_query = candidate_raw if use_candidate_seed else query
-    expansion_seed = candidate_norm_seed or normalize_text_ar(base_price_query)
+    expansion_seed = candidate_norm_seed or _WAREED_NORMALIZER.normalize(base_price_query)
 
     syn_full = expand_query_with_synonyms(expansion_seed) or expansion_seed
     expanded_syn_query = _cap_terms(syn_full, max_terms=14, max_chars=180)
@@ -1047,12 +1029,12 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
         expanded_query = _cap_relative(expanded_test_query, concept_full, max_extra_terms=8, max_chars=260)
 
     expanded_candidate_raw = extract_price_query_candidate(expanded_query)
-    candidate_norm = normalize_text_ar(candidate_raw)
-    expanded_candidate_norm = normalize_text_ar(expanded_candidate_raw)
+    candidate_norm = _WAREED_NORMALIZER.normalize(candidate_raw)
+    expanded_candidate_norm = _WAREED_NORMALIZER.normalize(expanded_candidate_raw)
     if not candidate_norm:
         candidate_norm = expanded_candidate_norm or query_norm
 
-    concept_query_seed = candidate_norm_seed or normalize_text_ar(base_price_query)
+    concept_query_seed = candidate_norm_seed or _WAREED_NORMALIZER.normalize(base_price_query)
     concept_matches = rag_collect_concept_matches(concept_query_seed, max_matches=8)
     concept_related_tests: list[str] = []
     concept_related_norm: list[str] = []
@@ -1061,7 +1043,7 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
         related = (m.get("related_tests") or []) if isinstance(m, dict) else []
         for rt in related:
             rt_s = str(rt or "").strip()
-            rt_n = normalize_text_ar(rt_s)
+            rt_n = _WAREED_NORMALIZER.normalize(rt_s)
             if not rt_n or rt_n in seen_related:
                 continue
             seen_related.add(rt_n)
@@ -1088,14 +1070,14 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
         if m_score + 0.02 < top_direct_score:
             continue
         m_type = str(m.get("match_type") or "")
-        display_n = normalize_text_ar(m.get("display_name") or "")
+        display_n = _WAREED_NORMALIZER.normalize(m.get("display_name") or "")
         if display_n and m_score >= 0.9:
             direct_name_terms.add(display_n)
-        key_n = normalize_text_ar(m.get("key") or "")
+        key_n = _WAREED_NORMALIZER.normalize(m.get("key") or "")
         if key_n and m_score >= 0.9:
             direct_name_terms.add(key_n)
         for mt in (m.get("matched_terms") or [])[:4]:
-            mt_n = normalize_text_ar(str(mt))
+            mt_n = _WAREED_NORMALIZER.normalize(str(mt))
             if mt_n:
                 if m_type in {"exact_alias", "abbreviation_or_code"} and m_score >= 0.9:
                     direct_alias_terms.add(mt_n)
@@ -1131,11 +1113,11 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
     candidate_len = len(candidate_norm)
     query_code_tokens: set[str] = set()
     for tok in re.findall(r"\b[A-Za-z]{2,10}\d{0,3}[A-Za-z]{0,3}\d{0,2}\b", query or ""):
-        t = normalize_text_ar(tok)
+        t = _WAREED_NORMALIZER.normalize(tok)
         if t:
             query_code_tokens.add(t)
     for tok in re.findall(r"\b[A-Za-z]{2,10}\d{0,3}[A-Za-z]{0,3}\d{0,2}\b", expanded_query or ""):
-        t = normalize_text_ar(tok)
+        t = _WAREED_NORMALIZER.normalize(tok)
         if t:
             query_code_tokens.add(t)
 
@@ -1185,7 +1167,7 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
         aliases = build_price_aliases(item)
         alias_norms: list[str] = []
         for alias in aliases:
-            alias_n = normalize_text_ar(alias)
+            alias_n = _WAREED_NORMALIZER.normalize(alias)
             if alias_n:
                 alias_norms.append(alias_n)
         alias_norms = list(dict.fromkeys(alias_norms))
@@ -1201,11 +1183,11 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
 
         normalized_names: list[str] = []
         for key in ("name_ar", "canonical_name_clean", "name_en", "canonical_name"):
-            val = normalize_text_ar(item.get(key) or "")
+            val = _WAREED_NORMALIZER.normalize(item.get(key) or "")
             if val:
                 normalized_names.append(val)
         normalized_names = list(dict.fromkeys(normalized_names))
-        code_norm = normalize_text_ar(str(item.get("code") or ""))
+        code_norm = _WAREED_NORMALIZER.normalize(str(item.get("code") or ""))
         return filtered_aliases, normalized_names, code_norm
 
     # Fast direct abbreviation mode: prefer exact alias/name/code and return quickly.
@@ -1257,14 +1239,14 @@ def _runtime_price_lookup_reply(query: str, gender: str) -> str | None:
                     print("PATH=runtime_price no_match")
                     print("PRICE_MATCH_DEBUG", _debug_payload(None, 0))
                     return None
-                code_norm = normalize_text_ar(str(item.get("code") or ""))
+                code_norm = _WAREED_NORMALIZER.normalize(str(item.get("code") or ""))
                 normalized_names = []
                 for key in ("name_ar", "canonical_name_clean", "name_en", "canonical_name"):
-                    val = normalize_text_ar(item.get(key) or "")
+                    val = _WAREED_NORMALIZER.normalize(item.get(key) or "")
                     if val:
                         normalized_names.append(val)
                 for key_item in (item.get("keys") or []):
-                    kn = normalize_text_ar(str(key_item))
+                    kn = _WAREED_NORMALIZER.normalize(str(key_item))
                     if kn:
                         normalized_names.append(kn)
                 normalized_names = list(dict.fromkeys(normalized_names))
@@ -1721,7 +1703,7 @@ def _runtime_tests_rag_reply(question: str, expanded_query: str, history: list |
 
 
 def _normalize_light(text: str) -> str:
-    value = normalize_text(text)
+    value = _WAREED_NORMALIZER.normalize(text)
     if not value:
         return ""
     value = re.sub(r"[^\w\s\u0600-\u06FF]", " ", value)
@@ -3363,7 +3345,7 @@ def _direct_kb_faq_answer(question: str, intent: str) -> str | None:
 
 
 def _symptom_guidance(question: str) -> str:
-    n = normalize_for_matching(question or "")
+    n = _WAREED_NORMALIZER.normalize(question or "")
     picks = ["CBC", "Ferritin", "TSH", "Vitamin D (25 OH-Vit D -Total)"]
     if "Ø³ÙƒØ±" in n or "Ø¯ÙˆØ®Ù‡" in n:
         picks.append("HbA1c")
@@ -3719,3 +3701,5 @@ def send_message_with_attachment(
         faq_only_runtime_mode=FAQ_ONLY_RUNTIME_MODE,
         deps=orchestration_deps,
     )
+
+

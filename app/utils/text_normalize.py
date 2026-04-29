@@ -4,11 +4,10 @@ Shared text normalization helpers for Arabic-first routing and slot extraction.
 
 from __future__ import annotations
 
-import re
+import warnings
 
-_ARABIC_INDIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
-_EASTERN_ARABIC_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹", "0123456789")
-_TASHKEEL_RE = re.compile(r"[\u064B-\u065F\u0670\u0640]")
+from app.services.runtime.unified_normalizer import get_wareed_normalizer
+
 
 
 def normalize_text(text: str | None) -> str:
@@ -23,14 +22,10 @@ def normalize_text(text: str | None) -> str:
     - Arabic digits -> Latin digits
     - collapse spaces
     """
-    value = (text or "").strip().lower()
-    if not value:
-        return ""
-
-    value = _TASHKEEL_RE.sub("", value)
-    value = value.translate(_ARABIC_INDIC_DIGITS).translate(_EASTERN_ARABIC_DIGITS)
-    value = value.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
-    value = value.replace("ى", "ي").replace("ؤ", "و").replace("ئ", "ي").replace("ة", "ه")
-    value = re.sub(r"\s+", " ", value)
-    return value.strip()
-
+    warnings.warn(
+        "app.utils.text_normalize.normalize_text() is deprecated. "
+        "Use WareedNormalizer.normalize() from unified_normalizer.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return get_wareed_normalizer().normalize(text or "")

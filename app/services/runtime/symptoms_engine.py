@@ -9,10 +9,12 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from app.services.runtime.text_normalizer import normalize_for_match
+from app.services.runtime.unified_normalizer import get_wareed_normalizer
 
 TESTS_JSONL_PATH = Path("app/data/runtime/rag/tests_clean.jsonl")
 logger = logging.getLogger(__name__)
+_NORMALIZER = get_wareed_normalizer()
+normalize_for_match = _NORMALIZER.normalize
 
 _CLARIFICATION_MESSAGE = (
     "\u0625\u0630\u0627 \u0645\u0645\u0643\u0646 \u062a\u0634\u0631\u062d \u0644\u064a "

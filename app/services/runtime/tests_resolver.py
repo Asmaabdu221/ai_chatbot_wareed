@@ -16,10 +16,11 @@ from app.services.runtime.tests_disambiguation import (
 )
 from app.services.runtime.tests_description_index import find_test_description_record
 from app.services.runtime.tests_business_engine import resolve_tests_business_query
-from app.services.runtime.text_normalizer import normalize_for_match
+from app.services.runtime.unified_normalizer import get_wareed_normalizer
 
 TESTS_JSONL_PATH = Path("app/data/runtime/rag/tests_clean.jsonl")
 logger = logging.getLogger(__name__)
+_NORMALIZER = get_wareed_normalizer()
 
 _GENERAL_HINTS = (
     "تحاليل",
@@ -122,8 +123,12 @@ def _safe_str(value: Any) -> str:
     return str(value or "").strip()
 
 
+def _debug_text(value: Any) -> str:
+    return _safe_str(value).encode("unicode_escape").decode("ascii")
+
+
 def _norm(value: Any) -> str:
-    return normalize_for_match(_safe_str(value))
+    return _NORMALIZER.normalize(_safe_str(value))
 
 
 def _as_list_of_str(value: Any) -> list[str]:
@@ -616,7 +621,10 @@ def resolve_tests_query(user_text: str, conversation_id: UUID | None = None) -> 
     """Resolve test queries deterministically from runtime tests dataset."""
     query = _safe_str(user_text)
     query_norm = _norm(query)
+    print("QUERY:", _debug_text(query))
+    print("NORMALIZED:", _debug_text(query_norm))
     if not query_norm:
+        print("MATCHED_TEST:", None)
         return {
             "matched": False,
             "answer": "",
@@ -642,6 +650,17 @@ def resolve_tests_query(user_text: str, conversation_id: UUID | None = None) -> 
     sample_type_like = _is_sample_type_query(query_norm)
     price_like = _is_price_query(query_norm)
     specific_match, specific_score = _find_specific_test(query_norm, records)
+    print(
+        "MATCHED_TEST:",
+        (
+            _debug_text(
+                _safe_str((specific_match or {}).get("title"))
+                or _safe_str((specific_match or {}).get("test_name_ar"))
+            )
+            if specific_match
+            else None
+        ),
+    )
     general_only = _is_general_only_query(query_norm)
 
     # Fallback alignment for standalone test price queries when business route is not selected upstream.

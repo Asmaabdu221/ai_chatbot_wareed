@@ -22,9 +22,11 @@ import pandas as pd
 from rapidfuzz import fuzz
 from rapidfuzz.distance import Levenshtein
 
-from app.utils.arabic_normalizer import normalize_for_matching
+from app.services.runtime.unified_normalizer import get_wareed_normalizer
 
 logger = logging.getLogger(__name__)
+_NORMALIZER = get_wareed_normalizer()
+normalize_for_matching = _NORMALIZER.normalize
 
 # Single source of truth
 ANALYSIS_FILE_PATH = os.path.join(
