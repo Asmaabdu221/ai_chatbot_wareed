@@ -16,6 +16,7 @@ from app.services.runtime.tests_disambiguation import (
 )
 from app.services.runtime.tests_description_index import find_test_description_record
 from app.services.runtime.tests_business_engine import resolve_tests_business_query
+from app.services.runtime.tests_semantic_search import search_tests
 from app.services.runtime.unified_normalizer import get_wareed_normalizer
 
 TESTS_JSONL_PATH = Path("app/data/runtime/rag/tests_clean.jsonl")
@@ -117,6 +118,7 @@ _PREPARATION_NOT_AVAILABLE_REPLY = (
     "تفاصيل التحضير لهذا التحليل غير واضحة بشكل كافٍ في البيانات الحالية."
 )
 _DEFINITION_NOT_FOUND_REPLY = "\u0645\u0627 \u0639\u0646\u062f\u064a \u0648\u0635\u0641 \u0648\u0627\u0636\u062d \u0644\u0647\u0630\u0627 \u0627\u0644\u062a\u062d\u0644\u064a\u0644 \u0641\u064a \u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u062d\u0627\u0644\u064a\u0629."
+_SEMANTIC_ACCEPT_THRESHOLD = 0.75
 
 
 def _safe_str(value: Any) -> str:
@@ -650,6 +652,7 @@ def resolve_tests_query(user_text: str, conversation_id: UUID | None = None) -> 
     sample_type_like = _is_sample_type_query(query_norm)
     price_like = _is_price_query(query_norm)
     specific_match, specific_score = _find_specific_test(query_norm, records)
+    matched_via = "lexical"
     print(
         "MATCHED_TEST:",
         (
@@ -662,6 +665,33 @@ def resolve_tests_query(user_text: str, conversation_id: UUID | None = None) -> 
         ),
     )
     general_only = _is_general_only_query(query_norm)
+
+    # Hybrid fallback path:
+    # If deterministic match is weak/absent and intent is specific-test-like,
+    # try semantic retrieval with strict acceptance gate.
+    if specific_match is None and not general_only and not general_like:
+        semantic_candidates = search_tests(query, records, limit=3)
+        if semantic_candidates:
+            top = semantic_candidates[0]
+            top_score = float(top.get("score") or 0.0)
+            if top_score > _SEMANTIC_ACCEPT_THRESHOLD:
+                semantic_record = top.get("record") or {}
+                if isinstance(semantic_record, dict):
+                    specific_match = semantic_record
+                    specific_score = top_score
+                    matched_via = "semantic"
+                    logger.debug(
+                        "tests_resolver hybrid semantic_accept | score=%.3f | threshold=%.2f | test_id=%s",
+                        top_score,
+                        _SEMANTIC_ACCEPT_THRESHOLD,
+                        _safe_str(semantic_record.get("id")),
+                    )
+            else:
+                logger.debug(
+                    "tests_resolver hybrid semantic_reject | score=%.3f | threshold=%.2f",
+                    top_score,
+                    _SEMANTIC_ACCEPT_THRESHOLD,
+                )
 
     # Fallback alignment for standalone test price queries when business route is not selected upstream.
     if price_like:
@@ -799,6 +829,7 @@ def resolve_tests_query(user_text: str, conversation_id: UUID | None = None) -> 
                 "matched_test_id": _safe_str(specific_match.get("id")),
                 "matched_test_name": _safe_str(specific_match.get("title")) or _safe_str(specific_match.get("test_name_ar")),
                 "score": specific_score,
+                "matched_via": matched_via,
             },
         }
 

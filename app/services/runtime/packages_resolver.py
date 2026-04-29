@@ -25,12 +25,14 @@ from typing import Any
 from uuid import UUID
 
 from app.services.runtime.entity_memory import load_entity_memory
+from app.services.runtime.packages_semantic_search import search_packages
 from app.services.runtime.selection_state import load_selection_state, save_selection_state
 from app.services.runtime.text_normalizer import normalize_arabic
 from app.services.dialogue_state import get_dialogue_state
 
 PACKAGES_JSONL_PATH = Path("app/data/runtime/rag/packages_clean.jsonl")
 logger = logging.getLogger(__name__)
+_SEMANTIC_ACCEPT_THRESHOLD = 0.75
 
 _GENERAL_HINTS = (
     "باقات",
@@ -1947,9 +1949,33 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
             },
         }
     specific_match = _find_specific_package(query, records)
+    matched_via = "lexical"
     direct_name_match = _find_specific_package_by_name_pass(query, records)
     if direct_name_match is not None:
         specific_match = direct_name_match
+        matched_via = "lexical"
+    if specific_match is None:
+        semantic_candidates = search_packages(query, records, limit=3)
+        if semantic_candidates:
+            top = semantic_candidates[0]
+            top_score = float(top.get("score") or 0.0)
+            if top_score > _SEMANTIC_ACCEPT_THRESHOLD:
+                semantic_record = top.get("record") or {}
+                if isinstance(semantic_record, dict):
+                    specific_match = semantic_record
+                    matched_via = "semantic"
+                    logger.debug(
+                        "packages_resolver hybrid semantic_accept | score=%.3f | threshold=%.2f | package_id=%s",
+                        top_score,
+                        _SEMANTIC_ACCEPT_THRESHOLD,
+                        _safe_str(semantic_record.get("id")),
+                    )
+            else:
+                logger.debug(
+                    "packages_resolver hybrid semantic_reject | score=%.3f | threshold=%.2f",
+                    top_score,
+                    _SEMANTIC_ACCEPT_THRESHOLD,
+                )
     ambiguous_candidates = _find_ambiguous_package_candidates(query, records)
     has_package_keyword = any(k in query_norm for k in ("باقة", "باقه", "package"))
     strong_specific_like = specific_match is not None and (
@@ -2079,6 +2105,7 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
                         "query_type": "package_best_for_query",
                         "matched_package_id": package_id,
                         "matched_package_name": _safe_str(specific_match.get("package_name")),
+                        "matched_via": matched_via,
                     },
                 }
             return {
@@ -2091,6 +2118,7 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
                     "matched_package_name": _safe_str(specific_match.get("package_name")),
                     "category": _safe_str(specific_match.get("main_category")),
                     "price_available": isinstance(specific_match.get("price_number"), (int, float)),
+                    "matched_via": matched_via,
                 },
             }
         if inclusion_query:
@@ -2103,6 +2131,7 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
                     "matched_package_id": package_id,
                     "matched_package_name": _safe_str(specific_match.get("package_name")),
                     "category": _safe_str(specific_match.get("main_category")),
+                    "matched_via": matched_via,
                 },
             }
         if detail_query:
@@ -2115,6 +2144,7 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
                     "matched_package_id": package_id,
                     "matched_package_name": _safe_str(specific_match.get("package_name")),
                     "category": _safe_str(specific_match.get("main_category")),
+                    "matched_via": matched_via,
                 },
             }
         if best_for_context:
@@ -2127,6 +2157,7 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
                     "matched_package_id": package_id,
                     "matched_package_name": _safe_str(specific_match.get("package_name")),
                     "category": _safe_str(specific_match.get("main_category")),
+                    "matched_via": matched_via,
                 },
             }
         return {
@@ -2138,6 +2169,7 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
                 "matched_package_id": package_id,
                 "matched_package_name": _safe_str(specific_match.get("package_name")),
                 "category": _safe_str(specific_match.get("main_category")),
+                "matched_via": matched_via,
             },
         }
 
@@ -2243,6 +2275,7 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
                     "query_type": "package_best_for_query",
                     "matched_package_id": package_id,
                     "matched_package_name": _safe_str(specific_match.get("package_name")),
+                    "matched_via": matched_via,
                 },
             }
         return {
@@ -2255,6 +2288,7 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
                 "matched_package_name": _safe_str(specific_match.get("package_name")),
                 "category": _safe_str(specific_match.get("main_category")),
                 "price_available": isinstance(specific_match.get("price_number"), (int, float)),
+                "matched_via": matched_via,
             },
         }
 
@@ -2269,6 +2303,7 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
                 "matched_package_id": package_id,
                 "matched_package_name": _safe_str(specific_match.get("package_name")),
                 "category": _safe_str(specific_match.get("main_category")),
+                "matched_via": matched_via,
             },
         }
 
@@ -2313,6 +2348,7 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
                     "matched_package_id": package_id,
                     "matched_package_name": _safe_str(specific_match.get("package_name")),
                     "category": _safe_str(specific_match.get("main_category")),
+                    "matched_via": matched_via,
                 },
             }
         if best_for_context and detail_query:
@@ -2325,6 +2361,7 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
                     "matched_package_id": package_id,
                     "matched_package_name": _safe_str(specific_match.get("package_name")),
                     "category": _safe_str(specific_match.get("main_category")),
+                    "matched_via": matched_via,
                 },
             }
         if detail_query:
@@ -2337,6 +2374,7 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
                     "matched_package_id": package_id,
                     "matched_package_name": _safe_str(specific_match.get("package_name")),
                     "category": _safe_str(specific_match.get("main_category")),
+                    "matched_via": matched_via,
                 },
             }
         return {
@@ -2348,6 +2386,7 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
                 "matched_package_id": package_id,
                 "matched_package_name": _safe_str(specific_match.get("package_name")),
                 "category": _safe_str(specific_match.get("main_category")),
+                "matched_via": matched_via,
             },
         }
 
