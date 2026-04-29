@@ -6,6 +6,7 @@ import hashlib
 import json
 import logging
 import gc
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -90,6 +91,8 @@ class TestsSemanticSearch:
         self._collection = None
         self._model = None
         self._initialized = False
+        self._build_lock = threading.Lock()
+        self._building = False
 
     @property
     def available(self) -> bool:
@@ -126,29 +129,9 @@ class TestsSemanticSearch:
             self._reason = f"init_failed:{exc.__class__.__name__}"
             logger.warning("tests_semantic_search init failed | reason=%s", self._reason)
 
-    def build_or_refresh(self, records: list[dict[str, Any]]) -> None:
-        self.initialize()
-        if not self._available:
-            return
+    def _build_or_refresh_sync(self, clean_records: list[dict[str, Any]], fingerprint: str) -> None:
         assert self._collection is not None
         assert self._model is not None
-
-        clean_records = [r for r in records if isinstance(r, dict) and _safe_str(r.get("id"))]
-        if not clean_records:
-            return
-
-        fingerprint = _records_fingerprint(clean_records)
-        count = int(self._collection.count() or 0)
-        expected = len(clean_records)
-        try:
-            meta = self._collection.metadata or {}
-            stored_fp = _safe_str(meta.get("tests_fingerprint"))
-        except Exception:
-            stored_fp = ""
-
-        if count == expected and stored_fp == fingerprint:
-            return
-
         ids: list[str] = []
         docs: list[str] = []
         metas: list[dict[str, Any]] = []
@@ -175,6 +158,51 @@ class TestsSemanticSearch:
         finally:
             gc.collect()
 
+    def _run_background_build(self, clean_records: list[dict[str, Any]], fingerprint: str) -> None:
+        try:
+            self._build_or_refresh_sync(clean_records, fingerprint)
+        except Exception as exc:
+            logger.warning("tests semantic background build failed | reason=%s", exc.__class__.__name__)
+        finally:
+            with self._build_lock:
+                self._building = False
+
+    def build_or_refresh(self, records: list[dict[str, Any]]) -> None:
+        self.initialize()
+        if not self._available:
+            return
+        assert self._collection is not None
+
+        clean_records = [r for r in records if isinstance(r, dict) and _safe_str(r.get("id"))]
+        if not clean_records:
+            return
+
+        fingerprint = _records_fingerprint(clean_records)
+        count = int(self._collection.count() or 0)
+        expected = len(clean_records)
+        try:
+            meta = self._collection.metadata or {}
+            stored_fp = _safe_str(meta.get("tests_fingerprint"))
+        except Exception:
+            stored_fp = ""
+
+        if count == expected and stored_fp == fingerprint:
+            return
+
+        with self._build_lock:
+            if self._building:
+                return
+            self._building = True
+
+        logger.info("Background semantic indexing started...")
+        thread = threading.Thread(
+            target=self._run_background_build,
+            args=(clean_records, fingerprint),
+            daemon=True,
+            name="tests-semantic-index-build",
+        )
+        thread.start()
+
     def query(
         self,
         text: str,
@@ -191,13 +219,18 @@ class TestsSemanticSearch:
         query_text = _safe_str(text)
         if not query_text:
             return []
+        if int(self._collection.count() or 0) <= 0:
+            return []
 
-        query_embedding = self._model.encode([query_text], normalize_embeddings=True).tolist()
-        raw = self._collection.query(
-            query_embeddings=query_embedding,
-            n_results=max(1, int(top_k)),
-            include=["metadatas", "distances"],
-        )
+        try:
+            query_embedding = self._model.encode([query_text], normalize_embeddings=True).tolist()
+            raw = self._collection.query(
+                query_embeddings=query_embedding,
+                n_results=max(1, int(top_k)),
+                include=["metadatas", "distances"],
+            )
+        except Exception:
+            return []
 
         out: list[TestSemanticCandidate] = []
         ids = (raw.get("ids") or [[]])[0]
