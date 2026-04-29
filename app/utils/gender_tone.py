@@ -72,7 +72,7 @@ def safe_clarify_message(contact_phone: str, gender: str = "unknown") -> str:
 
 
 if __name__ == "__main__":
-    phone = "920003694"
+    phone = "8001221220"
     print("male:", safe_clarify_message(phone, "male"))
     print("female:", safe_clarify_message(phone, "female"))
     print("unknown:", safe_clarify_message(phone, "unknown"))

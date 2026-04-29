@@ -13,6 +13,7 @@ from uuid import UUID
 from app.services.runtime.entity_memory import load_entity_memory
 from app.services.runtime.selection_state import load_selection_state, save_selection_state
 from app.services.runtime.text_normalizer import normalize_arabic
+from app.config.constants import PHONE_NUMBER
 
 _PRIMARY_BRANCHES_PATH = Path("app/data/runtime/rag/branches_clean.jsonl")
 _NORMALIZED_BRANCHES_PATH = Path("app/data/runtime/rag/branches_with_coordinates.jsonl")
@@ -755,7 +756,7 @@ def _format_selected_branch_reply(record: dict[str, Any]) -> str:
         lines.append(f"\u0627\u0644\u0645\u0648\u0642\u0639: {location_url}")
     if show_hours:
         lines.append(f"\u0633\u0627\u0639\u0627\u062a \u0627\u0644\u0639\u0645\u0644: {hours}")
-    lines.append("\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062a\u0641: 8001221220")
+    lines.append(f"\u0631\u0642\u0645 \u0627\u0644\u0647\u0627\u062a\u0641: {PHONE_NUMBER}")
     return _normalize_reply_text("\n".join(lines))
 
 

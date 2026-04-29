@@ -6,6 +6,7 @@ Handles all interactions with OpenAI API for Arabic medical chatbot responses
 import logging
 from typing import Optional, Dict, Any
 from app.core.config import settings
+from app.config.constants import PHONE_NUMBER
 
 try:
     from openai import OpenAI, OpenAIError
@@ -69,7 +70,7 @@ class OpenAIService:
 - إذا كتب المستخدم بالإنجليزية: أجب بالعربية أيضًا ما لم يطلب غير ذلك صراحة.
 
 === قواعد صارمة ===
-- عرض الأسعار معطّل. أي سؤال عن السعر/التكلفة: أعد فقط "للاستفسار عن الأسعار تقدر تتواصل معنا على الرقم: 920003694"
+- عرض الأسعار معطّل. أي سؤال عن السعر/التكلفة: أعد فقط "للاستفسار عن الأسعار تقدر تتواصل معنا على الرقم: 8001221220"
 - لا تستخدم معرفة خارج النتائج المسترجعة. لا تفسر طبياً. لا تشخص. لا تنصح علاجياً.
 - لا تخترع تحاليلاً أو أسعاراً.
 
@@ -89,6 +90,8 @@ class OpenAIService:
 
 === عند عدم وجود أي معلومة مناسبة ===
 قل: عذراً، لا تتوفر لدي معلومات عن ذلك حالياً."""
+
+        base_prompt = base_prompt.replace("8001221220", PHONE_NUMBER)
 
         if knowledge_context:
             base_prompt += f"\n\n=== النتائج المسترجعة (استخدمها فقط - لا تضيف شيئاً من خارجها) ===\n{knowledge_context}"

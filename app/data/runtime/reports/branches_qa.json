@@ -27,7 +27,7 @@
       "hours": "٢٤ ساعة",
       "raw_text": "الفرع الرئيسي - النرجس ٢٤ ساعة",
       "map_url": "https://maps.app.goo.gl/7RKTqwjUksjCMvsN6",
-      "contact_phone": "920003694"
+      "contact_phone": "8001221220"
     },
     {
       "source": "branches",
@@ -36,7 +36,7 @@
       "hours": "٢٤ ساعة",
       "raw_text": "فرع قرطبة ٢٤ ساعة",
       "map_url": "https://maps.app.goo.gl/48SuTJcnHjN27LMcA",
-      "contact_phone": "920003694"
+      "contact_phone": "8001221220"
     },
     {
       "source": "branches",
@@ -45,7 +45,7 @@
       "hours": "٢٤ ساعة",
       "raw_text": "فرع الروضة ٢٤ ساعة",
       "map_url": "https://maps.app.goo.gl/FXyn23sBjoCC3boi8",
-      "contact_phone": "920003694"
+      "contact_phone": "8001221220"
     }
   ],
   "sample_chunks": [
@@ -58,7 +58,7 @@
         "branch_name": "الفرع الرئيسي - النرجس",
         "hours": "٢٤ ساعة",
         "map_url": "https://maps.app.goo.gl/7RKTqwjUksjCMvsN6",
-        "contact_phone": "920003694"
+        "contact_phone": "8001221220"
       }
     },
     {
@@ -70,7 +70,7 @@
         "branch_name": "فرع قرطبة",
         "hours": "٢٤ ساعة",
         "map_url": "https://maps.app.goo.gl/48SuTJcnHjN27LMcA",
-        "contact_phone": "920003694"
+        "contact_phone": "8001221220"
       }
     },
     {
@@ -82,7 +82,7 @@
         "branch_name": "فرع الروضة",
         "hours": "٢٤ ساعة",
         "map_url": "https://maps.app.goo.gl/FXyn23sBjoCC3boi8",
-        "contact_phone": "920003694"
+        "contact_phone": "8001221220"
       }
     }
   ]

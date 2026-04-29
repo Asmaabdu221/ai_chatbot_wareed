@@ -66,6 +66,7 @@ from app.services.message_runtime_orchestrator import (
 )
 from app.services.runtime.runtime_router import route_runtime_message
 from app.services.runtime.unified_normalizer import get_wareed_normalizer
+from app.config.constants import PHONE_NUMBER
 
 logger = logging.getLogger(__name__)
 _WAREED_NORMALIZER = get_wareed_normalizer()
@@ -74,7 +75,7 @@ _WAREED_NORMALIZER = get_wareed_normalizer()
 # constants/config
 # ============================================================================
 
-WAREED_CUSTOMER_SERVICE_PHONE = "920003694"
+WAREED_CUSTOMER_SERVICE_PHONE = PHONE_NUMBER
 
 # Full runtime reset mode: disable all knowledge/routing logic while rebuilding.
 SYSTEM_REBUILD_MODE = False
@@ -1788,7 +1789,7 @@ def _is_working_hours_query(text: str) -> bool:
 
 
 def _working_hours_deterministic_reply() -> str:
-    return "Ø³Ø§Ø¹Ø§Øª Ø§Ù„Ø¯ÙˆØ§Ù…: 24 Ø³Ø§Ø¹Ø© ÙŠÙˆÙ…ÙŠØ§Ù‹.\nÙˆÙ…ØªÙˆÙØ± Ø£ÙŠØ¶Ø§Ù‹ Ø§Ù„Ø³Ø­Ø¨ Ø§Ù„Ù…Ù†Ø²Ù„ÙŠ Ù„Ù„Ø­Ø¬Ø²: 920003694"
+    return "Ø³Ø§Ø¹Ø§Øª Ø§Ù„Ø¯ÙˆØ§Ù…: 24 Ø³Ø§Ø¹Ø© ÙŠÙˆÙ…ÙŠØ§Ù‹.\nÙˆÙ…ØªÙˆÙØ± Ø£ÙŠØ¶Ø§Ù‹ Ø§Ù„Ø³Ø­Ø¨ Ø§Ù„Ù…Ù†Ø²Ù„ÙŠ Ù„Ù„Ø­Ø¬Ø²: 8001221220"
 
 
 def _is_general_price_query(text: str) -> bool:
@@ -2551,7 +2552,7 @@ def _resolve_services_branches_home_visit_start_reply(
     _save_state(conversation_id, _start_flow("branch_flow"))
     return (
         "ÙŠÙ‚Ø¯Ù… Ù…Ø®ØªØ¨Ø± ÙˆØ±ÙŠØ¯ Ø®Ø¯Ù…Ø§Øª Ø§Ù„ØªØ­Ø§Ù„ÙŠÙ„ Ø§Ù„Ù…Ø®Ø¨Ø±ÙŠØ©ØŒ ÙˆØ¨Ø§Ù‚Ø§Øª Ø§Ù„ÙØ­ÙˆØµØ§ØªØŒ ÙˆØ®Ø¯Ù…Ø© Ø§Ù„Ø³Ø­Ø¨ Ø§Ù„Ù…Ù†Ø²Ù„ÙŠ.\n"
-        "Ù„Ù„Ø§Ø³ØªÙØ³Ø§Ø± Ø£Ùˆ Ø§Ù„Ø­Ø¬Ø²: 920003694\n"
+        "Ù„Ù„Ø§Ø³ØªÙØ³Ø§Ø± Ø£Ùˆ Ø§Ù„Ø­Ø¬Ø²: 8001221220\n"
         "ÙˆØ¥Ø°Ø§ Ø­Ø§Ø¨ ØªØ¹Ø±Ù Ø§Ù„ÙØ±Ø¹ Ø§Ù„Ø£Ù‚Ø±Ø¨ Ù„ÙƒØŒ Ø§ÙƒØªØ¨ Ø§Ø³Ù… Ø§Ù„Ù…Ø¯ÙŠÙ†Ø© (Ù…Ø«Ø§Ù„: Ø§Ù„Ø±ÙŠØ§Ø¶ / Ø¬Ø¯Ø©) Ø£Ùˆ Ø§Ù„Ù…Ø¯ÙŠÙ†Ø© + Ø§Ù„Ø­ÙŠ."
     )
 

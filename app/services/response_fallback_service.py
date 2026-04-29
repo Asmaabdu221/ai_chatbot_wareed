@@ -3,6 +3,7 @@ Fallback response helpers for non-LLM flows.
 """
 
 import re
+from app.config.constants import PHONE_NUMBER
 
 
 def sanitize_for_ui(text: str) -> str:
@@ -39,9 +40,9 @@ def compose_context_fallback(
         pass
 
     if intent in {"branches_locations", "working_hours", "contact_support", "home_visit"}:
-        return "حالياً ما عندنا تفاصيل كافية عن الفرع المطلوب. تقدر/تقدرين تتواصل معنا على 920003694 ونخدمك فوراً."
+        return f"حالياً ما عندنا تفاصيل كافية عن الفرع المطلوب. تقدر/تقدرين تتواصل معنا على {PHONE_NUMBER} ونخدمك فوراً."
     if intent in {"pricing_inquiry", "packages_inquiry", "offers_discounts"}:
-        return "للاستفسار عن الأسعار والباقات الحالية تقدر/تقدرين تتواصل معنا على 920003694."
+        return f"للاستفسار عن الأسعار والباقات الحالية تقدر/تقدرين تتواصل معنا على {PHONE_NUMBER}."
     if slots.get("analysis_name"):
-        return f"حالياً ما عندنا تفاصيل كافية عن تحليل {slots['analysis_name']}، تقدر/تقدرين تتواصل معنا على 920003694."
-    return "ممكن توضح/توضحين سؤالك أكثر؟ وإذا تحب/تحبين تقدر/تقدرين تتواصل معنا مباشرة على 920003694."
+        return f"حالياً ما عندنا تفاصيل كافية عن تحليل {slots['analysis_name']}، تقدر/تقدرين تتواصل معنا على {PHONE_NUMBER}."
+    return f"ممكن توضح/توضحين سؤالك أكثر؟ وإذا تحب/تحبين تقدر/تقدرين تتواصل معنا مباشرة على {PHONE_NUMBER}."

@@ -16,6 +16,7 @@ from typing import Any, Callable
 from app.services.runtime.entity_memory import load_entity_memory, save_entity_memory, update_entity_memory
 from app.services.runtime.results_from_report_service import interpret_uploaded_lab_report_text
 from app.services.runtime.selection_state import load_selection_state
+from app.config.constants import PHONE_NUMBER
 from uuid import UUID
 
 _REPORT_ATTACHMENT_FALLBACK = "لم أتمكن من قراءة القيم بشكل واضح من التقرير..."
@@ -299,7 +300,7 @@ def run_message_runtime_orchestration(
     if is_price_query:
         print("PATH=price")
         return deps.save_assistant_reply(
-            "للاستفسار عن الأسعار يرجى التواصل مع الفريق على الرقم: 920003694"
+            f"للاستفسار عن الأسعار يرجى التواصل مع الفريق على الرقم: {PHONE_NUMBER}"
         )
 
     # D-H helpers
