@@ -36,11 +36,48 @@ from app.core.config import settings
 from app.db import get_db
 from app.db.models import User, Conversation, Message, MessageRole
 from app.core.deps import get_current_user_optional
+from app.services.response_fallback_service import sanitize_for_ui
 
 # Get logger
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+_CTA_TEXT = "للحصول على استشارة أدق، زودنا برقم جوالك وسيقوم فريقنا الطبي بالتواصل معك."
+_DISCLAIMER_PATTERNS = (
+    r"ننصحك\s*ب(?:مراجعة|زيارة)\s*طبيبك\.?",
+    r"ما\s*يغني\s*عن\s*مراجعة\s*الطبيب\.?",
+)
+_CACHE_CLEARED_FOR_TEMPLATE_UPDATE = False
+
+
+def _finalize_reply_for_ui(text: str, *, cache_key: str = "") -> str:
+    global _CACHE_CLEARED_FOR_TEMPLATE_UPDATE
+    raw = str(text or "")
+    out = sanitize_for_ui(raw)
+    changed = out != raw
+    for pattern in _DISCLAIMER_PATTERNS:
+        updated = re.sub(pattern, "", out, flags=re.IGNORECASE)
+        if updated != out:
+            changed = True
+            out = updated
+    out = re.sub(r"\n{3,}", "\n\n", out).strip()
+    if changed and _CTA_TEXT not in out:
+        if out and not out.endswith((".", "!", "؟")):
+            out += "."
+        out = f"{out}\n\n{_CTA_TEXT}".strip()
+    if changed and cache_key:
+        try:
+            get_smart_cache().invalidate(cache_key)
+        except Exception:
+            pass
+    if changed and not _CACHE_CLEARED_FOR_TEMPLATE_UPDATE:
+        try:
+            get_smart_cache().clear()
+            _CACHE_CLEARED_FOR_TEMPLATE_UPDATE = True
+            logger.info("smart_cache cleared after template-format update")
+        except Exception as cache_err:
+            logger.warning("smart_cache clear after template update failed: %s", cache_err)
+    return out
 
 
 # Request/Response Models
@@ -81,8 +118,10 @@ class ChatResponse(BaseModel):
     @classmethod
     def response_from_reply(cls, data: dict) -> dict:
         """Set response=reply when not provided."""
-        if isinstance(data, dict) and "reply" in data and "response" not in data:
-            data["response"] = data["reply"]
+        if isinstance(data, dict) and "reply" in data:
+            data["reply"] = _finalize_reply_for_ui(str(data["reply"] or ""))
+            if "response" not in data:
+                data["response"] = data["reply"]
         return data
 
 
@@ -158,6 +197,8 @@ def _save_message(
     token_count: Optional[int] = None
 ) -> Message:
     """Save a message to the database"""
+    if role == MessageRole.ASSISTANT:
+        content = _finalize_reply_for_ui(content)
     message = Message(
         conversation_id=conversation.id,
         role=role,

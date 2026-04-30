@@ -1932,7 +1932,7 @@ def _build_style_guidance_block_for_intent(query: str, intent_label: str) -> str
     if not chosen:
         return ""
 
-    lines = ["ðŸŽ¯ **Style Guidance Examples (tone only):**"]
+    lines = ["Style Guidance Examples (tone only):"]
     for i, ex in enumerate(chosen, 1):
         lines.append(f"{i}. {ex}")
     lines.append("Use these examples for tone and phrasing only, not for medical facts.")
@@ -1955,18 +1955,18 @@ def _filter_rag_results_by_intent(rag_results: list[dict], intent_label: str) ->
 def _format_rag_results_context(rag_results: list[dict], include_prices: bool = True) -> str:
     if not rag_results:
         return ""
-    parts = ["ðŸ“Š **Ù…Ø¹Ù„ÙˆÙ…Ø§Øª Ø§Ù„ØªØ­Ø§Ù„ÙŠÙ„ Ø°Ø§Øª Ø§Ù„ØµÙ„Ø©:**\n"]
+    parts = ["معلومات التحاليل ذات الصلة:\n"]
     for i, row in enumerate(rag_results[:3], 1):
         test = row.get("test") or {}
-        lines = [f"ðŸ”¬ **{test.get('analysis_name_ar', 'ØºÙŠØ± Ù…ØªÙˆÙØ±')}**"]
+        lines = [f"{test.get('analysis_name_ar', 'غير متوفر')}"]
         if test.get("analysis_name_en"):
             lines.append(f"   ({test.get('analysis_name_en')})")
         if test.get("description"):
-            lines.append(f"\nðŸ“ **Ø§Ù„ÙˆØµÙ:** {test.get('description')}")
+            lines.append(f"\nالوصف: {test.get('description')}")
         if include_prices and test.get("price") is not None:
-            lines.append(f"\nðŸ’µ **Ø§Ù„Ø³Ø¹Ø±:** {test.get('price')}")
+            lines.append(f"\nالسعر: {test.get('price')}")
         if test.get("category"):
-            lines.append(f"\nðŸ“‚ **Ø§Ù„ØªØµÙ†ÙŠÙ:** {test.get('category')}")
+            lines.append(f"\nالتصنيف: {test.get('category')}")
         parts.append(f"\n{i}. " + "\n".join(lines) + "\n" + "-" * 50 + "\n")
     return "".join(parts)
 
