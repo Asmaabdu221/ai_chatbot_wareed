@@ -6,12 +6,20 @@ Usage:
 
 from __future__ import annotations
 
+import gc
 import json
 import logging
 from pathlib import Path
 from typing import Any
 
-from app.services.runtime.tests_semantic_search import get_tests_semantic_search
+import chromadb  # type: ignore
+
+from app.services.runtime.semantic_model_pool import get_shared_sentence_transformer
+from app.services.runtime.tests_semantic_search import (
+    CHROMA_COLLECTION_NAME,
+    CHROMA_PERSIST_PATH,
+    DEFAULT_EMBED_MODEL,
+)
 from app.services.runtime.unified_normalizer import get_wareed_normalizer
 
 logger = logging.getLogger(__name__)
@@ -86,11 +94,48 @@ def main() -> int:
     if active_records:
         records = active_records
 
-    service = get_tests_semantic_search()
-    service.build_or_refresh(records)
-    if not service.available:
-        logger.error("Semantic index build unavailable: %s", service.unavailable_reason)
-        return 2
+    CHROMA_PERSIST_PATH.mkdir(parents=True, exist_ok=True)
+    client = chromadb.PersistentClient(path=str(CHROMA_PERSIST_PATH))
+    collection = client.get_or_create_collection(
+        name=CHROMA_COLLECTION_NAME,
+        metadata={"hnsw:space": "cosine"},
+    )
+
+    from app.services.runtime.tests_semantic_search import _records_fingerprint, _build_test_document, _norm, _safe_str
+
+    fingerprint = _records_fingerprint(records)
+    existing_count = int(collection.count() or 0)
+    existing_fp = _safe_str((collection.metadata or {}).get("tests_fingerprint"))
+    if existing_count == len(records) and existing_fp == fingerprint:
+        logger.info("Tests semantic index already up-to-date. Skipping rebuild.")
+        return 0
+
+    logger.info("Background semantic indexing started...")
+    model = get_shared_sentence_transformer(DEFAULT_EMBED_MODEL)
+    collection.delete(where={})
+
+    batch_size = 50
+    for i in range(0, len(records), batch_size):
+        batch = records[i : i + batch_size]
+        ids = [_safe_str(r.get("id")) for r in batch]
+        docs = [_build_test_document(r) for r in batch]
+        metas = [
+            {
+                "test_id": _safe_str(r.get("id")),
+                "test_name_ar": _safe_str(r.get("test_name_ar")),
+                "title": _safe_str(r.get("title")),
+                "test_name_norm": _norm(r.get("test_name_ar")),
+                "title_norm": _norm(r.get("title")),
+                "h1_norm": _norm(r.get("h1")),
+            }
+            for r in batch
+        ]
+        embeddings = model.encode(docs, normalize_embeddings=True).tolist()
+        collection.add(ids=ids, documents=docs, metadatas=metas, embeddings=embeddings)
+        del embeddings, docs, metas, ids, batch
+        gc.collect()
+
+    collection.modify(metadata={"hnsw:space": "cosine", "tests_fingerprint": fingerprint})
 
     logger.info("Tests semantic index is ready | records=%d", len(records))
     return 0
@@ -98,4 +143,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

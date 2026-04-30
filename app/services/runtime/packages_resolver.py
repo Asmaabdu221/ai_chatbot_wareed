@@ -1955,7 +1955,14 @@ def resolve_packages_query(user_text: str, conversation_id: UUID | None = None) 
         specific_match = direct_name_match
         matched_via = "lexical"
     if specific_match is None:
-        semantic_candidates = search_packages(query, records, limit=3)
+        try:
+            semantic_candidates = search_packages(query, records, limit=3)
+        except Exception as exc:
+            semantic_candidates = []
+            logger.warning(
+                "packages_resolver semantic search failed; continuing lexical fallback | error=%s",
+                exc.__class__.__name__,
+            )
         if semantic_candidates:
             top = semantic_candidates[0]
             top_score = float(top.get("score") or 0.0)

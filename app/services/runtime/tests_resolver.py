@@ -670,7 +670,14 @@ def resolve_tests_query(user_text: str, conversation_id: UUID | None = None) -> 
     # If deterministic match is weak/absent and intent is specific-test-like,
     # try semantic retrieval with strict acceptance gate.
     if specific_match is None and not general_only and not general_like:
-        semantic_candidates = search_tests(query, records, limit=3)
+        try:
+            semantic_candidates = search_tests(query, records, limit=3)
+        except Exception as exc:
+            semantic_candidates = []
+            logger.warning(
+                "tests_resolver semantic search failed; continuing lexical fallback | error=%s",
+                exc.__class__.__name__,
+            )
         if semantic_candidates:
             top = semantic_candidates[0]
             top_score = float(top.get("score") or 0.0)
