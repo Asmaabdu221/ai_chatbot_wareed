@@ -31,13 +31,14 @@ except Exception:
 
 from app.core.config import settings
 from app.data.knowledge_loader_v2 import get_knowledge_base
+from app.config.constants import PHONE_NUMBER
 
 logger = logging.getLogger(__name__)
 
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/jpg", "image/png"}
 MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
 VISION_MODEL = getattr(settings, "OPENAI_VISION_MODEL", "gpt-4o")
-WAREED_CONTACT = "800-122-1220"
+WAREED_CONTACT = PHONE_NUMBER
 
 VISION_PROMPT = """You are a medical prescription analyzer. Analyze this handwritten prescription image and extract ALL medical test/lab test names mentioned.
 
@@ -199,7 +200,7 @@ def _build_arabic_response(
     if not detected:
         return "لم يتم التعرف على تحاليل واضحة في الصورة، يرجى رفع صورة أوضح."
 
-    lines.append("**التحاليل المطلوبة في الوصفة:**")
+    lines.append("التحاليل المطلوبة في الوصفة:")
     for a in available:
         lines.append(f"• {a} ✓ (متوفر لدى وريد)")
     for u in unavailable:
@@ -208,7 +209,7 @@ def _build_arabic_response(
         lines.append(f"• {u} (غير مؤكد - يرجى التحقق)")
 
     lines.append("")
-    lines.append("لمعرفة الأسعار والعروض يرجى التواصل مع خدمة العملاء على الرقم **800-122-1220**.")
+    lines.append(f"لمعرفة الأسعار والعروض يرجى التواصل مع خدمة العملاء على الرقم {PHONE_NUMBER}.")
     lines.append("")
     lines.append("هل تحتاج إلى مزيد من المعلومات؟")
 

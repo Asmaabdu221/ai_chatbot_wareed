@@ -109,6 +109,19 @@ _ESCALATION_BLOCKED_PHRASES = (
     "Ø±Ø§Ø­ Ù†Ø­ÙˆÙ„ Ø·Ù„Ø¨Ùƒ",
 )
 
+_MEDICAL_CONSULTATION_CTA = (
+    "للحصول على استشارة أدق حول التحاليل المناسبة لحالتك، "
+    "زودنا برقم جوالك وسيقوم فريقنا الطبي بالتواصل معك مباشرة لمساعدتك."
+)
+_DISCLAIMER_PATTERNS = (
+    r"ننصحك\s*ب(?:مراجعة|زيارة)\s*طبيبك\.?",
+    r"ننصح\s*ب(?:مراجعة|زيارة)\s*الطبيب\.?",
+    r"يفضل\s*مراجعة\s*الطبيب(?:\s*المعالج)?\.?",
+    r"استشر\s*الطبيب(?:\s*المعالج)?\.?",
+    r"راجع\s*الطبيب(?:\s*المعالج)?\.?",
+    r"ما\s*يغني\s*عن\s*مراجعة\s*الطبيب\.?",
+)
+
 
 def _build_direct_support_message() -> str:
     return (
@@ -123,6 +136,27 @@ def _enforce_escalation_policy(text: str) -> str:
     if any(phrase in lowered for phrase in _ESCALATION_BLOCKED_PHRASES):
         return _build_direct_support_message()
     return content
+
+
+def _replace_medical_disclaimer_with_cta(text: str) -> str:
+    content = str(text or "")
+    if not content:
+        return content
+
+    replaced = content
+    changed = False
+    for pattern in _DISCLAIMER_PATTERNS:
+        updated = re.sub(pattern, "", replaced, flags=re.IGNORECASE)
+        if updated != replaced:
+            changed = True
+            replaced = updated
+
+    replaced = re.sub(r"\n{3,}", "\n\n", replaced).strip()
+    if changed and _MEDICAL_CONSULTATION_CTA not in replaced:
+        if replaced and not replaced.endswith((".", "!", "؟")):
+            replaced += "."
+        replaced = (replaced + "\n\n" + _MEDICAL_CONSULTATION_CTA).strip()
+    return replaced
 
 
 _LIGHT_INTENT_CITIES = {
@@ -3532,6 +3566,7 @@ def send_message_with_attachment(
 
     def _save_assistant_reply(raw_text: str, token_count: int = 0) -> tuple[Message, Message]:
         final_text = sanitize_for_ui(_apply_gender_addressing(raw_text))
+        final_text = _replace_medical_disclaimer_with_cta(final_text)
         assistant_msg = add_message(
             db,
             conversation_id,

@@ -1,6 +1,11 @@
-﻿"""Safe runtime fallback messages for rebuild and staged runtime phases."""
+"""Safe runtime fallback messages for rebuild and staged runtime phases."""
 
 from __future__ import annotations
+
+_MEDICAL_CONSULTATION_CTA = (
+    "للحصول على استشارة أدق حول التحاليل المناسبة لحالتك، "
+    "زودنا برقم جوالك وسيقوم فريقنا الطبي بالتواصل معك مباشرة لمساعدتك."
+)
 
 
 def get_guided_examples() -> tuple[str, ...]:
@@ -67,8 +72,8 @@ def get_symptoms_clarification_message() -> str:
 def get_results_clarification_message() -> str:
     """Return clarification when result query misses test name/value."""
     return (
-        "عطيني اسم التحليل مع النتيجة وبعطيك تفسير عام لها\n"
-        "لكن خلّي في بالك إن هذا مجرد إرشاد عام وما يغني عن مراجعة الطبيب."
+        "عطيني اسم التحليل مع النتيجة وبعطيك تفسير عام لها.\n"
+        f"{_MEDICAL_CONSULTATION_CTA}"
     )
 
 

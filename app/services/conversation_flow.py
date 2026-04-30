@@ -55,6 +55,21 @@ _CTA_MARKERS = (
 )
 _STRICT_INVALID_PHONE_REPLY = "لو سمحت ممكن تعيد كتابة رقم الجوال بالطريقة الصحيحة؟ مثال: 05xxxxxxxx"
 _CONTACT_SUPPORT_UNIFIED_REPLY = "\u062d\u064a\u0627\u0643 \u0627\u0644\u0644\u0647!\n\u0625\u0630\u0627 \u0633\u0645\u062d\u062a \u0627\u0643\u062a\u0628 \u0644\u064a \u0631\u0642\u0645 \u062c\u0648\u0627\u0644\u0643 \u0648\u0628\u0648\u0635\u0644\u0643 \u0627\u0644\u0622\u0646 \u0628\u062e\u062f\u0645\u0629 \u0627\u0644\u0639\u0645\u0644\u0627\u0621."
+_MEDICAL_CONSULTATION_INTENT = "medical_consultation_lead"
+
+
+def _resolve_lead_intent(*, pending_action: str = "", reason: str = "", action: Optional[ConversationAction] = None) -> str:
+    reason_l = (reason or "").lower()
+    pending_l = (pending_action or "").lower()
+    if "consult" in reason_l or "استشار" in reason_l or "medical" in reason_l:
+        return _MEDICAL_CONSULTATION_INTENT
+    if pending_l == ConversationAction.ASK_PHONE.value:
+        return _MEDICAL_CONSULTATION_INTENT
+    if action is not None and action == ConversationAction.ASK_PHONE:
+        return _MEDICAL_CONSULTATION_INTENT
+    if pending_action:
+        return pending_action
+    return action.value if action else ""
 
 
 @dataclass
@@ -114,7 +129,7 @@ def process_phone_submission(
     lead_draft = LeadDraft(
         phone=phone,
         conversation_id=conversation_id,
-        latest_intent=pending,
+        latest_intent=_resolve_lead_intent(pending_action=pending),
         summary_hint=state.pending_intent_summary or user_text[:100],
         status="ready",
     )
@@ -238,7 +253,11 @@ def apply_flow_to_reply(
         lead_draft = LeadDraft(
             phone=phone,
             conversation_id=conversation_id,
-            latest_intent=action.value if action else "",
+            latest_intent=_resolve_lead_intent(
+                pending_action=state.pending_action or "",
+                reason=decision.reason or "",
+                action=action,
+            ),
             summary_hint=user_text[:100],
             status="ready",
         )
