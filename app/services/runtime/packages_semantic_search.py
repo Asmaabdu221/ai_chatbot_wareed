@@ -117,7 +117,6 @@ class PackagesSemanticSearch:
                 name=CHROMA_COLLECTION_NAME,
                 metadata={"hnsw:space": "cosine"},
             )
-            self._model = get_shared_sentence_transformer(DEFAULT_EMBED_MODEL)
             self._available = True
             self._reason = ""
         except Exception as exc:
@@ -127,6 +126,8 @@ class PackagesSemanticSearch:
 
     def _build_or_refresh_sync(self, clean_records: list[dict[str, Any]], fingerprint: str) -> None:
         assert self._collection is not None
+        if self._model is None:
+            self._model = get_shared_sentence_transformer(DEFAULT_EMBED_MODEL)
         assert self._model is not None
         ids: list[str] = []
         docs: list[str] = []
@@ -165,6 +166,7 @@ class PackagesSemanticSearch:
     def build_or_refresh(self, records: list[dict[str, Any]]) -> None:
         self.initialize()
         if not self._available:
+            logger.info("packages semantic search unavailable | reason=%s", self._reason)
             return
         assert self._collection is not None
 
@@ -207,8 +209,12 @@ class PackagesSemanticSearch:
     ) -> list[PackageSemanticCandidate]:
         self.initialize()
         if not self._available:
+            logger.info("packages semantic query skipped | reason=%s", self._reason)
             return []
         assert self._collection is not None
+        if self._model is None:
+            logger.info("packages semantic query skipped | reason=model_not_loaded_yet")
+            return []
         assert self._model is not None
 
         query_text = _safe_str(text)
@@ -224,7 +230,8 @@ class PackagesSemanticSearch:
                 n_results=max(1, int(top_k)),
                 include=["metadatas", "distances"],
             )
-        except Exception:
+        except Exception as exc:
+            logger.warning("packages semantic query failed | error=%s", exc.__class__.__name__)
             return []
 
         out: list[PackageSemanticCandidate] = []
@@ -258,6 +265,7 @@ def search_packages(query: str, records: list[dict[str, Any]], limit: int = 3) -
     service = get_packages_semantic_search()
     service.build_or_refresh(records)
     if not service.available:
+        logger.info("packages semantic skipped in search_packages | reason=%s", service.unavailable_reason)
         return []
     by_id = {_safe_str(r.get("id")): r for r in records if isinstance(r, dict)}
     ranked = service.query(query, by_id, top_k=limit)

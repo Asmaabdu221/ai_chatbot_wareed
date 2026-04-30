@@ -46,6 +46,10 @@ class Settings(BaseSettings):
         default="text-embedding-3-small",
         description="OpenAI embedding model for semantic search"
     )
+    INTERNAL_REQUEST_TIMEOUT_SECONDS: int = Field(
+        default=30,
+        description="Internal service request timeout in seconds",
+    )
     # RAG: minimum cosine similarity to allow answer (0.0-1.0). Below = "no info" response.
     # 0.58-0.60 improves recall for symptom-based queries (نوم، مزاج، معدة); 0.75 was too strict.
     RAG_SIMILARITY_THRESHOLD: float = Field(

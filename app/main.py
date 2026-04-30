@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 import time
 from pathlib import Path
@@ -22,6 +22,29 @@ from app.db import init_db
 # Initialize logging (console only, level from .env)
 configure_logging()
 logger = logging.getLogger(__name__)
+
+
+async def _deferred_semantic_startup_after_healthy(app: FastAPI) -> None:
+    """Start semantic background indexing only after app is marked healthy."""
+    try:
+        while not bool(getattr(app.state, "is_healthy", False)):
+            await asyncio.sleep(0.25)
+
+        await asyncio.sleep(0.5)
+        from app.services.runtime.tests_resolver import load_tests_records
+        from app.services.runtime.tests_semantic_search import get_tests_semantic_search
+        from app.services.runtime.packages_resolver import load_packages_records
+        from app.services.runtime.packages_semantic_search import get_packages_semantic_search
+
+        tests = [r for r in load_tests_records() if isinstance(r, dict) and bool(r.get("is_active", True))]
+        packages = [r for r in load_packages_records() if isinstance(r, dict) and bool(r.get("is_active", True))]
+
+        if tests:
+            get_tests_semantic_search().build_or_refresh(tests)
+        if packages:
+            get_packages_semantic_search().build_or_refresh(packages)
+    except Exception as exc:
+        logger.warning("deferred semantic startup skipped | reason=%s", exc.__class__.__name__)
 
 
 @asynccontextmanager
@@ -72,6 +95,10 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Lead event bus ready (SSE stream: /api/internal/leads/stream)")
         from app.services.crm_retry_worker import start_crm_retry_worker
         start_crm_retry_worker()
+
+        # Mark app healthy first, then trigger semantic indexing in background.
+        app.state.is_healthy = True
+        asyncio.create_task(_deferred_semantic_startup_after_healthy(app))
         
     except Exception as e:
         logger.error("Failed to initialize application: %s", str(e))
@@ -99,6 +126,7 @@ app = FastAPI(
     version=settings.APP_VERSION,
     lifespan=lifespan
 )
+app.state.is_healthy = False
 
 
 @app.exception_handler(Exception)

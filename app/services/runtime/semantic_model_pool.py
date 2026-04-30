@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 _MODEL_SINGLETONS: dict[str, Any] = {}
 _TORCH_THREADS_CONFIGURED = False
+_MODEL_INIT_LOCK = threading.Lock()
 
 
 def get_shared_sentence_transformer(model_name: str):
@@ -22,18 +24,23 @@ def get_shared_sentence_transformer(model_name: str):
     if cached is not None:
         return cached
 
-    try:
-        import torch  # type: ignore
+    with _MODEL_INIT_LOCK:
+        cached = _MODEL_SINGLETONS.get(model_key)
+        if cached is not None:
+            return cached
 
-        if not _TORCH_THREADS_CONFIGURED:
-            torch.set_num_threads(1)
-            _TORCH_THREADS_CONFIGURED = True
-    except Exception as exc:
-        logger.debug("torch threading cap not applied | reason=%s", exc.__class__.__name__)
+        try:
+            import torch  # type: ignore
 
-    from sentence_transformers import SentenceTransformer  # type: ignore
+            if not _TORCH_THREADS_CONFIGURED:
+                torch.set_num_threads(1)
+                _TORCH_THREADS_CONFIGURED = True
+        except Exception as exc:
+            logger.debug("torch threading cap not applied | reason=%s", exc.__class__.__name__)
 
-    model = SentenceTransformer(model_key)
-    _MODEL_SINGLETONS[model_key] = model
-    return model
+        from sentence_transformers import SentenceTransformer  # type: ignore
 
+        model = SentenceTransformer(model_key)
+        _MODEL_SINGLETONS[model_key] = model
+        logger.info("semantic model loaded once | model=%s", model_key)
+        return model

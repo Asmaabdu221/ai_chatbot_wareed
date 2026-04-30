@@ -359,7 +359,11 @@ def _llm_fallback_classify(message: str) -> Optional[Dict[str, Any]]:
         from openai import OpenAI
         from app.core.config import settings
 
-        client = OpenAI(api_key=settings.OPENAI_API_KEY, timeout=8.0, max_retries=0)
+        client = OpenAI(
+            api_key=settings.OPENAI_API_KEY,
+            timeout=float(getattr(settings, "INTERNAL_REQUEST_TIMEOUT_SECONDS", 30)),
+            max_retries=0,
+        )
         prompt = (
             "صنف الرسالة إلى intent واحد فقط من: "
             + ", ".join(INTENT_CATEGORIES)
