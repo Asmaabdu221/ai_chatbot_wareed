@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Optional
 
 from app.services.conversation_manager import ConversationAction, ConversationDecision
@@ -70,6 +71,10 @@ def _resolve_lead_intent(*, pending_action: str = "", reason: str = "", action: 
     if pending_action:
         return pending_action
     return action.value if action else ""
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 @dataclass
@@ -131,6 +136,7 @@ def process_phone_submission(
         conversation_id=conversation_id,
         latest_intent=_resolve_lead_intent(pending_action=pending),
         summary_hint=state.pending_intent_summary or user_text[:100],
+        summary_window_start_at=state.pending_started_at,
         status="ready",
     )
 
@@ -141,6 +147,7 @@ def process_phone_submission(
         lead_draft=lead_draft,
         pending_action="",
         pending_intent_summary="",
+        pending_started_at=None,
     )
 
     logger.info(
@@ -216,6 +223,7 @@ def handle_awaiting_phone_state(
         state=StateEnum.IDLE,
         pending_action="",
         pending_intent_summary="",
+        pending_started_at=None,
     )
     logger.info(
         "conversation_flow | topic_switch_exits_awaiting_phone | state_reset=idle"
@@ -259,6 +267,7 @@ def apply_flow_to_reply(
                 action=action,
             ),
             summary_hint=user_text[:100],
+            summary_window_start_at=state.pending_started_at,
             status="ready",
         )
         store.update(
@@ -268,6 +277,7 @@ def apply_flow_to_reply(
             lead_draft=lead_draft,
             pending_action="",
             pending_intent_summary="",
+            pending_started_at=None,
         )
         return FlowResult(
             final_reply="تم استلام رقمك، سيتواصل معك أحد المختصين قريبًا.",
@@ -305,6 +315,7 @@ def apply_flow_to_reply(
                 state=StateEnum.AWAITING_PHONE,
                 pending_action=ConversationAction.ASK_PHONE.value,
                 pending_intent_summary=user_text[:100],
+                pending_started_at=_utc_now(),
             )
             _log(action, state_before, StateEnum.AWAITING_PHONE, note="contact_support_unified_cta")
             return FlowResult(
@@ -329,6 +340,7 @@ def apply_flow_to_reply(
                 state=StateEnum.AWAITING_PHONE,
                 pending_action=ConversationAction.ASK_PHONE.value,
                 pending_intent_summary=user_text[:100],
+                pending_started_at=_utc_now(),
             )
             return FlowResult(
                 final_reply=base_reply,
@@ -342,6 +354,7 @@ def apply_flow_to_reply(
             state=StateEnum.AWAITING_PHONE,
             pending_action=ConversationAction.ASK_PHONE.value,
             pending_intent_summary=user_text[:100],
+            pending_started_at=_utc_now(),
         )
         _log(action, state_before, StateEnum.AWAITING_PHONE, phone_detected=False)
         return FlowResult(
@@ -412,6 +425,7 @@ def apply_flow_to_reply(
                 state=StateEnum.AWAITING_PHONE,
                 pending_action=ConversationAction.TRANSFER_TO_HUMAN.value,
                 pending_intent_summary=user_text[:100],
+                pending_started_at=_utc_now(),
             )
             return FlowResult(
                 final_reply=base_reply,
@@ -425,6 +439,7 @@ def apply_flow_to_reply(
             state=StateEnum.AWAITING_PHONE,
             pending_action=ConversationAction.TRANSFER_TO_HUMAN.value,
             pending_intent_summary=user_text[:100],
+            pending_started_at=_utc_now(),
         )
         _log(action, state_before, StateEnum.AWAITING_PHONE, phone_detected=False)
         return FlowResult(

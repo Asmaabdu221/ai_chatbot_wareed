@@ -236,6 +236,7 @@ def _safe_uuid(value: object) -> Optional[UUID]:
 def _load_lead_context_messages(
     db: Optional[Session],
     conversation_id: UUID,
+    start_at: Optional[datetime],
     cutoff_at: Optional[datetime],
 ) -> List[Dict]:
     """
@@ -254,6 +255,8 @@ def _load_lead_context_messages(
     )
     if cutoff_at is not None:
         query = query.filter(Message.created_at <= cutoff_at)
+    if start_at is not None:
+        query = query.filter(Message.created_at >= start_at)
     rows = query.all()
     return [{"role": row.role.value, "content": row.content} for row in rows if row.content]
 
@@ -516,6 +519,7 @@ def _build_lead_summary_text_ar(
     db: Optional[Session],
     lead_conversation_id: str,
     fallback_messages: List[Dict],
+    start_at: Optional[datetime],
     cutoff_at: Optional[datetime],
 ) -> str:
     """
@@ -527,6 +531,7 @@ def _build_lead_summary_text_ar(
         isolated_messages = _load_lead_context_messages(
             db=db,
             conversation_id=conv_uuid,
+            start_at=start_at,
             cutoff_at=cutoff_at,
         )
     # Fallback for demo/no-db mode still uses current conversation context only.
@@ -596,6 +601,38 @@ def _normalize_selection_domain(value: str) -> str:
         "packages_business": "package",
     }
     return aliases.get(domain, domain)
+
+
+def _reset_context_after_lead_capture(conversation_id: UUID) -> None:
+    """Hard reset volatile per-conversation runtime state after lead capture."""
+    try:
+        from app.services.runtime.selection_state import clear_selection_state
+        clear_selection_state(conversation_id)
+    except Exception as exc:
+        logger.debug("post_lead_reset | selection_state skipped: %s", exc)
+    try:
+        from app.services.runtime.entity_memory import save_entity_memory
+        save_entity_memory(conversation_id, {})
+    except Exception as exc:
+        logger.debug("post_lead_reset | entity_memory skipped: %s", exc)
+    try:
+        from app.services.dialogue_state import set_dialogue_state
+        set_dialogue_state(str(conversation_id), {})
+    except Exception as exc:
+        logger.debug("post_lead_reset | dialogue_state skipped: %s", exc)
+    try:
+        from app.services.conversation_state import get_state_store, StateEnum
+        get_state_store().update(
+            str(conversation_id),
+            state=StateEnum.IDLE,
+            pending_action="",
+            pending_intent_summary="",
+            pending_started_at=None,
+            phone=None,
+            lead_draft=None,
+        )
+    except Exception as exc:
+        logger.debug("post_lead_reset | conversation_state skipped: %s", exc)
 
 
 # Endpoints
@@ -720,6 +757,7 @@ async def chat_endpoint(
                                 db=db,
                                 lead_conversation_id=_phone_result.lead_draft.conversation_id,
                                 fallback_messages=conversation_history,
+                                start_at=_phone_result.lead_draft.summary_window_start_at,
                                 cutoff_at=lead_cutoff_at,
                             )
                             _lead = create_lead_from_draft(_phone_result.lead_draft, db)
@@ -727,6 +765,7 @@ async def chat_endpoint(
                                 deliver_lead(_lead, db)
                                 lead_captured_flag = True
                                 lead_id = _lead.id
+                                _reset_context_after_lead_capture(conversation_id)
                         except Exception as _lead_err:
                             logger.warning("lead_service skipped (non-blocking): %s", _lead_err)
                     return ChatResponse(
@@ -763,6 +802,7 @@ async def chat_endpoint(
                     db=db,
                     lead_conversation_id=_flow_result.lead_draft.conversation_id,
                     fallback_messages=conversation_history,
+                    start_at=_flow_result.lead_draft.summary_window_start_at,
                     cutoff_at=lead_cutoff_at,
                 )
                 _lead = create_lead_from_draft(_flow_result.lead_draft, db)
@@ -770,6 +810,7 @@ async def chat_endpoint(
                     deliver_lead(_lead, db)
                     lead_captured_flag = True
                     lead_id = _lead.id
+                    _reset_context_after_lead_capture(conversation_id)
             except Exception as _lead_err:
                 logger.warning("lead_service skipped (non-blocking): %s", _lead_err)
 

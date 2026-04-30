@@ -43,6 +43,7 @@ class LeadDraft:
     latest_intent: str
     summary_hint: str
     summary_text: Optional[str] = None
+    summary_window_start_at: Optional[datetime] = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     status: str = "ready"
 
@@ -55,6 +56,7 @@ class ConversationState:
     state: StateEnum = StateEnum.IDLE
     pending_action: str = ""
     pending_intent_summary: str = ""
+    pending_started_at: Optional[datetime] = None
     phone: Optional[str] = None
     lead_draft: Optional[LeadDraft] = None
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -102,6 +104,7 @@ class ConversationStateStore:
             latest_intent=str(value.get("latest_intent") or ""),
             summary_hint=str(value.get("summary_hint") or ""),
             summary_text=str(value.get("summary_text") or "") or None,
+            summary_window_start_at=ConversationStateStore._parse_datetime(value.get("summary_window_start_at")),
             created_at=created_at or ConversationStateStore._now(),
             status=str(value.get("status") or "ready"),
         )
@@ -113,6 +116,7 @@ class ConversationStateStore:
             "state": state.state.value,
             "pending_action": state.pending_action,
             "pending_intent_summary": state.pending_intent_summary,
+            "pending_started_at": state.pending_started_at.isoformat() if state.pending_started_at else None,
             "phone": state.phone,
             "lead_draft": (
                 {
@@ -121,6 +125,11 @@ class ConversationStateStore:
                     "latest_intent": state.lead_draft.latest_intent,
                     "summary_hint": state.lead_draft.summary_hint,
                     "summary_text": state.lead_draft.summary_text,
+                    "summary_window_start_at": (
+                        state.lead_draft.summary_window_start_at.isoformat()
+                        if state.lead_draft.summary_window_start_at
+                        else None
+                    ),
                     "created_at": state.lead_draft.created_at.isoformat(),
                     "status": state.lead_draft.status,
                 }
@@ -156,6 +165,7 @@ class ConversationStateStore:
             state=parsed_state,
             pending_action=str(payload.get("pending_action") or ""),
             pending_intent_summary=str(payload.get("pending_intent_summary") or ""),
+            pending_started_at=ConversationStateStore._parse_datetime(payload.get("pending_started_at")),
             phone=str(payload.get("phone") or "") or None,
             lead_draft=lead_draft,
             updated_at=updated_at or ConversationStateStore._now(),
