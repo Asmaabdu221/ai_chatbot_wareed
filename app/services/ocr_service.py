@@ -14,7 +14,15 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
-TESSERACT_CMD = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+# Cross-platform tesseract: env override -> Windows install -> PATH (Linux/Render).
+import os as _os
+import shutil as _shutil
+TESSERACT_CMD = (
+    _os.getenv("TESSERACT_CMD")
+    or (r"C:\Program Files\Tesseract-OCR\tesseract.exe" if _os.name == "nt" else None)
+    or _shutil.which("tesseract")
+    or "tesseract"
+)
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/jpg", "image/png"}
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024  # 10MB

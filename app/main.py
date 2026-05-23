@@ -17,7 +17,11 @@ from app.api.internal_leads import router as internal_leads_router
 from app.api.internal_analytics import router as internal_analytics_router
 from app.core.config import settings
 from app.core.logging_config import configure_logging
+from app.core.limiter import limiter
 from app.db import init_db
+
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 # Initialize logging (console only, level from .env)
 configure_logging()
@@ -45,6 +49,23 @@ async def _deferred_semantic_startup_after_healthy(app: FastAPI) -> None:
             get_packages_semantic_search().build_or_refresh(packages)
     except Exception as exc:
         logger.warning("deferred semantic startup skipped | reason=%s", exc.__class__.__name__)
+
+
+async def _deferred_lab_vector_build() -> None:
+    """(Re)build the Lab RAG v2 OpenAI vector index in the background when empty.
+
+    Idempotent (skips already-indexed tests) and non-blocking. After building,
+    the engine's vector retriever is refreshed so vectors are used without a restart.
+    """
+    try:
+        from app.scripts.build_vector_index import build_index
+        from app.services.lab_retrieval_engine import get_lab_retrieval_engine, VectorRetriever
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, build_index)
+        get_lab_retrieval_engine().vector_retriever = VectorRetriever()
+        logger.info("✅ Lab RAG v2 vector index ready")
+    except Exception as exc:
+        logger.warning("Lab RAG v2 vector build skipped | reason=%s", exc.__class__.__name__)
 
 
 @asynccontextmanager
@@ -99,6 +120,19 @@ async def lifespan(app: FastAPI):
         # Mark app healthy first, then trigger semantic indexing in background.
         app.state.is_healthy = True
         asyncio.create_task(_deferred_semantic_startup_after_healthy(app))
+
+        # Lab RAG v2 warm-up (guarded by USE_LAB_RAG_V2; default off -> no-op).
+        if getattr(settings, "USE_LAB_RAG_V2", False):
+            try:
+                from app.services.lab_rag_integration import warm_up as _lab_warm
+                _lab_warm()
+                logger.info("✅ Lab RAG v2 engine warmed up")
+            except Exception as _lab_e:
+                logger.warning("Lab RAG v2 warm-up skipped: %s", _lab_e)
+            # Option B: rebuild the OpenAI vector index in the background if empty
+            # (Render disk is ephemeral). Deferred so it never blocks health checks.
+            if str(getattr(settings, "EMBEDDING_BACKEND", "openai")).strip().lower() != "none":
+                asyncio.create_task(_deferred_lab_vector_build())
         
     except Exception as e:
         logger.error("Failed to initialize application: %s", str(e))
@@ -127,6 +161,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 app.state.is_healthy = False
+
+# Rate limiting (slowapi): register the shared limiter and its 429 handler.
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @app.exception_handler(Exception)

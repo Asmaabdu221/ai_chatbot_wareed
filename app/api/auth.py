@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.deps import get_current_user
+from app.core.limiter import limiter
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -163,14 +164,14 @@ async def register(
     summary="Login (Web / Mobile)",
     description="Login with email + password. Returns access_token + refresh_token. Same flow for all platforms.",
 )
+@limiter.limit("5/minute")
 async def login(
+    request: Request,
     body: LoginRequest,
     db: Optional[Session] = Depends(get_db),
-    request: Request = None,
 ) -> TokenResponse:
     _db_required(db)
-    if request is not None:
-        logger.info("Auth request %s %s", request.method, request.url.path)
+    logger.info("Auth request %s %s", request.method, request.url.path)
     email = body.email.lower()
 
     def _login_sync() -> UUID:

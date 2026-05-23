@@ -5,7 +5,7 @@
  * Accessible at /internal/leads — protected by X-Internal-Api-Key.
  *
  * Realtime layer:
- *   - EventSource connects to GET /api/internal/leads/stream?api_key=...
+ *   - Fetch-based SSE reader connects to GET /api/internal/leads/stream (auth via request headers)
  *   - Events are merged into the leads list by lead_id (no duplicates)
  *   - Toast notifications for new leads and delivery failures
  *   - Unread badge counts leads that arrived since last refresh
@@ -712,45 +712,83 @@ export default function InternalLeadsDashboard() {
     if (authMode === 'checking' || authMode === 'denied') return;
     if (authMode === 'apikey' && !apiKey) return;
 
-    // Bearer path: pass JWT via ?token= (EventSource cannot send Authorization header)
-    const sseUrl = authMode === 'bearer'
-      ? `${API_BASE_URL}/api/internal/leads/stream?token=${encodeURIComponent(getAccessToken() || '')}`
-      : `${API_BASE_URL}/api/internal/leads/stream?api_key=${encodeURIComponent(apiKey)}`;
+    // Credentials go in HEADERS only (never the URL) to avoid leaking secrets
+    // into server/proxy access logs and browser history. Browser EventSource
+    // cannot send headers, so we read the SSE stream via fetch + ReadableStream.
+    const sseUrl = `${API_BASE_URL}/api/internal/leads/stream`;
+    const authHeaders =
+      authMode === 'bearer'
+        ? { Authorization: `Bearer ${getAccessToken() || ''}` }
+        : { 'X-Internal-Api-Key': apiKey };
 
-    let es = null;
+    let aborted = false;
+    let controller = null;
+    let reconnectTimer = null;
     let errorCount = 0;
 
-    function connect() {
-      es = new window.EventSource(sseUrl);
+    function scheduleReconnect() {
+      if (aborted) return;
+      errorCount += 1;
+      if (errorCount >= SSE_MAX_ERRORS) {
+        setConnectionStatus('offline'); // stop retrying - 30s poll covers it
+        return;
+      }
+      setConnectionStatus('reconnecting');
+      reconnectTimer = setTimeout(connect, 2000);
+    }
 
-      es.onopen = () => {
+    async function connect() {
+      if (aborted) return;
+      controller = new AbortController();
+      try {
+        const resp = await fetch(sseUrl, {
+          method: 'GET',
+          headers: { ...authHeaders, Accept: 'text/event-stream' },
+          signal: controller.signal,
+        });
+        if (!resp.ok || !resp.body) throw new Error(`SSE HTTP ${resp.status}`);
+
         setConnectionStatus('live');
         errorCount = 0;
-      };
 
-      es.onmessage = (e) => {
-        try {
-          const event = JSON.parse(e.data);
-          if (handleLeadEventRef.current) handleLeadEventRef.current(event);
-        } catch {
-          // malformed event — ignore
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done || aborted) break;
+          buffer += decoder.decode(value, { stream: true });
+          let sep;
+          while ((sep = buffer.indexOf('\n\n')) !== -1) {
+            const frame = buffer.slice(0, sep);
+            buffer = buffer.slice(sep + 2);
+            const data = frame
+              .split('\n')
+              .filter((l) => l.startsWith('data:'))
+              .map((l) => l.slice(5).trim())
+              .join('\n');
+            if (!data) continue;
+            try {
+              const event = JSON.parse(data);
+              if (handleLeadEventRef.current) handleLeadEventRef.current(event);
+            } catch {
+              // malformed event - ignore
+            }
+          }
         }
-      };
-
-      es.onerror = () => {
-        errorCount += 1;
-        if (errorCount >= SSE_MAX_ERRORS) {
-          setConnectionStatus('offline');
-          es.close(); // stop retrying — 30s poll covers it
-        } else {
-          setConnectionStatus('reconnecting');
-          // EventSource auto-reconnects; we just track state
-        }
-      };
+        if (!aborted) scheduleReconnect();
+      } catch (err) {
+        if (!aborted) scheduleReconnect();
+      }
     }
 
     connect();
-    return () => { if (es) es.close(); };
+    return () => {
+      aborted = true;
+      if (controller) controller.abort();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+    };
   }, [authMode, apiKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------------------------------------------------------

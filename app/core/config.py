@@ -125,6 +125,11 @@ class Settings(BaseSettings):
     # Rate Limiting (for future implementation)
     RATE_LIMIT_PER_MINUTE: int = Field(default=20, description="API requests per minute")
 
+    # Lab RAG v2 (guarded). When False, the existing retrieval pipeline is used unchanged.
+    USE_LAB_RAG_V2: bool = Field(default=False, description="Enable the Lab RAG v2 retrieval pipeline")
+    EMBEDDING_BACKEND: str = Field(default="openai", description="Vector embedding backend: openai | local | none")
+    CHROMA_PERSIST_PATH: str = Field(default="", description="Override path for the Lab RAG v2 vector index (e.g. /data/chromadb on a Render persistent disk)")
+
     # Knowledge Base auto-reload (check file mtime and reload when changed)
     KB_AUTO_RELOAD_ENABLED: bool = Field(default=True, description="Enable automatic KB reload on file change")
     KB_AUTO_RELOAD_INTERVAL_SECONDS: int = Field(default=60, description="Seconds between KB file checks")

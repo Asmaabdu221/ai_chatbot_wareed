@@ -59,3 +59,11 @@ htmlcov/
 
 # MyPy
 .mypy_cache/
+
+# Private keys / certificates (never commit)
+*.pem
+wareed_key.pem
+
+# Vector indexes (rebuilt on deploy; never commit)
+app/data/runtime/chroma_lab_v2/
+app/data/runtime/chroma/

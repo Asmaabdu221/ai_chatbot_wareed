@@ -7,14 +7,14 @@ Two access paths (both remain supported):
      ‣ User must have role ∈ {admin, supervisor, staff}
      ‣ Role is stored on User.role (String column, NULL = regular chat user)
 
-  2. X-Internal-Api-Key / ?api_key= query param  (compatibility / service-to-service)
+  2. X-Internal-Api-Key header  (compatibility / service-to-service)
      ‣ Matches settings.INTERNAL_LEADS_API_KEY
-     ‣ Dev mode: if that setting is empty → always accepted
-     ‣ Used by SSE stream (EventSource cannot send custom headers)
+     ‣ Dev mode: if that setting is empty → accepted only in dev mode (DEBUG=True); otherwise denied
+     ‣ Used by the SSE stream (sent as a header by a fetch-based client)
      ‣ Transitional: keep until all callers migrate to role-based auth
 
-SSE variant also accepts ?token=<JWT> so EventSource clients can authenticate
-without a custom header.
+SSE clients authenticate via headers only (Authorization or X-Internal-Api-Key);
+query-param credentials are not accepted.
 
 Role permissions (current — all three roles are identical intentionally so the
 architecture is ready for future differentiation):
@@ -27,10 +27,11 @@ architecture is ready for future differentiation):
 from __future__ import annotations
 
 import logging
+import secrets
 from typing import Optional
 from uuid import UUID
 
-from fastapi import Depends, Header, HTTPException, Query, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -68,11 +69,29 @@ def _resolve_bearer(token: str, db: Session) -> Optional[User]:
 
 
 def _api_key_ok(provided: str) -> bool:
-    """Return True if the provided API key is acceptable."""
+    """Return True if the provided API key is acceptable.
+
+    Fails CLOSED by default: when no INTERNAL_LEADS_API_KEY is configured,
+    access is granted ONLY in explicit local/dev mode (settings.DEBUG=True).
+    In production a missing key denies access instead of silently opening
+    the internal endpoints (which expose customer/lead PII).
+
+    Uses a constant-time comparison to avoid timing side-channels.
+    """
     expected = (settings.INTERNAL_LEADS_API_KEY or "").strip()
     if not expected:
-        return True  # dev mode: no key configured → open
-    return provided == expected
+        if settings.DEBUG:
+            logger.warning(
+                "internal_access | api_key | DEV-ONLY open access: "
+                "INTERNAL_LEADS_API_KEY is not set and DEBUG=True"
+            )
+            return True
+        logger.error(
+            "internal_access | denied | INTERNAL_LEADS_API_KEY is not configured; "
+            "refusing access. Set the key (or enable DEBUG for local dev)."
+        )
+        return False
+    return secrets.compare_digest((provided or "").strip(), expected)
 
 
 # ---------------------------------------------------------------------------
@@ -128,24 +147,26 @@ def require_internal_access(
 
 def require_internal_access_sse(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme),
-    token: str = Query(default="", description="JWT Bearer token (for EventSource that cannot send headers)"),
-    api_key: str = Query(default=""),
     x_internal_api_key: str = Header(default=""),
     db: Optional[Session] = Depends(get_db),
 ) -> Optional[User]:
     """
-    SSE-compatible variant of require_internal_access.
+    SSE internal access — header-based credentials ONLY.
 
-    EventSource (browser native API) cannot set custom headers, so we also
-    accept credentials via query params:
-      • ?token=<JWT>    — JWT Bearer alternative
-      • ?api_key=<key>  — API key alternative (existing behaviour)
+    Credentials must be supplied via request headers:
+      • Authorization: Bearer <JWT>   — JWT with an internal role (preferred)
+      • X-Internal-Api-Key: <key>     — service API key
+
+    Query-param credentials (?token= / ?api_key=) are no longer accepted: they
+    leak secrets into URLs, server/proxy access logs, and browser history.
+    Browser EventSource cannot send headers, so SSE clients must use a fetch
+    based reader that sets the Authorization (or X-Internal-Api-Key) header.
     """
     if db is None:
         raise HTTPException(status_code=503, detail="Database unavailable")
 
-    # --- Path 1: JWT Bearer (header takes priority, then ?token= param) ---
-    jwt_token = (credentials.credentials if credentials else "") or token
+    # --- Path 1: JWT Bearer (header only) ---
+    jwt_token = credentials.credentials if credentials else ""
     if jwt_token:
         user = _resolve_bearer(jwt_token, db)
         if user is not None:
@@ -156,9 +177,8 @@ def require_internal_access_sse(
                 detail="حسابك لا يمتلك صلاحية الوصول الداخلي.",
             )
 
-    # --- Path 2: API key (header takes priority, then ?api_key= param) ---
-    key = x_internal_api_key or api_key
-    if _api_key_ok(key):
+    # --- Path 2: API key (header only) ---
+    if _api_key_ok(x_internal_api_key):
         return None
 
     raise HTTPException(

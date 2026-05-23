@@ -1260,6 +1260,17 @@ async def chat_endpoint(
             except Exception as e:
                 logger.warning(f"⚠️ Failed to load knowledge context: {str(e)}")
         
+        # [LAB RAG v2] guarded hook - overrides knowledge_context when enabled (default OFF).
+        if getattr(settings, "USE_LAB_RAG_V2", False):
+            try:
+                from app.services.lab_rag_integration import maybe_build_lab_context
+                _lab_ctx = maybe_build_lab_context(request.message, phone_captured=False)
+                if _lab_ctx:
+                    knowledge_context = _lab_ctx
+                    logger.info("lab_rag_v2: knowledge_context overridden (%d chars)", len(_lab_ctx))
+            except Exception as _lab_err:
+                logger.warning("lab_rag_v2 hook skipped: %s", _lab_err)
+
         # Generate AI response (grounded in context only)
         ai_response = openai_service.generate_response(
             user_message=request.message,

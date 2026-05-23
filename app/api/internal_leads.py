@@ -44,8 +44,8 @@ router = APIRouter(prefix="/internal/leads", tags=["internal-leads"])
 # ---------------------------------------------------------------------------
 # All routes use require_internal_access (from app.core.permissions).
 # That dependency accepts JWT Bearer with internal role OR X-Internal-Api-Key header.
-# The SSE stream uses require_internal_access_sse which additionally accepts
-# ?token= and ?api_key= query params (EventSource cannot send custom headers).
+# The SSE stream uses require_internal_access_sse, which accepts the SAME
+# header-based credentials (query-param credentials are no longer supported).
 # The old _require_api_key / _check_key helpers are removed.
 
 
@@ -207,11 +207,11 @@ async def leads_stream(
     """
     Server-Sent Events stream for realtime lead lifecycle events.
 
-    Authentication (EventSource cannot send custom headers):
-      • Authorization: Bearer <token>  — JWT with internal role (preferred)
-      • ?token=<JWT>                   — JWT via query param for EventSource
-      • X-Internal-Api-Key header      — API key (legacy)
-      • ?api_key=<key>                 — API key via query param for EventSource
+    Authentication - credentials must be sent as request HEADERS:
+      Authorization: Bearer <token>   (JWT with an internal role, preferred)
+      X-Internal-Api-Key: <key>       (service API key)
+    Query-param credentials (?token= / ?api_key=) are not accepted; they leak
+    secrets into URLs, proxy/access logs, and browser history.
 
     Events emitted:
       lead.created, lead.updated, lead.delivery_failed, lead.closed
