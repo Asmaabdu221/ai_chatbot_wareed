@@ -837,6 +837,78 @@ async def chat_endpoint(
             except Exception as _lead_err:
                 logger.warning("lead_service skipped (non-blocking): %s", _lead_err)
 
+        # === PHASE 2A-bis: global phone intercept (capture a phone typed in ANY state) ===
+        # Fixes leads not being captured when a bare phone arrives while the
+        # conversation is NOT in AWAITING_PHONE: early-return branches (e.g. the
+        # dialogue-manager clarification) used to bypass apply_flow_to_reply.
+        try:
+            from app.services.phone_utils import detect_phone
+            from app.services.conversation_state import get_state_store, StateEnum, LeadDraft
+            _pi_state = get_state_store().get(str(conversation_id))
+            _pi_phone = detect_phone(request.message)
+            if _pi_phone and _pi_state.state != StateEnum.AWAITING_PHONE:
+                logger.info(
+                    "PHONE DETECTED: %s | path=global_intercept | conversation_id=%s",
+                    _pi_phone, conversation_id,
+                )
+                _pi_draft = LeadDraft(
+                    phone=_pi_phone,
+                    conversation_id=str(conversation_id),
+                    latest_intent="inbound_phone",
+                    summary_hint=request.message[:100],
+                    summary_window_start_at=_pi_state.pending_started_at,
+                    status="ready",
+                )
+                try:
+                    _pi_draft.summary_text = _build_lead_summary_text_ar(
+                        db=db,
+                        lead_conversation_id=str(conversation_id),
+                        fallback_messages=conversation_history,
+                        start_at=_pi_draft.summary_window_start_at,
+                        cutoff_at=lead_cutoff_at,
+                    )
+                except Exception as _pi_sum_err:
+                    logger.debug("global intercept summary skipped: %s", _pi_sum_err)
+                from app.services.lead_service import create_lead_from_draft, deliver_lead
+                _pi_lead = create_lead_from_draft(_pi_draft, db)
+                if _pi_lead is not None:
+                    deliver_lead(_pi_lead, db)
+                    lead_captured_flag = True
+                    lead_id = _pi_lead.id
+                    try:
+                        get_state_store().update(
+                            str(conversation_id),
+                            state=StateEnum.PHONE_RECEIVED,
+                            phone=_pi_phone,
+                            lead_draft=_pi_draft,
+                            pending_action="",
+                            pending_intent_summary="",
+                            pending_started_at=None,
+                        )
+                        _reset_context_after_lead_capture(conversation_id)
+                    except Exception as _pi_state_err:
+                        logger.debug("global intercept state update skipped: %s", _pi_state_err)
+                _pi_reply = "تم استلام رقمك، سيتواصل معك أحد المختصين قريبًا."
+                if db is not None and conversation is not None:
+                    _save_message(db, conversation, MessageRole.ASSISTANT, _pi_reply, token_count=0)
+                    db.commit()
+                return ChatResponse(
+                    reply=_pi_reply,
+                    success=True,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    message_id=uuid4(),
+                    tokens_used=0,
+                    model="flow",
+                    timestamp=datetime.now(),
+                    error=None,
+                    lead_captured=lead_captured_flag,
+                    lead_id=lead_id,
+                    conversation_closed=lead_captured_flag,
+                )
+        except Exception as _pi_err:
+            logger.warning("global phone intercept skipped (non-blocking): %s", _pi_err)
+
         # === PHASE 2C: Home-sampling (home-visit) city flow ===
         try:
             from app.services.message_service import start_home_sampling_flow

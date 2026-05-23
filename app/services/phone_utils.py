@@ -114,6 +114,7 @@ def detect_phone(text: str) -> str | None:
             normalized or "",
         )
         if normalized:
+            logger.info("PHONE DETECTED: %s", normalized)
             return normalized
 
     logger.info(
