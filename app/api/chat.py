@@ -842,6 +842,7 @@ async def chat_endpoint(
         # conversation is NOT in AWAITING_PHONE: early-return branches (e.g. the
         # dialogue-manager clarification) used to bypass apply_flow_to_reply.
         try:
+            logger.info("PHASE 2A-bis: checking for phone in message")
             from app.services.phone_utils import detect_phone
             from app.services.conversation_state import get_state_store, StateEnum, LeadDraft
             _pi_state = get_state_store().get(str(conversation_id))
