@@ -61,10 +61,6 @@ def _finalize_reply_for_ui(text: str, *, cache_key: str = "") -> str:
             changed = True
             out = updated
     out = re.sub(r"\n{3,}", "\n\n", out).strip()
-    if changed and _CTA_TEXT not in out:
-        if out and not out.endswith((".", "!", "؟")):
-            out += "."
-        out = f"{out}\n\n{_CTA_TEXT}".strip()
     if changed and cache_key:
         try:
             get_smart_cache().invalidate(cache_key)

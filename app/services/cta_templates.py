@@ -17,7 +17,23 @@ Naming convention
 # ---------------------------------------------------------------------------
 
 ASK_PHONE_SALES = (
-    "إذا أردت معرفة السعر الدقيق أو الحجز، تفضل أرسل رقم جوالك وسيتواصل معك فريقنا."
+    "تبي تعرف السعر بالضبط وتحجز؟\n"
+    "اكتب رقمك وأحد من فريقنا يتواصل معك خلال دقائق 🕐"
+)
+
+ASK_PHONE_SYMPTOM = (
+    "هذي التحاليل تعطيك صورة كاملة عن وضعك 🩺\n"
+    "اكتب رقم جوالك وفريقنا الطبي يتواصل معك لتحديد الأنسب لك وتحصل على السعر"
+)
+
+ASK_PHONE_PACKAGE = (
+    "هذي الباقة توفر عليك وقت وفلوس 💰\n"
+    "اكتب رقمك ونرتب لك موعد بأسرع وقت"
+)
+
+ASK_PHONE_CONSULT = (
+    "سؤال ممتاز! فريقنا الطبي يقدر يشرح لك النتائج بالتفصيل\n"
+    "اكتب رقم جوالك وسيتواصلون معك"
 )
 
 ASK_PHONE_BOOKING = (
@@ -37,7 +53,8 @@ ASK_PHONE_DEFAULT = (
 # ---------------------------------------------------------------------------
 
 OFFER_HUMAN_HELP = (
-    "إذا احتجت متابعة من متخصص، أرسل رقم جوالك وسنتواصل معك."
+    "هذي التحاليل تعطيك صورة كاملة عن وضعك 🩺\n"
+    "اكتب رقم جوالك وفريقنا الطبي يتواصل معك لتحديد الأنسب لك وتحصل على السعر"
 )
 
 # ---------------------------------------------------------------------------
@@ -85,6 +102,12 @@ def get_ask_phone_cta(intent_hint: str = "") -> str:
     ``"urgent_phrase:…"``.
     """
     hint = (intent_hint or "").lower()
+    if any(k in hint for k in ("package", "باقة", "باقات", "bundle")):
+        return ASK_PHONE_PACKAGE
+    if any(k in hint for k in ("symptom", "أعراض", "اعراض")):
+        return ASK_PHONE_SYMPTOM
+    if any(k in hint for k in ("result", "نتائج", "consultation", "استشارة", "medical_consultation")):
+        return ASK_PHONE_CONSULT
     if any(k in hint for k in ("booking", "appointment", "حجز", "موعد")):
         return ASK_PHONE_BOOKING
     if any(k in hint for k in ("transfer", "urgent", "طوارئ")):

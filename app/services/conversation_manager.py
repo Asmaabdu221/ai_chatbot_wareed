@@ -194,6 +194,12 @@ _ROUTE_ACTION_MAP: dict[str, ConversationAction] = {
 # Public API
 # ---------------------------------------------------------------------------
 
+_NO_CTA_ROUTES = frozenset({
+    "branches", "branch", "branch_hours", "working_hours",
+    "faq_only", "faq_only_no_match", "greeting", "general_conversation",
+})
+
+
 def decide_conversation_action(
     user_text: str,
     *,
@@ -248,6 +254,16 @@ def decide_conversation_action(
             detected_route=route,
             confidence="high",
             metadata={"signal": transfer_reason},
+        )
+
+    # --- 1b. Context-aware CTA suppression: branches / FAQ / general get no CTA
+    if route in _NO_CTA_ROUTES:
+        return ConversationDecision(
+            action=ConversationAction.ANSWER_ONLY,
+            reason=f"no_cta_route:{route}",
+            detected_route=route,
+            confidence="high",
+            metadata={"route": route, "source": source},
         )
 
     # --- 2. Route-map fast path (when a route is already known) ---------------

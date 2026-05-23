@@ -51,6 +51,9 @@ logger = logging.getLogger(__name__)
 
 _CTA_MARKERS = (
     "أرسل رقم جوالك",
+    "زودنا برقم جوالك",
+    "اكتب رقم جوالك",
+    "اكتب رقمك",
     "سيتواصل معك",
     "خدمة العملاء",
 )
@@ -269,6 +272,10 @@ def apply_flow_to_reply(
             summary_hint=user_text[:100],
             summary_window_start_at=state.pending_started_at,
             status="ready",
+        )
+        logger.info(
+            "LEAD CAPTURED | phone=%s | intent=%s | conversation_id=%s",
+            phone, lead_draft.latest_intent, conversation_id,
         )
         store.update(
             conversation_id,
