@@ -3,10 +3,27 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+def lab_rag_v2_enabled() -> bool:
+    """True when Lab RAG v2 (OpenAI embeddings) is active.
+
+    When enabled, the legacy local sentence-transformers model is redundant and
+    must NOT be loaded (~500MB RAM; caused OOM on Render).
+    """
+    val = os.getenv("USE_LAB_RAG_V2")
+    if val is not None:
+        return str(val).strip().lower() in ("1", "true", "yes", "on")
+    try:
+        from app.core.config import settings
+        return bool(getattr(settings, "USE_LAB_RAG_V2", False))
+    except Exception:
+        return False
 
 _MODEL_SINGLETONS: dict[str, Any] = {}
 _TORCH_THREADS_CONFIGURED = False
@@ -19,6 +36,11 @@ def get_shared_sentence_transformer(model_name: str):
     model_key = str(model_name or "").strip()
     if not model_key:
         raise ValueError("model_name must be a non-empty string")
+
+    # Skip loading the heavy local model entirely when Lab RAG v2 is active.
+    if lab_rag_v2_enabled():
+        logger.info("sentence-transformers load skipped (USE_LAB_RAG_V2=true) | model=%s", model_key)
+        return None
 
     cached = _MODEL_SINGLETONS.get(model_key)
     if cached is not None:

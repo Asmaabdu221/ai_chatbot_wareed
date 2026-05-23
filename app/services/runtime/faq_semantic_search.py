@@ -127,6 +127,12 @@ class FAQSemanticSearch:
         if self._initialized:
             return
         self._initialized = True
+        from app.services.runtime.semantic_model_pool import lab_rag_v2_enabled
+        if lab_rag_v2_enabled():
+            self._available = False
+            self._reason = "disabled_for_lab_rag_v2"
+            logger.info("faq_semantic_search disabled | reason=%s", self._reason)
+            return
         try:
             import chromadb  # type: ignore
             from sentence_transformers import SentenceTransformer  # type: ignore

@@ -31,6 +31,9 @@ logger = logging.getLogger(__name__)
 async def _deferred_semantic_startup_after_healthy(app: FastAPI) -> None:
     """Start semantic background indexing only after app is marked healthy."""
     try:
+        if getattr(settings, "USE_LAB_RAG_V2", False):
+            logger.info("deferred old-semantic startup skipped | reason=USE_LAB_RAG_V2 (OpenAI embeddings active)")
+            return
         while not bool(getattr(app.state, "is_healthy", False)):
             await asyncio.sleep(0.25)
 
