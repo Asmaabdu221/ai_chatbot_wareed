@@ -1370,9 +1370,23 @@ async def chat_endpoint(
         error_msg = f"Unexpected error in chat endpoint: {str(e)}"
         logger.error(f"❌ {error_msg}", exc_info=True)
         
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to process chat request"
+        # Graceful fallback: never surface a 500 to the user — return a polite
+        # Arabic message so the chat keeps working even if a sub-pipeline fails.
+        _fallback_uid = (current_user.id if current_user else getattr(request, "user_id", None)) or uuid4()
+        _fallback_cid = getattr(request, "conversation_id", None) or uuid4()
+        return ChatResponse(
+            reply="عذراً، واجهتنا مشكلة مؤقتة في معالجة رسالتك. يرجى المحاولة مرة أخرى بعد قليل.",
+            success=False,
+            user_id=_fallback_uid,
+            conversation_id=_fallback_cid,
+            message_id=uuid4(),
+            tokens_used=0,
+            model="error",
+            timestamp=datetime.now(),
+            error="internal_error",
+            lead_captured=False,
+            lead_id=None,
+            conversation_closed=False,
         )
 
 

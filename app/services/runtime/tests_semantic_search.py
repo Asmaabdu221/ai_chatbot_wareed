@@ -175,35 +175,41 @@ class TestsSemanticSearch:
             return
         assert self._collection is not None
 
-        clean_records = [r for r in records if isinstance(r, dict) and _safe_str(r.get("id"))]
-        if not clean_records:
-            return
-
-        fingerprint = _records_fingerprint(clean_records)
-        count = int(self._collection.count() or 0)
-        expected = len(clean_records)
         try:
-            meta = self._collection.metadata or {}
-            stored_fp = _safe_str(meta.get("tests_fingerprint"))
-        except Exception:
-            stored_fp = ""
-
-        if count == expected and stored_fp == fingerprint:
-            return
-
-        with self._build_lock:
-            if self._building:
+            clean_records = [r for r in records if isinstance(r, dict) and _safe_str(r.get("id"))]
+            if not clean_records:
                 return
-            self._building = True
 
-        logger.info("Background semantic indexing started...")
-        thread = threading.Thread(
-            target=self._run_background_build,
-            args=(clean_records, fingerprint),
-            daemon=True,
-            name="tests-semantic-index-build",
-        )
-        thread.start()
+            fingerprint = _records_fingerprint(clean_records)
+            count = int(self._collection.count() or 0)
+            expected = len(clean_records)
+            try:
+                meta = self._collection.metadata or {}
+                stored_fp = _safe_str(meta.get("tests_fingerprint"))
+            except Exception:
+                stored_fp = ""
+
+            if count == expected and stored_fp == fingerprint:
+                return
+
+            with self._build_lock:
+                if self._building:
+                    return
+                self._building = True
+
+            logger.info("Background semantic indexing started...")
+            thread = threading.Thread(
+                target=self._run_background_build,
+                args=(clean_records, fingerprint),
+                daemon=True,
+                name="tests-semantic-index-build",
+            )
+            thread.start()
+        except Exception as exc:
+            # Never let an index (re)build error reach the chat request path.
+            logger.warning("tests build_or_refresh skipped (non-fatal) | reason=%s", exc.__class__.__name__)
+            with self._build_lock:
+                self._building = False
 
     def query(
         self,
