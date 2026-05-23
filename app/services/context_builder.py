@@ -40,20 +40,29 @@ class ContextBuilder:
     """Builds intent-specific grounded context strings."""
 
     def build_context(self, tests: list[dict], intent: QueryIntent,
-                      include_price: bool = False, extra: Optional[dict] = None) -> str:
+                      include_price: bool = False, extra: Optional[dict] = None,
+                      packages: Optional[list[dict]] = None,
+                      upsell_packages: Optional[list[dict]] = None) -> str:
         """Dispatch to the intent-specific builder. Returns '' when nothing to say."""
-        if intent == QueryIntent.SYMPTOM_QUERY:
-            return self._build_symptom_context(tests)
-        if intent == QueryIntent.FASTING_PREP:
-            return self._build_fasting_context(tests)
-        if intent == QueryIntent.AVAILABILITY:
-            return self._build_availability_context(tests)
-        if intent == QueryIntent.AMBIGUOUS:
-            return self._build_disambiguation_context(tests, extra)
+        packages = packages or []
+        upsell_packages = upsell_packages or []
         if intent == QueryIntent.PACKAGE_INQUIRY:
-            return self._build_package_context(tests)
-        # TEST_LOOKUP / GENERAL
-        return self._build_test_context(tests, include_price)
+            return self._build_package_context(packages, include_price)
+        if intent == QueryIntent.SYMPTOM_QUERY:
+            base = self._build_symptom_context(tests)
+        elif intent == QueryIntent.FASTING_PREP:
+            base = self._build_fasting_context(tests)
+        elif intent == QueryIntent.AVAILABILITY:
+            base = self._build_availability_context(tests)
+        elif intent == QueryIntent.AMBIGUOUS:
+            base = self._build_disambiguation_context(tests, extra)
+        else:  # TEST_LOOKUP / GENERAL
+            base = self._build_test_context(tests, include_price)
+        if upsell_packages:
+            up = self._build_upsell_context(tests, upsell_packages, include_price)
+            if up:
+                base = (base + "\n\n" + up) if base else up
+        return base
 
     # ------------------------------------------------------------ helpers
     @staticmethod
@@ -146,12 +155,59 @@ class ContextBuilder:
             lines.append(f"- {self._name(t)}" + (f" — {bf}" if bf and not bf.startswith('NEEDS') else ""))
         return "\n".join(lines)
 
-    def _build_package_context(self, tests: list[dict]) -> str:
-        pkgs = []
-        for t in tests[:6]:
-            names = str(t.get(K_PKG_NAMES, "")).strip()
+    @staticmethod
+    def _pkg_name(p: dict) -> str:
+        ar = str(p.get("package_name_ar", "")).strip()
+        en = str(p.get("package_name_en", "")).strip()
+        return f"{ar} ({en})" if en and not en.startswith("NEEDS") else ar
+
+    def _pkg_price_line(self, p: dict, include_price: bool) -> str:
+        if not include_price:
+            return "السعر: سيتواصل معك فريقنا لإعطائك السعر الدقيق"
+        price = str(p.get("price", "")).strip()
+        if price in PRICE_PLACEHOLDERS:
+            return "السعر: سيتواصل معك فريقنا لإعطائك السعر الدقيق"
+        line = f"السعر: {price} ريال"
+        disc = str(p.get("discount_vs_individual", "")).strip()
+        if disc and not disc.startswith("NEEDS"):
+            line += f" (توفير {disc} مقارنة بشرائها منفردة)"
+        return line
+
+    def _build_package_context(self, packages: list[dict], include_price: bool = False) -> str:
+        if not packages:
+            return "تتوفر لدى مختبر وريد باقات صحية متنوعة؛ يسعدنا مساعدتك في اختيار الأنسب. شاركنا ما تود فحصه."
+        blocks = []
+        for p in packages[:5]:
+            lines = [f"- الباقة: {self._pkg_name(p)}"]
+            tc = str(p.get("test_count", "")).strip()
+            names = str(p.get("test_names_ar", "")).strip()
             if names and not names.startswith("NEEDS"):
-                pkgs.append(f"- {self._name(t)} ضمن الباقات: {names}")
-        if not pkgs:
-            return "تتوفر لدى مختبر وريد باقات صحية متنوعة؛ يسعدنا مساعدتك في اختيار الأنسب."
-        return "باقات ذات صلة:\n" + "\n".join(pkgs)
+                parts = [x.strip() for x in names.split("،") if x.strip()]
+                shown = "، ".join(parts[:5])
+                more = f" و{len(parts) - 5} تحليل آخر" if len(parts) > 5 else ""
+                lines.append(f"  تشمل {tc or len(parts)} تحاليل: {shown}{more}")
+            bf = str(p.get("best_for", "")).strip()
+            if bf and not bf.startswith("NEEDS"):
+                lines.append(f"  مناسبة لـ: {bf}")
+            fr = str(p.get("fasting_required", "")).strip()
+            if fr and not fr.startswith("NEEDS"):
+                fh = str(p.get("fasting_hours", "")).strip()
+                suffix = f" ({fh} ساعة)" if fh and fh not in ("0", "NEEDS_REVIEW") else ""
+                lines.append(f"  الصيام: {fr}{suffix}")
+            lines.append("  " + self._pkg_price_line(p, include_price))
+            blocks.append("\n".join(lines))
+        return "باقات ذات صلة:\n" + "\n".join(blocks)
+
+    def _build_upsell_context(self, tests: list[dict], packages: list[dict],
+                              include_price: bool = False) -> str:
+        if not packages:
+            return ""
+        p = packages[0]
+        line = f"ملاحظة: هذه التحاليل متوفرة ضمن «{self._pkg_name(p)}»"
+        disc = str(p.get("discount_vs_individual", "")).strip()
+        if disc and not disc.startswith("NEEDS"):
+            line += f" بسعر أوفر (توفير {disc}) من شرائها منفردة"
+        else:
+            line += "، وقد تكون أوفر من شراء التحاليل منفردة"
+        line += ". يمكن طلب رقم جوال العميل لإتمام الحجز."
+        return line

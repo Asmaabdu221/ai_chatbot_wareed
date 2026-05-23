@@ -68,6 +68,8 @@ class RetrievalResult:
     test_ids: list[str] = field(default_factory=list)
     intent: Optional[QueryIntent] = None
     disambiguation: Optional[dict] = None
+    packages: list[dict] = field(default_factory=list)
+    upsell_packages: list[dict] = field(default_factory=list)
 
 
 # ----------------------------------------------------------------- Layer 1
@@ -169,6 +171,81 @@ class SymptomRouter:
         return [tid for tid, _ in counter.most_common(8)]
 
 
+# ----------------------------------------------------------------- Packages
+class PackageRetriever:
+    """Name / symptom / member-test based package lookup (offline, fast)."""
+
+    def __init__(self, packages_df, synonym_df, symptom_df) -> None:
+        self.by_id: dict[str, dict] = {}
+        for _, r in packages_df.iterrows():
+            pid = str(r.get("package_id", "")).strip()
+            if pid:
+                self.by_id[pid] = r.to_dict()
+        self.index: dict[str, list[str]] = {}
+        for _, r in synonym_df.iterrows():
+            term = normalize(r.get("search_term", ""))
+            pid = str(r.get("package_id", "")).strip()
+            if term and pid:
+                self.index.setdefault(term, [])
+                if pid not in self.index[term]:
+                    self.index[term].append(pid)
+        self.terms: list[str] = list(self.index.keys())
+        self.sym_rows: list[tuple[str, list[str]]] = []
+        for _, r in symptom_df.iterrows():
+            sym = normalize(r.get("symptom_ar", ""))
+            pids = [p.strip() for p in str(r.get("package_ids", "")).split(",") if p.strip()]
+            if sym and pids:
+                self.sym_rows.append((sym, pids))
+        self.test2pkgs: dict[str, list[str]] = {}
+        for pid, row in self.by_id.items():
+            for tid in str(row.get("test_ids", "")).split(","):
+                tid = tid.strip()
+                if tid.startswith("TEST_"):
+                    self.test2pkgs.setdefault(tid, [])
+                    if pid not in self.test2pkgs[tid]:
+                        self.test2pkgs[tid].append(pid)
+
+    def search_by_name(self, query: str, threshold: int = 82, limit: int = 5) -> list[str]:
+        nq = normalize(query)
+        if not nq:
+            return []
+        if nq in self.index:
+            return list(self.index[nq])
+        out: list[str] = []
+        for term, score, _ in process.extract(nq, self.terms, scorer=fuzz.token_set_ratio, limit=limit):
+            if score >= threshold:
+                for pid in self.index.get(term, []):
+                    if pid not in out:
+                        out.append(pid)
+        return out
+
+    def search_by_symptoms(self, symptom_terms: list[str]) -> list[str]:
+        q = " ".join(normalize(t) for t in (symptom_terms or []))
+        q_tokens = {w for w in q.split() if len(w) >= 3}
+        if not q_tokens:
+            return []
+        from collections import Counter
+        c: Counter = Counter()
+        for sym, pids in self.sym_rows:
+            s_tokens = {w for w in sym.split() if len(w) >= 3}
+            overlap = q_tokens & s_tokens
+            if overlap or sym in q:
+                for pid in pids:
+                    c[pid] += len(overlap) or 1
+        return [pid for pid, _ in c.most_common(6)]
+
+    def get_packages_for_tests(self, test_ids: list[str], min_overlap: int = 2) -> list[str]:
+        from collections import Counter
+        c: Counter = Counter()
+        for tid in test_ids or []:
+            for pid in self.test2pkgs.get(str(tid).strip(), []):
+                c[pid] += 1
+        return [pid for pid, n in c.most_common() if n >= min_overlap]
+
+    def get(self, pid: str) -> dict:
+        return self.by_id.get(str(pid).strip(), {})
+
+
 # ----------------------------------------------------------------- Orchestrator
 class LabRetrievalEngine:
     """Combines the three retrieval layers behind an intent-aware API."""
@@ -178,6 +255,7 @@ class LabRetrievalEngine:
         self.synonym_retriever: Optional[SynonymRetriever] = None
         self.vector_retriever: Optional[VectorRetriever] = None
         self.symptom_router: Optional[SymptomRouter] = None
+        self.package_retriever: Optional["PackageRetriever"] = None
         self._disambig: Optional[pd.DataFrame] = None
         self._warm = False
 
@@ -190,6 +268,14 @@ class LabRetrievalEngine:
         self.symptom_router = SymptomRouter(self.data_loader.load_symptoms_map())
         self._disambig = self.data_loader.load_disambiguation()
         self.vector_retriever = VectorRetriever()
+        try:
+            self.package_retriever = PackageRetriever(
+                self.data_loader.load_packages(),
+                self.data_loader.load_package_synonyms(),
+                self.data_loader.load_package_symptoms(),
+            )
+        except Exception:
+            self.package_retriever = None
         self._warm = True
 
     def _ensure_warm(self) -> None:
@@ -235,8 +321,20 @@ class LabRetrievalEngine:
         test_ids: list[str] = []
         disambig: Optional[dict] = None
 
-        if intent in (QueryIntent.TEST_LOOKUP, QueryIntent.FASTING_PREP,
-                      QueryIntent.AVAILABILITY, QueryIntent.PACKAGE_INQUIRY):
+        packages: list[dict] = []
+        upsell: list[dict] = []
+
+        if intent == QueryIntent.PACKAGE_INQUIRY:
+            pkg_ids: list[str] = []
+            if self.package_retriever is not None:
+                pkg_ids = self.package_retriever.search_by_name(query)
+                if not pkg_ids:
+                    pkg_ids = self.package_retriever.search_by_symptoms([query])
+            packages = self.data_loader.get_packages_by_ids(pkg_ids[:6])
+            return RetrievalResult(tests=[], test_ids=[], intent=intent,
+                                   disambiguation=None, packages=packages, upsell_packages=[])
+
+        if intent in (QueryIntent.TEST_LOOKUP, QueryIntent.FASTING_PREP, QueryIntent.AVAILABILITY):
             test_ids = self.synonym_retriever.search(query)
             if not test_ids and self.vector_retriever is not None:
                 test_ids = self.vector_retriever.search(query, top_k=3)
@@ -251,7 +349,20 @@ class LabRetrievalEngine:
             test_ids = []
 
         tests = self.data_loader.get_tests_by_ids(test_ids[:8])
-        return RetrievalResult(tests=tests, test_ids=test_ids[:8], intent=intent, disambiguation=disambig)
+
+        # Cross-sell: packages that cover the recommended tests.
+        if self.package_retriever is not None and tests:
+            ids_for_upsell = [t.get("test_id") for t in tests]
+            if intent == QueryIntent.SYMPTOM_QUERY:
+                up_ids = self.package_retriever.get_packages_for_tests(ids_for_upsell, min_overlap=2)
+            elif intent == QueryIntent.TEST_LOOKUP:
+                up_ids = self.package_retriever.get_packages_for_tests(ids_for_upsell, min_overlap=1)
+            else:
+                up_ids = []
+            upsell = self.data_loader.get_packages_by_ids(up_ids[:3])
+
+        return RetrievalResult(tests=tests, test_ids=test_ids[:8], intent=intent,
+                               disambiguation=disambig, packages=packages, upsell_packages=upsell)
 
 
 _engine: Optional[LabRetrievalEngine] = None

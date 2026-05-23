@@ -19,18 +19,22 @@ import pandas as pd
 # Project root: app/data/lab_data_loader.py -> parents[2] == repo root
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_EXCEL = PROJECT_ROOT / "app" / "data" / "sources" / "excel" / "tests_REBUILT.xlsx"
-DEFAULT_PACKAGES = PROJECT_ROOT / "app" / "data" / "sources" / "excel" / "packages.xlsx"
+DEFAULT_PACKAGES = PROJECT_ROOT / "app" / "data" / "sources" / "excel" / "packages_REBUILT.xlsx"
 
 # Sheet names (exact, from the rebuilt workbook)
 SHEET_MASTER = "التحاليل الكاملة"
 SHEET_SYNONYMS = "الكلمات المرادفة"
 SHEET_SYMPTOMS = "الأعراض والتحاليل"
 SHEET_DISAMBIG = "التحاليل المتشابهة"
+SHEET_PKG_MAIN = "الباقات الكاملة"
+SHEET_PKG_SYN = "مرادفات الباقات"
+SHEET_PKG_SYM = "أعراض الباقات"
 
 # Canonical master column keys (row-2 English/Arabic keys)
 COL_ID = "test_id"
 COL_NAME_AR = "اسم التحليل بالعربية"
 COL_NAME_EN = "names"
+COL_PKG_ID = "package_id"
 
 
 class LabDataLoader:
@@ -45,7 +49,10 @@ class LabDataLoader:
         self._symptoms: Optional[pd.DataFrame] = None
         self._disambig: Optional[pd.DataFrame] = None
         self._packages: Optional[pd.DataFrame] = None
+        self._package_syn: Optional[pd.DataFrame] = None
+        self._package_sym: Optional[pd.DataFrame] = None
         self._by_id: dict[str, dict] = {}
+        self._pkg_by_id: dict[str, dict] = {}
 
     # ------------------------------------------------------------------ loaders
     def load_master(self) -> pd.DataFrame:
@@ -76,13 +83,73 @@ class LabDataLoader:
         return self._disambig
 
     def load_packages(self) -> pd.DataFrame:
-        """Load the standalone packages workbook (best-effort; empty DF on failure)."""
+        """Load the packages master sheet (one row per package), indexed by package_id."""
         if self._packages is None:
             try:
-                self._packages = pd.read_excel(self.packages_path, dtype=str).fillna("")
+                df = pd.read_excel(self.packages_path, sheet_name=SHEET_PKG_MAIN, header=1, dtype=str).fillna("")
+                df = df[df[COL_PKG_ID].astype(str).str.strip() != ""].reset_index(drop=True)
+                self._packages = df
+                self._pkg_by_id = {str(r[COL_PKG_ID]).strip(): r.to_dict() for _, r in df.iterrows()}
             except Exception:
                 self._packages = pd.DataFrame()
+                self._pkg_by_id = {}
         return self._packages
+
+    def load_package_synonyms(self) -> pd.DataFrame:
+        """Load the flat package synonym index (search_term | package_id | name_ar | match_type)."""
+        if self._package_syn is None:
+            try:
+                self._package_syn = pd.read_excel(self.packages_path, sheet_name=SHEET_PKG_SYN, dtype=str).fillna("")
+            except Exception:
+                self._package_syn = pd.DataFrame()
+        return self._package_syn
+
+    def load_package_symptoms(self) -> pd.DataFrame:
+        """Load the symptom -> package_ids mapping for packages."""
+        if self._package_sym is None:
+            try:
+                self._package_sym = pd.read_excel(self.packages_path, sheet_name=SHEET_PKG_SYM, dtype=str).fillna("")
+            except Exception:
+                self._package_sym = pd.DataFrame()
+        return self._package_sym
+
+    def get_package_by_id(self, pkg_id: str) -> dict:
+        """Return the package row for a package_id as a dict ({} if not found)."""
+        if self._packages is None:
+            self.load_packages()
+        return self._pkg_by_id.get(str(pkg_id).strip(), {})
+
+    def get_packages_by_ids(self, ids: list[str]) -> list[dict]:
+        """Return package rows for a list of package_ids (ordered, de-duplicated)."""
+        if self._packages is None:
+            self.load_packages()
+        out: list[dict] = []
+        seen: set[str] = set()
+        for pid in ids or []:
+            p = str(pid).strip()
+            if p and p not in seen and p in self._pkg_by_id:
+                seen.add(p)
+                out.append(self._pkg_by_id[p])
+        return out
+
+    def get_packages_for_symptoms(self, symptom_terms: list[str]) -> list[dict]:
+        """Return packages mapped to any of the given symptom terms (via the symptom sheet)."""
+        from app.utils.arabic_normalizer import normalize
+        sym_df = self.load_package_symptoms()
+        if sym_df is None or sym_df.empty:
+            return []
+        terms = {normalize(t) for t in (symptom_terms or []) if normalize(t)}
+        if not terms:
+            return []
+        order: list[str] = []
+        for _, r in sym_df.iterrows():
+            sym = normalize(r.get("symptom_ar", ""))
+            if sym and any(t in sym or sym in t for t in terms):
+                for pid in str(r.get("package_ids", "")).split(","):
+                    pid = pid.strip()
+                    if pid and pid not in order:
+                        order.append(pid)
+        return self.get_packages_by_ids(order)
 
     def load_all(self) -> None:
         """Eagerly load every sheet (used by warm_up)."""
@@ -91,6 +158,8 @@ class LabDataLoader:
         self.load_symptoms_map()
         self.load_disambiguation()
         self.load_packages()
+        self.load_package_synonyms()
+        self.load_package_symptoms()
 
     # ------------------------------------------------------------------ lookups
     def get_test_by_id(self, test_id: str) -> dict:

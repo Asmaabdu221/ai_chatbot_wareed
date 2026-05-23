@@ -42,11 +42,13 @@ def maybe_build_lab_context(message: str, phone_captured: bool = False) -> Optio
 
         intent = get_intent_classifier().classify(message)
         result = get_lab_retrieval_engine().retrieve(message, intent)
-        if not result.tests and intent != QueryIntent.AMBIGUOUS:
+        if (not result.tests and not result.packages
+                and intent != QueryIntent.AMBIGUOUS):
             return None
         ctx = ContextBuilder().build_context(
             tests=result.tests, intent=intent,
             include_price=phone_captured, extra=result.disambiguation,
+            packages=result.packages, upsell_packages=result.upsell_packages,
         )
         return ctx or None
     except Exception as exc:  # never break the chat path

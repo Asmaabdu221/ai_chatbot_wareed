@@ -110,3 +110,53 @@ def test_price_gated(engine):
 
     with_price = ContextBuilder().build_context(tests, QueryIntent.TEST_LOOKUP, include_price=True)
     assert price_val in with_price
+
+
+# ---- Package recommender (Step 5) -------------------------------------------
+def test_package_direct_inquiry(engine, clf):
+    q = "عندكم باقات؟"
+    intent = clf.classify(q)
+    assert intent == QueryIntent.PACKAGE_INQUIRY
+    res = engine.retrieve(q, intent)
+    ctx = ContextBuilder().build_context([], intent, packages=res.packages)
+    assert ctx and "باق" in ctx
+
+
+def test_package_by_name(engine):
+    pkgs = engine.data_loader.load_packages()
+    assert len(pkgs) > 0
+    pid = pkgs.iloc[0]["package_id"]
+    name = pkgs.iloc[0]["package_name_ar"]
+    assert pid in engine.package_retriever.search_by_name(name)
+
+
+def test_package_upsell(engine):
+    pr = engine.package_retriever
+    target = None
+    for pid, row in pr.by_id.items():
+        ids = [x.strip() for x in str(row.get("test_ids", "")).split(",") if x.strip().startswith("TEST_")]
+        if len(ids) >= 2:
+            target = (pid, ids[:2]); break
+    assert target, "expected a package with >=2 member tests"
+    pid, two = target
+    assert pid in pr.get_packages_for_tests(two, min_overlap=2)
+
+
+def test_package_symptom_match(engine):
+    sym_df = engine.data_loader.load_package_symptoms()
+    assert len(sym_df) > 0
+    sym = sym_df.iloc[0]["symptom_ar"]
+    assert len(engine.package_retriever.search_by_symptoms([sym])) >= 1
+
+
+def test_package_price_gated(engine):
+    pkgs = engine.data_loader.load_packages()
+    priced = pkgs[pkgs["price"].str.match(r"^\d", na=False)]
+    assert len(priced) > 0
+    pkg = priced.iloc[0].to_dict()
+    price = str(pkg["price"]).strip()
+    cb = ContextBuilder()
+    no_price = cb.build_context([], QueryIntent.PACKAGE_INQUIRY, include_price=False, packages=[pkg])
+    assert "سيتواصل" in no_price
+    with_price = cb.build_context([], QueryIntent.PACKAGE_INQUIRY, include_price=True, packages=[pkg])
+    assert price in with_price
