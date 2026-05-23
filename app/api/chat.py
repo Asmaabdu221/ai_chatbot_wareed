@@ -783,6 +783,29 @@ async def chat_endpoint(
                         conversation_closed=lead_captured_flag,
                     )
                 # None returned → new topic, state already reset to IDLE, fall through
+            elif _curr_state.state == StateEnum.AWAITING_HOME_CITY:
+                from app.services.message_service import resolve_home_sampling_city
+                _hs_reply = resolve_home_sampling_city(conversation_id, request.message)
+                if _hs_reply is not None:
+                    if db is not None and conversation is not None:
+                        _save_message(
+                            db, conversation, MessageRole.ASSISTANT,
+                            _hs_reply, token_count=0,
+                        )
+                        db.commit()
+                    return ChatResponse(
+                        reply=_hs_reply,
+                        success=True,
+                        user_id=user_id,
+                        conversation_id=conversation_id,
+                        message_id=uuid4(),
+                        tokens_used=0,
+                        model="flow",
+                        timestamp=datetime.now(),
+                        error=None,
+                        lead_captured=False,
+                        lead_id=None,
+                    )
         except Exception as _phase2a_err:
             logger.warning("conversation_flow phase2a skipped (non-blocking): %s", _phase2a_err)
 
@@ -813,6 +836,33 @@ async def chat_endpoint(
                     _reset_context_after_lead_capture(conversation_id)
             except Exception as _lead_err:
                 logger.warning("lead_service skipped (non-blocking): %s", _lead_err)
+
+        # === PHASE 2C: Home-sampling (home-visit) city flow ===
+        try:
+            from app.services.message_service import start_home_sampling_flow
+            _hs_start = start_home_sampling_flow(conversation_id, request.message)
+            if _hs_start is not None:
+                if db is not None and conversation is not None:
+                    _save_message(
+                        db, conversation, MessageRole.ASSISTANT,
+                        _hs_start, token_count=0,
+                    )
+                    db.commit()
+                return ChatResponse(
+                    reply=_hs_start,
+                    success=True,
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    message_id=uuid4(),
+                    tokens_used=0,
+                    model="flow",
+                    timestamp=datetime.now(),
+                    error=None,
+                    lead_captured=False,
+                    lead_id=None,
+                )
+        except Exception as _phase2c_err:
+            logger.warning("home_sampling phase2c skipped (non-blocking): %s", _phase2c_err)
 
         # === QUESTION ROUTING (price → fixed response, no API) ===
         route_type, fixed_reply = route_question(request.message)

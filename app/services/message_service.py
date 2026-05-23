@@ -2591,6 +2591,62 @@ def _resolve_services_branches_home_visit_start_reply(
     )
 
 
+def start_home_sampling_flow(conversation_id: UUID, message: str) -> str | None:
+    """Home-visit path extension: when the user asks about home sampling in free
+    text, answer + ask for their city and arm AWAITING_HOME_CITY. Returns the
+    reply, or None to let normal routing handle the message.
+    """
+    try:
+        if not _user_explicitly_asked_home_visit(message):
+            return None
+        # Preserve existing deterministic button flows.
+        if _is_home_visit_button_request(message) or _is_services_branches_home_visit_start_trigger(message):
+            return None
+        from app.services.conversation_state import get_state_store, StateEnum
+        from app.services.home_sampling import append_city_prompt
+        base = _direct_kb_faq_answer(message, "home_visit") or _safe_faq_class_fallback_reply("home_visit")
+        reply = append_city_prompt(base)
+        get_state_store().update(str(conversation_id), state=StateEnum.AWAITING_HOME_CITY)
+        logger.info("HOME_SAMPLING | started -> AWAITING_HOME_CITY | conversation_id=%s", conversation_id)
+        return reply
+    except Exception as exc:  # never break the chat path
+        logger.warning("home_sampling start skipped (non-blocking): %s", exc)
+        return None
+
+
+def resolve_home_sampling_city(conversation_id: UUID, message: str) -> str | None:
+    """When AWAITING_HOME_CITY, classify the named city and reply. Available ->
+    move to AWAITING_PHONE (lead CTA). Unavailable -> IDLE (no CTA). Unrecognized
+    -> stay in AWAITING_HOME_CITY. Returns None when not in the awaiting state.
+    """
+    try:
+        from app.services.conversation_state import get_state_store, StateEnum
+        from app.services.home_sampling import resolve_city_reply
+        store = get_state_store()
+        state = store.get(str(conversation_id))
+        if state.state != StateEnum.AWAITING_HOME_CITY:
+            return None
+        outcome, reply = resolve_city_reply(message)
+        if outcome == "available":
+            store.update(
+                str(conversation_id),
+                state=StateEnum.AWAITING_PHONE,
+                pending_action="home_visit",
+                pending_intent_summary="الزيارة المنزلية",
+                pending_started_at=datetime.now(timezone.utc),
+            )
+            logger.info("HOME_SAMPLING | city_available -> AWAITING_PHONE | conversation_id=%s", conversation_id)
+        elif outcome == "unavailable":
+            store.update(str(conversation_id), state=StateEnum.IDLE)
+            logger.info("HOME_SAMPLING | city_unavailable -> IDLE | conversation_id=%s", conversation_id)
+        else:
+            logger.info("HOME_SAMPLING | city_unrecognized -> stay | conversation_id=%s", conversation_id)
+        return reply
+    except Exception as exc:  # never break the chat path
+        logger.warning("home_sampling resolve skipped (non-blocking): %s", exc)
+        return None
+
+
 def _flow_state_key(conversation_id: UUID) -> str:
     return f"flow_state:{conversation_id}"
 

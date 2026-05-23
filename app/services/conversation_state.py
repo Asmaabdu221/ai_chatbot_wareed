@@ -29,6 +29,7 @@ class StateEnum(str, Enum):
     PHONE_RECEIVED = "phone_received"
     HUMAN_HELP_OFFERED = "human_help_offered"
     READY_FOR_TRANSFER = "ready_for_transfer"
+    AWAITING_HOME_CITY = "awaiting_home_city"
 
 
 @dataclass
