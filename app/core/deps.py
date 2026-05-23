@@ -87,15 +87,21 @@ def get_current_user_optional(
     """
     if db is None or not credentials or not credentials.credentials:
         return None
-    token = credentials.credentials
-    user_id_str = decode_access_token(token)
-    if not user_id_str:
-        return None
     try:
-        user_id = UUID(user_id_str)
-    except ValueError:
+        token = credentials.credentials
+        user_id_str = decode_access_token(token)
+        if not user_id_str:
+            return None
+        try:
+            user_id = UUID(user_id_str)
+        except ValueError:
+            return None
+        user = db.get(User, user_id)
+        if not user or not user.is_active:
+            return None
+        return user
+    except Exception as exc:
+        # Optional auth must never 500 the request. A transient DB/token error
+        # degrades to anonymous so the chat endpoint can still respond.
+        logger.warning("get_current_user_optional degraded to anonymous | reason=%s", exc.__class__.__name__)
         return None
-    user = db.get(User, user_id)
-    if not user or not user.is_active:
-        return None
-    return user

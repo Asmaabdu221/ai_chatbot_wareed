@@ -662,6 +662,10 @@ async def chat_endpoint(
     """
     try:
         logger.info(f"📨 Received chat request: {request.message[:50]}...")
+        logger.info(
+            "chat_request_received | authed=%s | conversation_id=%s | message_length=%s",
+            bool(current_user), request.conversation_id, len(request.message or ""),
+        )
         
         # Resolve user: JWT Bearer overrides body user_id (same for Web/Mobile)
         effective_user_id = current_user.id if current_user else request.user_id
@@ -1367,8 +1371,7 @@ async def chat_endpoint(
     except Exception as e:
         if db is not None:
             db.rollback()
-        error_msg = f"Unexpected error in chat endpoint: {str(e)}"
-        logger.error(f"❌ {error_msg}", exc_info=True)
+        logger.error("❌ CHAT ERROR: %s: %s", type(e).__name__, e, exc_info=True)
         
         # Graceful fallback: never surface a 500 to the user — return a polite
         # Arabic message so the chat keeps working even if a sub-pipeline fails.
