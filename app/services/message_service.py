@@ -3659,15 +3659,26 @@ def send_message_with_attachment(
         elif normalized_attachment_type == "image" or (
             attachment_filename and attachment_filename.lower().endswith((".jpg", ".jpeg", ".png"))
         ):
+            _lab_rag_v2 = bool(getattr(settings, "USE_LAB_RAG_V2", False))
             try:
                 ocr_result = process_prescription_image(attachment_content, "image/jpeg")
             except Exception:
-                raise ValueError("Failed to analyze the attached image. Please upload a clearer image.")
+                if _lab_rag_v2:
+                    ocr_result = {}
+                else:
+                    raise ValueError("Failed to analyze the attached image. Please upload a clearer image.")
             extracted_context = (ocr_result.get("response_message") or "").strip()
-            if not extracted_context:
+            if not extracted_context and not _lab_rag_v2:
                 raise ValueError("No readable content could be extracted from the attached image.")
         else:
-            extracted_context = extract_text_from_document(attachment_content, attachment_filename or "")
+            _lab_rag_v2 = bool(getattr(settings, "USE_LAB_RAG_V2", False))
+            try:
+                extracted_context = extract_text_from_document(attachment_content, attachment_filename or "")
+            except Exception:
+                if _lab_rag_v2:
+                    extracted_context = ""
+                else:
+                    raise
     logger.info(
         "attachment extraction checkpoint | extracted_present=%s | extracted_len=%s | extracted_preview=%s",
         bool(extracted_context.strip()),
@@ -3734,6 +3745,29 @@ def send_message_with_attachment(
     user_msg = add_message(db, conversation_id, MessageRole.USER, question_for_ai)
     db.commit()
     db.refresh(user_msg)
+
+    # === Feature 1: uploaded lab-results reader (gated by USE_LAB_RAG_V2) ===
+    if attachment_content and not is_audio and bool(getattr(settings, "USE_LAB_RAG_V2", False)):
+        from app.services.lab_results_reader import (
+            read_lab_results_from_text,
+            OCR_UNREADABLE_MSG,
+        )
+        if not (extracted_context or "").strip():
+            return _save_assistant_reply(OCR_UNREADABLE_MSG)
+        _lab_reply = read_lab_results_from_text(extracted_context)
+        if _lab_reply:
+            try:
+                from app.services.conversation_state import get_state_store, StateEnum
+                get_state_store().update(
+                    str(conversation_id),
+                    state=StateEnum.AWAITING_PHONE,
+                    pending_action="lab_results_upload",
+                    pending_intent_summary="نتائج تحاليل مرفوعة",
+                    pending_started_at=datetime.now(timezone.utc),
+                )
+            except Exception as _lab_lead_exc:
+                logger.warning("lab_results lead-arm skipped (non-blocking): %s", _lab_lead_exc)
+            return _save_assistant_reply(_lab_reply)
 
     orchestration_deps = RuntimeOrchestrationDeps(
         logger=logger,

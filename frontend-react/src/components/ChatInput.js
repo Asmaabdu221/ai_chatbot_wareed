@@ -88,6 +88,7 @@ const ChatInput = ({
   useEffect(() => {
     return () => {
       clearRecordingTimer();
+      clearAutoSend();
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.stop();
       }
@@ -109,7 +110,16 @@ const ChatInput = ({
   const streamRef = useRef(null);
   const recognitionRef = useRef(null);
   const gotResultRef = useRef(false);
-  const hasSpeechRecognition = false;
+  const autoSendTimerRef = useRef(null);
+  const hasSpeechRecognition = typeof window !== 'undefined'
+    && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+
+  const clearAutoSend = () => {
+    if (autoSendTimerRef.current) {
+      window.clearTimeout(autoSendTimerRef.current);
+      autoSendTimerRef.current = null;
+    }
+  };
 
   const clearRecordingTimer = () => {
     if (recordingTimerRef.current) {
@@ -139,17 +149,46 @@ const ChatInput = ({
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
     recognition.continuous = false;
-    recognition.interimResults = false;
+    recognition.interimResults = true;
     recognition.lang = 'ar-SA';
     recognitionRef.current = recognition;
 
     recognition.onresult = (event) => {
-      gotResultRef.current = true;
-      const transcript = event.results[0][0].transcript;
-      if (transcript?.trim()) {
-        onSend(transcript.trim());
+      let interim = '';
+      let final = '';
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const chunk = event.results[i][0].transcript;
+        if (event.results[i].isFinal) final += chunk;
+        else interim += chunk;
       }
-      setIsListening(false);
+      const resize = () => {
+        if (textareaRef.current) {
+          textareaRef.current.style.height = 'auto';
+          textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 150)}px`;
+        }
+      };
+      if (interim) {
+        setMessage(interim);
+        resize();
+      }
+      if (final.trim()) {
+        gotResultRef.current = true;
+        const text = final.trim();
+        setMessage(text);
+        setIsListening(false);
+        resize();
+        // Final transcript -> let the user edit, else auto-send after 1.5s.
+        clearAutoSend();
+        autoSendTimerRef.current = window.setTimeout(() => {
+          autoSendTimerRef.current = null;
+          const out = (textareaRef.current?.value || text).trim();
+          if (out && !disabled) {
+            void onSend(out);
+            setMessage('');
+            if (textareaRef.current) textareaRef.current.style.height = 'auto';
+          }
+        }, 1500);
+      }
     };
 
     recognition.onend = () => setIsListening(false);
@@ -172,7 +211,7 @@ const ChatInput = ({
     return () => {
       if (recognitionRef.current) recognitionRef.current.abort();
     };
-  }, [hasSpeechRecognition, onSend]);
+  }, [hasSpeechRecognition, onSend, disabled]);
 
   const startRecording = async () => {
     if (disabled) return;
@@ -273,6 +312,7 @@ const ChatInput = ({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    clearAutoSend();
     if (pendingAudio) {
       await sendPendingAudio();
       return;
@@ -312,6 +352,7 @@ const ChatInput = ({
   };
 
   const handleChange = (e) => {
+    clearAutoSend();
     setMessage(e.target.value);
     setVoiceError(null);
     setOcrError(null);
@@ -330,9 +371,11 @@ const ChatInput = ({
       return;
     }
     if (isListening) {
-      recognitionRef.current?.abort();
+      recognitionRef.current?.stop();
       setIsListening(false);
     } else {
+      clearAutoSend();
+      setMessage('');
       gotResultRef.current = false;
       try {
         recognitionRef.current?.start();
@@ -352,6 +395,15 @@ const ChatInput = ({
       return;
     }
     void startRecording();
+  };
+
+  const handleMicClick = () => {
+    if (disabled) return;
+    if (hasSpeechRecognition) {
+      toggleVoiceInput();
+    } else {
+      handleVoiceRecordingToggle();
+    }
   };
 
   const handleAttachClick = () => {
@@ -524,10 +576,10 @@ const ChatInput = ({
 
         <button
           type="button"
-          className={`chat-input-mic-btn ${recordingState === 'recording' ? 'listening' : ''}`}
-          onClick={handleVoiceRecordingToggle}
+          className={`chat-input-mic-btn ${(isListening || recordingState === 'recording') ? 'listening' : ''}`}
+          onClick={handleMicClick}
           disabled={disabled}
-          title={recordingState === 'recording' ? 'Stop recording' : 'Start recording'}
+          title={(isListening || recordingState === 'recording') ? 'إيقاف الاستماع' : 'التحدث صوتياً'}
         >
           <MicrophoneIcon />
         </button>
