@@ -335,7 +335,10 @@ class LabRetrievalEngine:
                                    disambiguation=None, packages=packages, upsell_packages=[])
 
         if intent in (QueryIntent.TEST_LOOKUP, QueryIntent.FASTING_PREP, QueryIntent.AVAILABILITY):
-            test_ids = self.synonym_retriever.search(query)
+            # Precision guard: noise phrases like "كم سعر تحليل X" otherwise fuzzy-match
+            # unrelated price-phrase synonyms (e.g. DNA -> "سعر تحليل pt" ~85). Require a
+            # stronger match so an unknown test yields empty context -> safe fallback.
+            test_ids = self.synonym_retriever.search(query, threshold=88)
             if not test_ids and self.vector_retriever is not None:
                 test_ids = self.vector_retriever.search(query, top_k=3)
         elif intent == QueryIntent.SYMPTOM_QUERY:

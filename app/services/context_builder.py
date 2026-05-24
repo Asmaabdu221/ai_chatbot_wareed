@@ -211,3 +211,30 @@ class ContextBuilder:
             line += "، وقد تكون أوفر من شراء التحاليل منفردة"
         line += ". يمكن طلب رقم جوال العميل لإتمام الحجز."
         return line
+
+
+# ---------------------------------------------------------------------------
+# Grounding / hallucination guards
+# ---------------------------------------------------------------------------
+
+def is_context_sufficient(context: str) -> bool:
+    """Return False when the retrieved context is empty or too thin to answer.
+
+    Used by callers to decide whether to answer from the context or fall back
+    to a safe "contact us" message instead of letting the model improvise.
+    """
+    if not context or len(context.strip()) < 50:
+        return False
+    if "NEEDS_REVIEW" in context and len(context) < 100:
+        return False
+    return True
+
+
+def get_fallback_response(query_type: str = "general") -> str:
+    """Safe, grounded fallback when no sufficient context is available."""
+    return (
+        "ما عندي معلومات كافية عن هذا الموضوع في قاعدة بياناتنا 🔍\n\n"
+        "للمساعدة الكاملة، تواصل مع فريقنا:\n"
+        "📞 8001221220 (مجاني)\n"
+        "أو اكتب رقمك وسيتواصلون معك فوراً"
+    )
