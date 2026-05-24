@@ -2014,3 +2014,114 @@ async def transcribe_audio(audio_data: bytes, filename: str) -> str:
         logger.error(f"❌ Transcription error: {str(e)}")
         # Fallback: return placeholder text
         return "لم أتمكن من فهم الرسالة الصوتية. يرجى المحاولة مرة أخرى أو الكتابة."
+
+
+@router.post("/chat/attachment", response_model=ChatResponse, summary="Send an attachment (image/PDF) to the AI")
+async def chat_attachment_endpoint(
+    http_request: Request,
+    file: UploadFile = File(..., description="Image (jpg/png) or PDF lab report"),
+    message: Optional[str] = Form(None),
+    user_id: Optional[str] = Form(None),
+    conversation_id: Optional[str] = Form(None),
+    db: Optional[Session] = Depends(get_db),
+):
+    """Anonymous attachment endpoint for the public widget.
+
+    Auto-resolves/creates an anonymous user + conversation (like /api/chat),
+    then runs the existing attachment pipeline (OCR/PDF -> lab-results reader
+    when USE_LAB_RAG_V2 is on). Never raises a 500 to the widget.
+    """
+    from uuid import uuid4
+
+    def _err(reply: str, code: str) -> ChatResponse:
+        return ChatResponse(
+            reply=reply, success=False, user_id=uuid4(), conversation_id=uuid4(),
+            message_id=uuid4(), tokens_used=0, model="flow",
+            timestamp=datetime.now(), error=code,
+        )
+
+    try:
+        try:
+            uid = UUID(user_id) if user_id else None
+        except (ValueError, TypeError):
+            uid = None
+
+        # Rate limit (OCR/PDF parsing is expensive; this route is anonymous).
+        client_id = _get_client_id(http_request, uid)
+        allowed, retry_after = get_rate_limiter().is_allowed(client_id)
+        if not allowed:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="تم تجاوز الحد المسموح من الطلبات. يرجى المحاولة بعد قليل.",
+                headers={"Retry-After": str(retry_after)},
+            )
+
+        if db is None:
+            return _err("عذراً، خدمة رفع الملفات غير متاحة حالياً.", "db_unavailable")
+
+        file_bytes = await file.read()
+        if not file_bytes:
+            return _err("الملف فارغ، حاول ترفع صورة أو ملف صالح.", "empty_file")
+
+        filename = file.filename or "upload"
+        ext = ("." + filename.rsplit(".", 1)[-1].lower()) if "." in filename else ""
+        if ext in (".jpg", ".jpeg", ".png"):
+            attach_type = "image"
+        elif ext == ".pdf":
+            attach_type = "pdf"
+        elif ext in (".doc", ".docx"):
+            attach_type = "doc"
+        elif ext == ".txt":
+            attach_type = "txt"
+        else:
+            attach_type = "image"
+
+        try:
+            conv_uuid = UUID(conversation_id) if conversation_id else None
+        except (ValueError, TypeError):
+            conv_uuid = None
+
+        user, _created_u = _get_or_create_user(db, uid)
+        conv, _created_c = _get_or_create_conversation(db, user, conv_uuid, message or filename)
+        db.commit()
+        resolved_user_id = user.id
+        resolved_conv_id = conv.id
+
+        from app.services import message_service as _msg_svc
+        result = _msg_svc.send_message_with_attachment(
+            db,
+            resolved_conv_id,
+            resolved_user_id,
+            (message or "").strip(),
+            attachment_content=file_bytes,
+            attachment_filename=filename,
+            attachment_type=attach_type,
+        )
+
+        reply_text = ""
+        msg_id = uuid4()
+        if result:
+            _user_msg, assistant_msg = result
+            reply_text = (assistant_msg.content or "").strip()
+            msg_id = assistant_msg.id
+        if not reply_text:
+            reply_text = (
+                "ما قدرت أقرأ الورقة بوضوح 😅\n"
+                "جرب ترفع صورة أوضح، أو اكتب أسماء التحاليل يدوياً"
+            )
+
+        logger.info(
+            "chat_attachment | user_id=%s | conversation_id=%s | type=%s | bytes=%s",
+            resolved_user_id, resolved_conv_id, attach_type, len(file_bytes),
+        )
+        return ChatResponse(
+            reply=reply_text, success=True,
+            user_id=resolved_user_id, conversation_id=resolved_conv_id,
+            message_id=msg_id, tokens_used=0, model="flow",
+            timestamp=datetime.now(), error=None,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("CHAT ATTACHMENT ERROR: %s: %s", type(e).__name__, e, exc_info=True)
+        return _err("حصلت مشكلة مؤقتة في معالجة الملف، حاول مرة أخرى بعد قليل.", type(e).__name__)

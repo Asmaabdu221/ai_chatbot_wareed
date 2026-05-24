@@ -291,7 +291,7 @@
   border: 1px solid #D1D5DB;
   border-radius: 999px;
   width: 100%;
-  padding: 13px 46px 13px 14px;
+  padding: 13px 84px 13px 14px;
   font-size: 14px;
   color: #1E293B;
   outline: none;
@@ -334,6 +334,83 @@
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.wareed-widget-preview__upload-button {
+  appearance: none;
+  border: none;
+  background: #EEF2F7;
+  color: #2D9C8B;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.wareed-widget-preview__upload-button svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+.wareed-widget-preview__upload-button:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.wareed-widget-preview__mic-button {
+  appearance: none;
+  border: none;
+  background: #EEF2F7;
+  color: #2D9C8B;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  position: absolute;
+  right: 46px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.wareed-widget-preview__mic-button svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+.wareed-widget-preview__mic-button--listening {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  animation: wareed-mic-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes wareed-mic-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.wareed-widget-preview__mic-button:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
 }
 
 .wareed-widget-preview__message br {

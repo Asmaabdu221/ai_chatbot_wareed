@@ -144,12 +144,70 @@ export default function WareedAiWidgetPreview() {
   ]);
   const messageCounterRef = useRef(1);
   const messagesContainerRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const autoSendTimerRef = useRef(null);
+  const sendMessageRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const [isListening, setIsListening] = useState(false);
+  const speechSupported =
+    typeof window !== 'undefined' &&
+    !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+
+  const clearAutoSend = () => {
+    if (autoSendTimerRef.current) {
+      window.clearTimeout(autoSendTimerRef.current);
+      autoSendTimerRef.current = null;
+    }
+  };
 
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
     container.scrollTop = container.scrollHeight;
   }, [messages, isOpen]);
+
+  // Voice input via the browser's free Web Speech API (Arabic).
+  useEffect(() => {
+    if (!speechSupported) return undefined;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SR();
+    recognition.lang = 'ar-SA';
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognitionRef.current = recognition;
+
+    recognition.onresult = (event) => {
+      let interim = '';
+      let final = '';
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const chunk = event.results[i][0].transcript;
+        if (event.results[i].isFinal) final += chunk;
+        else interim += chunk;
+      }
+      if (interim) setInput(interim);
+      if (final.trim()) {
+        const text = final.trim();
+        setInput(text);
+        setIsListening(false);
+        clearAutoSend();
+        autoSendTimerRef.current = window.setTimeout(() => {
+          autoSendTimerRef.current = null;
+          if (sendMessageRef.current) sendMessageRef.current(text);
+        }, 1300);
+      }
+    };
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = () => setIsListening(false);
+
+    return () => {
+      clearAutoSend();
+      try {
+        recognition.abort();
+      } catch (err) {
+        /* no-op */
+      }
+    };
+  }, [speechSupported]);
 
   const sendMessage = async (rawText) => {
     const text = (rawText || '').trim();
@@ -259,8 +317,103 @@ export default function WareedAiWidgetPreview() {
     }
   };
 
+  sendMessageRef.current = sendMessage;
+
+  const toggleMic = () => {
+    if (isSending) return;
+    const recognition = recognitionRef.current;
+    if (!recognition) return;
+    if (isListening) {
+      try {
+        recognition.stop();
+      } catch (err) {
+        /* no-op */
+      }
+      setIsListening(false);
+      return;
+    }
+    setInput('');
+    try {
+      recognition.start();
+      setIsListening(true);
+    } catch (err) {
+      setIsListening(false);
+    }
+  };
+
+  const openFilePicker = () => {
+    if (!isSending) fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || isSending) return;
+
+    const lower = (file.name || '').toLowerCase();
+    const okExt = ['.jpg', '.jpeg', '.png', '.pdf'].some((e) => lower.endsWith(e));
+    if (!okExt) {
+      setMessages((prev) => [
+        ...prev,
+        { id: `err_${messageCounterRef.current++}`, role: 'assistant', text: 'يرجى رفع صورة (JPG/PNG) أو ملف PDF.' },
+      ]);
+      return;
+    }
+
+    const userMsgId = `msg_${messageCounterRef.current++}`;
+    setMessages((prev) => [...prev, { id: userMsgId, role: 'user', text: `📎 ${file.name}` }]);
+    setIsOpen(true);
+
+    const typingId = `typing_${messageCounterRef.current++}`;
+    setMessages((prev) => [
+      ...prev,
+      { id: typingId, role: 'assistant', text: TYPING_MESSAGE, isTyping: true },
+    ]);
+    setIsSending(true);
+
+    try {
+      const stableUserId = getOrCreateWidgetUserId();
+      const stableConversationId = getStoredConversationId();
+
+      const form = new FormData();
+      form.append('file', file);
+      if (stableUserId) form.append('user_id', stableUserId);
+      if (stableConversationId) form.append('conversation_id', stableConversationId);
+
+      const { data } = await api.post('/api/chat/attachment', form, { timeout: 120000 });
+
+      const assistantText = (data?.reply || '').trim() || CONNECTIVITY_ERROR_MESSAGE;
+      const assistantId = data?.message_id || `msg_${messageCounterRef.current++}`;
+
+      if (data?.user_id && UUID_V4_REGEX.test(data.user_id)) {
+        setStoredUserId(data.user_id);
+        setSessionUserId(data.user_id);
+      }
+      if (data?.conversation_id && UUID_V4_REGEX.test(data.conversation_id)) {
+        setStoredConversationId(data.conversation_id);
+        setSessionConversationId(data.conversation_id);
+      }
+
+      setMessages((prev) =>
+        prev.map((m) => (m.id === typingId ? { id: assistantId, role: 'assistant', text: assistantText } : m))
+      );
+    } catch (error) {
+      console.error('Preview widget attachment failed:', error);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === typingId
+            ? { id: `err_${messageCounterRef.current++}`, role: 'assistant', text: CONNECTIVITY_ERROR_MESSAGE }
+            : m
+        )
+      );
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   const onSubmit = (event) => {
     event.preventDefault();
+    clearAutoSend();
     sendMessage(input);
   };
 
@@ -340,11 +493,47 @@ export default function WareedAiWidgetPreview() {
             <input
               type="text"
               value={input}
-              onChange={(event) => setInput(event.target.value)}
+              onChange={(event) => { clearAutoSend(); setInput(event.target.value); }}
               placeholder="اكتب سؤالك هنا..."
               aria-label="اكتب سؤالك هنا"
               disabled={isSending}
             />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".jpg,.jpeg,.png,.pdf"
+              onChange={handleFileChange}
+              style={{ display: 'none' }}
+              aria-hidden="true"
+            />
+            <button
+              type="button"
+              className="wareed-widget-preview__upload-button"
+              onClick={openFilePicker}
+              disabled={isSending}
+              aria-label="رفع صورة أو ملف"
+              title="رفع صورة أو ملف"
+            >
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M21.44 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+              </svg>
+            </button>
+            {speechSupported && (
+              <button
+                type="button"
+                className={`wareed-widget-preview__mic-button ${isListening ? 'wareed-widget-preview__mic-button--listening' : ''}`}
+                onClick={toggleMic}
+                disabled={isSending}
+                aria-label={isListening ? 'إيقاف الاستماع' : 'التحدث صوتياً'}
+                title={isListening ? 'إيقاف الاستماع' : 'التحدث صوتياً'}
+              >
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+                  <path d="M12 18v3" />
+                </svg>
+              </button>
+            )}
             <button
               type="submit"
               className="wareed-widget-preview__send-button"
