@@ -238,3 +238,61 @@ def get_fallback_response(query_type: str = "general") -> str:
         "📞 8001221220 (مجاني)\n"
         "أو اكتب رقمك وسيتواصلون معك فوراً"
     )
+
+
+def format_context_for_prompt(tests: list[dict], intent: QueryIntent) -> str:
+    """Concise, intent-shaped context so the model gets structured input, not a wall
+    of text (which makes it over-explain). Never includes price — price is disclosed
+    only after phone capture, via build_context().
+    """
+    if not tests:
+        return ""
+
+    def _nm(t: dict) -> str:
+        ar = str(t.get(K_AR, "")).strip()
+        en = str(t.get(K_EN, "")).strip()
+        return f"{ar} ({en})" if en and not en.startswith("NEEDS") else ar
+
+    def _avail_ok(t: dict) -> bool:
+        v = str(t.get(K_AVAIL, "")).strip().lower()
+        return ("yes" in v) or ("متاح" in v)
+
+    if intent == QueryIntent.FASTING_PREP:
+        out = []
+        for t in tests[:3]:
+            fasting = str(t.get(K_FASTING, "")).strip() or "غير محدد"
+            hours = str(t.get(K_FASTING_H, "")).strip()
+            prep = str(t.get(K_PREP, "")).strip()
+            line = f"- {_nm(t)}: صيام {fasting}"
+            if hours and hours not in ("0", "NEEDS_REVIEW"):
+                line += f" ({hours} ساعة)"
+            if prep and not prep.startswith("NEEDS"):
+                line += f" — {prep}"
+            out.append(line)
+        return "\n".join(out)
+
+    if intent == QueryIntent.SYMPTOM_QUERY:
+        out = ["تحاليل مقترحة (للتعريف فقط، دون تشخيص):"]
+        for t in tests[:3]:
+            b = str(t.get(K_BENEFIT, "")).strip()
+            out.append(f"- {_nm(t)}" + (f": {b[:80]}" if b and not b.startswith("NEEDS") else ""))
+        return "\n".join(out)
+
+    if intent == QueryIntent.AVAILABILITY:
+        out = []
+        for t in tests[:3]:
+            avail = "متاح" if _avail_ok(t) else (str(t.get(K_AVAIL, "")).strip() or "غير محدد")
+            out.append(f"- {_nm(t)} | التوفر: {avail}")
+        return "\n".join(out)
+
+    # TEST_LOOKUP / GENERAL
+    out = []
+    for t in tests[:3]:
+        line = f"- {_nm(t)}"
+        if _avail_ok(t):
+            line += " ✅"
+        b = str(t.get(K_BENEFIT, "")).strip()
+        if b and not b.startswith("NEEDS"):
+            line += f": {b[:90]}"
+        out.append(line)
+    return "\n".join(out)

@@ -38,18 +38,32 @@ def maybe_build_lab_context(message: str, phone_captured: bool = False) -> Optio
     try:
         from app.services.lab_retrieval_engine import get_lab_retrieval_engine
         from app.services.intent_classifier import get_intent_classifier, QueryIntent
-        from app.services.context_builder import ContextBuilder
+        from app.services.context_builder import ContextBuilder, format_context_for_prompt
 
         intent = get_intent_classifier().classify(message)
         result = get_lab_retrieval_engine().retrieve(message, intent)
         if (not result.tests and not result.packages
                 and intent != QueryIntent.AMBIGUOUS):
             return None
-        ctx = ContextBuilder().build_context(
-            tests=result.tests, intent=intent,
-            include_price=phone_captured, extra=result.disambiguation,
-            packages=result.packages, upsell_packages=result.upsell_packages,
+        # Concise, structured context for plain test-based lookups (keeps the model
+        # from over-explaining). Fall back to the full builder when price is being
+        # disclosed (after phone), or for packages / disambiguation / cross-sell.
+        _concise_intents = (
+            QueryIntent.TEST_LOOKUP, QueryIntent.FASTING_PREP,
+            QueryIntent.AVAILABILITY, QueryIntent.SYMPTOM_QUERY,
         )
+        if intent in _concise_intents and result.tests and not phone_captured:
+            ctx = format_context_for_prompt(result.tests, intent)
+            if result.upsell_packages:
+                _pkg = str(result.upsell_packages[0].get("package_name_ar", "")).strip()
+                if _pkg and not _pkg.startswith("NEEDS"):
+                    ctx += f"\n\nملاحظة: متوفرة ضمن باقة «{_pkg}» بسعر أوفر — يمكن طلب رقم الجوال للحجز."
+        else:
+            ctx = ContextBuilder().build_context(
+                tests=result.tests, intent=intent,
+                include_price=phone_captured, extra=result.disambiguation,
+                packages=result.packages, upsell_packages=result.upsell_packages,
+            )
         return ctx or None
     except Exception as exc:  # never break the chat path
         logger.warning("lab_rag_v2 maybe_build_lab_context skipped: %s", exc)

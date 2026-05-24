@@ -73,6 +73,21 @@ class RetrievalResult:
 
 
 # ----------------------------------------------------------------- Layer 1
+# Canonical consumer-term overrides. The AI-generated synonym index maps common
+# health terms to obscure tests (e.g. "سكر" -> insulin autoantibodies). These curated
+# tokens take precedence so the bot returns the core test the customer means.
+_CANONICAL_TEST_TOKENS = {
+    "سكر": ("TEST_253", "TEST_258"),       # Glucose (Fasting) + HbA1c
+    "سكري": ("TEST_253", "TEST_258"),
+    "دهون": ("TEST_156", "TEST_524"),      # Cholesterol + Triglycerides
+    "كوليسترول": ("TEST_156", "TEST_524"),
+    "كولسترول": ("TEST_156", "TEST_524"),
+    "هيموجلوبين": ("TEST_272",),           # Hemoglobin Level
+    "هيموغلوبين": ("TEST_272",),
+    "خضاب": ("TEST_272",),
+}
+
+
 class SynonymRetriever:
     """Exact + fuzzy lookup over the synonym index. Returns test_ids by score."""
 
@@ -314,6 +329,21 @@ class LabRetrievalEngine:
                 return member_ids, {"group": group, "decision_helper": row.get("decision_helper", "")}
         return ids, None
 
+    def _canonical_test_ids(self, query: str) -> list[str]:
+        """Curated canonical test_ids when a common consumer term is present.
+
+        Guards against the synonym index's AI-generated phrases steering
+        high-frequency terms (سكر/دهون/هيموجلوبين) to obscure tests.
+        """
+        nq = normalize(query or "")
+        tokens = {self._strip_al(t) for t in nq.split() if t}
+        for term, ids in _CANONICAL_TEST_TOKENS.items():
+            if term in tokens:
+                valid = [i for i in ids if self.data_loader.get_test_by_id(i)]
+                if valid:
+                    return valid
+        return []
+
     def retrieve(self, query: str, intent: QueryIntent) -> RetrievalResult:
         """Retrieve tests for a query given its intent."""
         self._ensure_warm()
@@ -334,7 +364,14 @@ class LabRetrievalEngine:
             return RetrievalResult(tests=[], test_ids=[], intent=intent,
                                    disambiguation=None, packages=packages, upsell_packages=[])
 
-        if intent in (QueryIntent.TEST_LOOKUP, QueryIntent.FASTING_PREP, QueryIntent.AVAILABILITY):
+        canonical_ids = self._canonical_test_ids(query)
+        if canonical_ids and intent in (
+            QueryIntent.TEST_LOOKUP, QueryIntent.FASTING_PREP, QueryIntent.AVAILABILITY,
+            QueryIntent.AMBIGUOUS, QueryIntent.SYMPTOM_QUERY,
+        ):
+            test_ids = canonical_ids
+            disambig = None
+        elif intent in (QueryIntent.TEST_LOOKUP, QueryIntent.FASTING_PREP, QueryIntent.AVAILABILITY):
             # Precision guard: noise phrases like "كم سعر تحليل X" otherwise fuzzy-match
             # unrelated price-phrase synonyms (e.g. DNA -> "سعر تحليل pt" ~85). Require a
             # stronger match so an unknown test yields empty context -> safe fallback.
