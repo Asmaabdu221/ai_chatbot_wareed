@@ -67,9 +67,12 @@ class ContextBuilder:
     # ------------------------------------------------------------ helpers
     @staticmethod
     def _name(t: dict) -> str:
-        ar = str(t.get(K_AR, "")).strip()
+        # Display names come ONLY from the English-name column (K_EN = "names").
+        # Never fall back to Arabic / aliases. Callers skip rows with empty names.
         en = str(t.get(K_EN, "")).strip()
-        return f"{ar} ({en})" if en else ar
+        if not en or en.startswith("NEEDS"):
+            return ""
+        return en
 
     @staticmethod
     def _safety_check(field_value: str, data_source: str) -> str:
@@ -94,7 +97,10 @@ class ContextBuilder:
     def _build_test_context(self, tests: list[dict], include_price: bool) -> str:
         blocks = []
         for t in tests[:5]:
-            lines = [f"- التحليل: {self._name(t)}"]
+            nm = self._name(t)
+            if not nm:
+                continue
+            lines = [f"- التحليل: {nm}"]
             if str(t.get(K_BENEFIT, "")).strip():
                 lines.append(f"  الفائدة: {t[K_BENEFIT]}")
             comp = str(t.get(K_COMPLEMENT, "")).strip()
@@ -109,8 +115,11 @@ class ContextBuilder:
             return ""
         lines = ["تحاليل قد تكون مناسبة بناءً على الأعراض المذكورة (للتعريف فقط، دون تشخيص):"]
         for t in tests[:6]:
+            nm = self._name(t)
+            if not nm:
+                continue
             b = str(t.get(K_BENEFIT, "")).strip()
-            lines.append(f"- {self._name(t)}" + (f": {b}" if b else ""))
+            lines.append(f"- {nm}" + (f": {b}" if b else ""))
         lines.append("لإتمام الحجز أو معرفة التفاصيل، يمكن طلب رقم جوال العميل.")
         return "\n".join(lines)
 
@@ -121,7 +130,10 @@ class ContextBuilder:
             hours = str(t.get(K_FASTING_H, "")).strip()
             prep = str(t.get(K_PREP, "")).strip()
             notes = str(t.get(K_NOTES, "")).strip()
-            lines = [f"- التحليل: {self._name(t)}", f"  يتطلب صيام: {fasting}"]
+            _nm = self._name(t)
+            if not _nm:
+                continue
+            lines = [f"- التحليل: {_nm}", f"  يتطلب صيام: {fasting}"]
             if hours and hours != "0":
                 lines.append(f"  ساعات الصيام: {hours}")
             if prep and not prep.startswith("NEEDS"):
@@ -137,7 +149,10 @@ class ContextBuilder:
             avail = str(t.get(K_AVAIL, "")).strip()
             avail = SAFE_FALLBACK if (not avail or avail.startswith("NEEDS")) else avail
             tat = str(t.get(K_TAT, "")).strip()
-            line = f"- التحليل: {self._name(t)} | التوفر: {avail}"
+            _nm = self._name(t)
+            if not _nm:
+                continue
+            line = f"- التحليل: {_nm} | التوفر: {avail}"
             if tat and not tat.startswith("NEEDS"):
                 line += f" | وقت الاستلام التقريبي: {tat}"
             blocks.append(line)
@@ -151,8 +166,11 @@ class ContextBuilder:
                 lines.append(f"سؤال توضيحي مقترح: {extra['decision_helper']}")
         lines.append("الخيارات المتاحة:")
         for t in tests[:6]:
+            nm = self._name(t)
+            if not nm:
+                continue
             bf = str(t.get(K_BESTFOR, "")).strip()
-            lines.append(f"- {self._name(t)}" + (f" — {bf}" if bf and not bf.startswith('NEEDS') else ""))
+            lines.append(f"- {nm}" + (f" — {bf}" if bf and not bf.startswith('NEEDS') else ""))
         return "\n".join(lines)
 
     @staticmethod
@@ -249,9 +267,11 @@ def format_context_for_prompt(tests: list[dict], intent: QueryIntent) -> str:
         return ""
 
     def _nm(t: dict) -> str:
-        ar = str(t.get(K_AR, "")).strip()
+        # English-name column only ("names"); never AR / aliases. Empty -> caller skips.
         en = str(t.get(K_EN, "")).strip()
-        return f"{ar} ({en})" if en and not en.startswith("NEEDS") else ar
+        if not en or en.startswith("NEEDS"):
+            return ""
+        return en
 
     def _avail_ok(t: dict) -> bool:
         v = str(t.get(K_AVAIL, "")).strip().lower()
@@ -260,10 +280,13 @@ def format_context_for_prompt(tests: list[dict], intent: QueryIntent) -> str:
     if intent == QueryIntent.FASTING_PREP:
         out = []
         for t in tests[:3]:
+            nm = _nm(t)
+            if not nm:
+                continue
             fasting = str(t.get(K_FASTING, "")).strip() or "غير محدد"
             hours = str(t.get(K_FASTING_H, "")).strip()
             prep = str(t.get(K_PREP, "")).strip()
-            line = f"- {_nm(t)}: صيام {fasting}"
+            line = f"- {nm}: صيام {fasting}"
             if hours and hours not in ("0", "NEEDS_REVIEW"):
                 line += f" ({hours} ساعة)"
             if prep and not prep.startswith("NEEDS"):
@@ -274,23 +297,30 @@ def format_context_for_prompt(tests: list[dict], intent: QueryIntent) -> str:
     if intent == QueryIntent.SYMPTOM_QUERY:
         out = ["تحاليل مقترحة (للتعريف فقط، دون تشخيص):"]
         for t in tests[:3]:
+            nm = _nm(t)
+            if not nm:
+                continue
             b = str(t.get(K_BENEFIT, "")).strip()
-            out.append(f"- {_nm(t)}" + (f": {b[:80]}" if b and not b.startswith("NEEDS") else ""))
+            out.append(f"- {nm}" + (f": {b[:80]}" if b and not b.startswith("NEEDS") else ""))
         return "\n".join(out)
 
     if intent == QueryIntent.AVAILABILITY:
         out = []
         for t in tests[:3]:
-            avail = "متاح" if _avail_ok(t) else (str(t.get(K_AVAIL, "")).strip() or "غير محدد")
-            out.append(f"- {_nm(t)} | التوفر: {avail}")
+            nm = _nm(t)
+            if not nm:
+                continue
+            marker = "متوفر عندنا ✅" if _avail_ok(t) else (str(t.get(K_AVAIL, "")).strip() or "غير محدد")
+            out.append(f"- {nm} | التوفر: {marker}")
         return "\n".join(out)
 
-    # TEST_LOOKUP / GENERAL
+    # TEST_LOOKUP / GENERAL -- ✅ is reserved for AVAILABILITY intent; never claim it here.
     out = []
     for t in tests[:3]:
-        line = f"- {_nm(t)}"
-        if _avail_ok(t):
-            line += " ✅"
+        nm = _nm(t)
+        if not nm:
+            continue
+        line = f"- {nm}"
         b = str(t.get(K_BENEFIT, "")).strip()
         if b and not b.startswith("NEEDS"):
             line += f": {b[:90]}"

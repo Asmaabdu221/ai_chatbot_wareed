@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = Field(..., description="OpenAI API Key")
     
     # OpenAI Configuration
-    OPENAI_MODEL: str = Field(default="gpt-4", description="OpenAI model to use")
+    OPENAI_MODEL: str = Field(default="gpt-4o", description="OpenAI model (gpt-4o recommended for Arabic; was gpt-4)")
     OPENAI_MAX_TOKENS: int = Field(default=500, description="Max tokens for responses")
     OPENAI_TEMPERATURE: float = Field(default=0.7, description="Temperature for AI responses")
     OPENAI_EMBEDDING_MODEL: str = Field(

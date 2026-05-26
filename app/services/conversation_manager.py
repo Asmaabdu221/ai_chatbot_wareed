@@ -200,6 +200,21 @@ _NO_CTA_ROUTES = frozenset({
 })
 
 
+
+# --- Fasting / preparation questions are purely informational. The user wants
+# Yes/No + instructions; appending a "send your phone" CTA is wrong UX.
+_FASTING_TOKENS = ("صيام", "صائم", "صوم", "فطار", "فطور", "فاطر", "افطر")
+
+
+def _is_fasting_question(text: str) -> bool:
+    try:
+        from app.utils.arabic_normalizer import normalize  # local import to avoid cycles
+        n = normalize(text or "")
+    except Exception:
+        n = (text or "").lower()
+    return any(tok in n for tok in _FASTING_TOKENS)
+
+
 def decide_conversation_action(
     user_text: str,
     *,
@@ -264,6 +279,16 @@ def decide_conversation_action(
             detected_route=route,
             confidence="high",
             metadata={"route": route, "source": source},
+        )
+
+    # --- 1c. Fasting / preparation: informational only, NEVER append a phone CTA.
+    if _is_fasting_question(text):
+        return ConversationDecision(
+            action=ConversationAction.ANSWER_ONLY,
+            reason="fasting_question_informational",
+            detected_route=route,
+            confidence="high",
+            metadata={"route": route, "fasting": True},
         )
 
     # --- 2. Route-map fast path (when a route is already known) ---------------

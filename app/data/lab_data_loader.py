@@ -37,6 +37,32 @@ COL_NAME_EN = "names"
 COL_PKG_ID = "package_id"
 
 
+# Conversational filler phrases that polluted the AI-generated synonym index.
+# Any row whose normalized search_term is one of these (or empty) is dropped at
+# load time so noisy queries like "ابي اعرف عن X" can't fuzzy-match the wrong test.
+_STOPWORD_SEARCH_TERMS = {
+    "ابي", "ابغي", "ابغى", "ودي", "محتاج", "اعرف", "اعرف عن",
+    "ابي اعرف", "ابي اعرف عن", "ابغي اعرف", "ابغى اعرف", "ابغي اعرف عن",
+    "ودي اعرف", "ودي اعرف عن", "ابي تحليل", "ابغي تحليل", "ودي تحليل",
+    "ابي اسأل", "ابي اسال", "ابغى اسأل", "ابغي اسأل",
+    "تحليل", "فحص", "كم سعر", "كم", "سعر",
+}
+
+
+def _filter_stopword_synonyms(df: "pd.DataFrame") -> "pd.DataFrame":
+    """Remove rows whose search_term is a conversational filler (not a real test name)."""
+    try:
+        from app.utils.arabic_normalizer import normalize
+    except Exception:
+        return df
+    if df is None or len(df) == 0 or "search_term" not in df.columns:
+        return df
+    norms = df["search_term"].astype(str).map(lambda x: normalize(x).strip())
+    mask = norms.isin({normalize(t) for t in _STOPWORD_SEARCH_TERMS}) | (norms == "")
+    cleaned = df[~mask].reset_index(drop=True)
+    return cleaned
+
+
 class LabDataLoader:
     """Loads and caches the rebuilt lab workbook sheets."""
 
@@ -65,9 +91,16 @@ class LabDataLoader:
         return self._master
 
     def load_synonym_index(self) -> pd.DataFrame:
-        """Load the flat synonym index (search_term | test_id | name_ar | name_en | match_type)."""
+        """Load the flat synonym index (search_term | test_id | name_ar | name_en | match_type).
+
+        Drops rows whose search_term is a generic conversational filler — many such
+        rows were AI-generated (e.g. "ابي اعرف", "ابغي تحليل") and mapped to obscure
+        tests, which caused noisy queries to fuzzy-match the wrong thing. Real test
+        names and the canonical consumer terms are untouched.
+        """
         if self._synonyms is None:
-            self._synonyms = pd.read_excel(self.excel_path, sheet_name=SHEET_SYNONYMS, dtype=str).fillna("")
+            df = pd.read_excel(self.excel_path, sheet_name=SHEET_SYNONYMS, dtype=str).fillna("")
+            self._synonyms = _filter_stopword_synonyms(df)
         return self._synonyms
 
     def load_symptoms_map(self) -> pd.DataFrame:
